@@ -322,10 +322,8 @@ Plus roughly $12/year for a domain.
 ## Next Steps
 
 1. Create the repository and copy `product-brief.md` and this document into `docs/`.
-2. **Answer the open question about the defensive slot list** in the brief — the exact
-   positions and labels — before any schema or diamond work begins.
-3. Run `repo-setup` to generate a grounded `AGENTS.md`.
-4. Run `milestone-planner` with the brief's MVP scope as the initiative, to break the
+2. Run `repo-setup` to generate a grounded `AGENTS.md`.
+3. Run `milestone-planner` with the brief's MVP scope as the initiative, to break the
    build into phased, dependency-linked issues. Suggested phase order, which front-loads
    the riskiest assumption: auth + roster → schedule + RSVP → **validate with one real
    game weekend** → lineup → positions → view page → messaging → push.

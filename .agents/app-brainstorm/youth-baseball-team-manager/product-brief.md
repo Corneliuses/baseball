@@ -59,9 +59,10 @@ Scoped to fit **6 weeks of evenings and weekends**.
   slots equal the attending count; `allPlay = false` → 9 slots. Dropping onto an occupied
   slot swaps. Cancel / Finalize.
 - **Positions** — drag players onto a labeled diamond, set once per game (no inning
-  rotation). No catcher position; **"C" means Center Field**. `allPlay = true` → one kid
-  per infield position, outfield holds all remaining players. `allPlay = false` → one kid
-  per outfield position, remainder go to a Bench/Dugout zone. Cancel / Finalize.
+  rotation). The nine standard defensive positions: **P, C, 1B, 2B, 3B, SS, LF, CF, RF**
+  — `C` is Catcher, `CF` is Center Field. `allPlay = true` → one kid per infield position
+  (P, C, 1B, 2B, 3B, SS), outfield holds all remaining players. `allPlay = false` → one
+  kid per position, remainder go to a Bench/Dugout zone. Cancel / Finalize.
 - **View page** — one mobile-friendly page with the labeled diamond and the ordered
   lineup, stacked vertically on phones, with touch-activation delay so scrolling never
   triggers a drag.
@@ -165,12 +166,6 @@ decision.
 
 ## Open Questions
 
-- **How many defensive slots are on the diamond?** The proposal specifies 9 batting slots
-  when `allPlay = false`, no catcher, and "C" = Center Field. Standard positions minus
-  catcher is 8 fielders (P, 1B, 2B, 3B, SS, LF, CF, RF), but many coach-pitch and
-  machine-pitch leagues field a 4th outfielder or a rover. **Confirm the exact slot list
-  and their labels before building the diamond** — this drives the graphic, the drop
-  zones, and the `allPlay = false` bench logic.
 - **Does the batting order persist between games as a default?** Assumed no for MVP;
   every game starts blank.
 - **Can a parent RSVP on behalf of a kid they aren't linked to?** Assumed no — guardians
