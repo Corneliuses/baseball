@@ -47,7 +47,13 @@ Scoped to fit **6 weeks of evenings and weekends**.
 - **Auth & onboarding** — coach enters parent emails; each gets an invitation link;
   clicking it issues a one-time, expiring magic link and creates the account. No
   passwords. No self-serve signup.
-- **Roles** — owner, coach, parent. Owner can elevate a parent to coach.
+- **Teams** — the owner creates a team per season and keeps past teams around. Every
+  screen operates on exactly one **active team**, chosen from a team switcher; past teams
+  stay readable. Team-scoped settings live here, including `allPlay`.
+- **Roles** — owner, coach, parent, assigned **per team**. The same person can be a coach
+  on this year's team and a parent on last year's. Owner can elevate a parent to coach on
+  the team they're viewing. Coaches and parents see only the teams they're assigned to;
+  the owner sees all of them.
 - **Roster** — players with jersey numbers (editable); guardians linked to players
   many-to-many (a player can have several guardians; a guardian can have several kids).
 - **Directory** — parent name, phone, email, and their kids. Visible to all signed-in
@@ -86,8 +92,13 @@ Deliberately deferred past the 6-week mark, in the order I'd add them:
 
 ## Out of Scope
 
-- **Multi-team support.** Single team, permanently. No team creation UI, no other coaches
-  signing up, no per-team query scoping.
+- **Multi-tenancy as a product.** The app is multi-*team* but single-*owner*: one person
+  owns every team in the instance and is the only one who can create one. There is no
+  self-serve signup for other coaches, no org or league layer above the team, and no
+  billing. Another coach wanting their own teams means running a second instance.
+- **Cross-team views.** No "all my teams" combined schedule, no roster carried forward
+  automatically from last season, no season-over-season reporting. Teams are siloed and
+  you switch between them.
 - **Score, stats, and box scores.** This app schedules and assigns; it does not record
   what happened.
 - **Inning-by-inning position rotation.** Positions are static for the whole game, by
@@ -142,11 +153,11 @@ features.
 | Constraint | Answer |
 |---|---|
 | Platform | Progressive Web App, mobile-first. No native apps. |
-| Audience | One youth baseball team — ~15 players, ~25 guardians, 1–3 coaches. |
+| Audience | One active youth baseball team at a time — ~15 players, ~25 guardians, 1–3 coaches — plus archived teams from past seasons. |
 | Team & skills | Solo build. TypeScript / React, comfortable in the npm ecosystem. |
 | Budget | Vercel paid plan already in place; willing to pay for a small database. |
 | Timeline | 6 weeks, evenings and weekends. |
-| Scope | Single team, permanently. |
+| Scope | Multiple teams under one owner, one active at a time. Every table carries a team scope and every query is filtered by membership. Not a SaaS — no other owners. |
 
 **Carried risk — iOS push.** On iPhone, Web Push only works if the user has explicitly
 added the PWA to their Home Screen (iOS 16.4+). A parent who just uses the link in Safari
@@ -166,6 +177,16 @@ decision.
 
 ## Open Questions
 
+- **Is a returning kid the same player record or a new one?** Assumed **new** — a `Player`
+  is a roster entry belonging to one team, so a kid who plays three seasons has three
+  rows. Guardians and user accounts are global and carry over, so a returning family
+  doesn't re-onboard. The alternative (one player identity across teams) only pays off if
+  you ever want season-over-season history, which is explicitly out of scope.
+- **Are past teams read-only?** Assumed **yes** — an archived team renders fully but
+  blocks mutations, which removes a whole class of "edited the wrong season's lineup"
+  mistakes. Cheap to add now, and easy to relax later if it turns out to be annoying.
+- **Do parents keep access to past teams they were on?** Assumed **yes**, read-only —
+  membership persists rather than being revoked at season end.
 - **Does the batting order persist between games as a default?** Assumed no for MVP;
   every game starts blank.
 - **Can a parent RSVP on behalf of a kid they aren't linked to?** Assumed no — guardians

@@ -5,10 +5,11 @@
 Solo build by one developer who ships **TypeScript and React** and is comfortable in the
 npm ecosystem. **Vercel paid plan already in place** — hosting is effectively a fixed
 input, not an open decision. Willing to pay for a small managed database. **6 weeks** of
-evenings and weekends to a usable app. **Single team, permanently** — roughly 40 total
-user accounts, ever.
+evenings and weekends to a usable app. **Multiple teams under a single owner** — one team
+active at a time with a switcher for past seasons — so roughly 40 accounts per team and a
+low hundreds across a decade of archived seasons.
 
-Two consequences shape every decision below. First, at 40 users **scale is irrelevant** —
+Two consequences shape every decision below. First, at that size **scale is irrelevant** —
 every choice optimizes for build speed and low operational surface, never throughput.
 Second, a solo developer on a 6-week clock cannot afford to learn two new things at once,
 so the stack spends exactly one innovation token.
@@ -20,10 +21,10 @@ Written before any technology is named.
 | Layer | Requirements (technology-agnostic) |
 |---|---|
 | **Client** | Installable to a phone home screen. Mobile-first. Touch drag-and-drop with an activation delay so page scrolling never triggers a drag. Must render a labeled baseball diamond with arbitrary drop targets, plus a reorderable vertical list. Realtime sync **not** required — a refresh is acceptable. Offline read of the finalized lineup is desirable, not required, for MVP. |
-| **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs gate which players may appear in a lineup. Entities: `Team`, `Player`, `Guardian`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows. No full-text search. No analytics workload. |
-| **Auth** | Passwordless. Invitation-gated: no self-serve signup exists. Onboarding is one-time, expiring email links. Three roles — owner, coach, parent — checked server-side on every mutation. Long-lived sessions so parents are not re-authenticating on a phone at a ballfield. |
+| **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs gate which players may appear in a lineup. **Team-scoped throughout** — `Player`, `Event`, `Message`, and `Invitation` each belong to exactly one `Team`, and access is mediated by a `Membership` join table carrying a per-team role. Entities: `Team`, `Membership`, `Player`, `Guardian`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
+| **Auth** | Passwordless. Invitation-gated: no self-serve signup exists. Onboarding is one-time, expiring email links. Three roles — owner, coach, parent — assigned **per team** and checked server-side on every mutation, against the team that owns the record being touched. Long-lived sessions so parents are not re-authenticating on a phone at a ballfield. |
 | **Backgrounding** | Send transactional email (invites, coach broadcasts, parent→coaches). Fan out web push to stored subscriptions. Optionally, a scheduled pre-game RSVP reminder. Fan-out size is ~25 recipients — no queue, no worker infrastructure justified. |
-| **Scale** | ~15 players, ~25 guardians, ~40 accounts. Peak concurrency is one coach and a handful of parents on a Saturday morning. Explicitly do not design for growth. |
+| **Scale** | ~15 players, ~25 guardians, ~40 accounts *per team*, growing by one team a season. Peak concurrency is one coach and a handful of parents on a Saturday morning, all on the active team. Archived teams are cold data that must remain readable. Explicitly do not design for growth. |
 | **Integrations** | A transactional email provider and browser Web Push. No payments, no AI, no third-party sports data. |
 
 ## Decisions
@@ -276,6 +277,76 @@ day of work; integrating a calendar library and overriding its styling to match 
 and work on a phone is not obviously less. Calendar libraries earn their weight on
 editing interactions this app doesn't have.
 
+### Decision 13: Team Scoping & Active-Team Context
+
+*Belongs with Decision 5 (Auth); numbered last because it was settled after the rest.*
+
+**Options considered:**
+- **Team ID in the URL** — every scoped route lives under `/t/[teamId]/…`, and server
+  code reads the team from route params.
+- **Active team in the session/cookie** — one "current team" stored server-side, switched
+  by a mutation, with URLs staying team-free.
+- **Postgres row-level security** — scope enforced in the database via policies and a
+  session variable.
+
+**Decision:** **Team ID in the URL**, with a single `requireTeamAccess(teamId, minRole)`
+helper called at the top of every scoped page loader and server action. It resolves the
+caller's `Membership` for that team, throws on absence, and returns the role for finer
+checks. Archived teams additionally reject mutations.
+
+**Rationale:** Hidden active-team state is the bug factory here — a coach opens last
+season in one tab and this season in another, and a cookie-based "current team" silently
+writes the lineup to the wrong one. Putting the team in the URL makes every request
+self-describing, makes tabs independent, and makes links shareable. It also means the
+authorization check has a parameter to check *against*, rather than having to trust
+ambient state. RLS is the most rigorous option and the wrong one for a solo 6-week
+build — it's a second authorization language to learn (the same reason the BaaS option
+lost in Decision 2), and Prisma's support for it would need threading a session variable
+through every connection.
+
+**The discipline this requires:** every Prisma query on a scoped entity must filter by
+`teamId`, and every mutation must call the helper first. This is a convention, not a
+compiler guarantee — the mitigation is to keep all scoped queries behind a thin data
+module rather than calling Prisma directly from components, so there's one place to audit.
+
+### Decision 14: Animation & Motion
+
+**Options considered:**
+- **Motion** (`motion`, formerly `framer-motion`) — declarative animation for React with
+  gesture support, layout animation, and a hardware-accelerated engine.
+- **`@formkit/auto-animate`** — a ~2 kB zero-config plugin that animates list add/remove/
+  reorder automatically with a single hook.
+- **`react-spring`** — physics-based, powerful, more API surface to learn.
+- **Tailwind transitions + `tailwindcss-animate`** — CSS only, no runtime dependency.
+
+**Decision:** **Motion**, imported via its `LazyMotion` + `m` API so the shipped bundle is
+roughly 6 kB rather than the full ~34 kB. Tailwind transitions stay the default for
+trivial hover and focus states — don't reach for a library to fade a button.
+
+**Rationale:** This app has a genuine, non-decorative use for motion: the moment a coach
+hits **Finalize**, and the moment a parent opens the view page and sees where their kid is
+playing. Those deserve to feel good, and they're the app's emotional payoff. Motion is the
+most familiar-shaped option for a React developer (`<m.div animate={…}>` needs no new
+mental model), has by far the largest body of examples, and its `AnimatePresence` is the
+only clean answer for animating elements *out* — which plain Tailwind cannot do at all.
+`auto-animate` is a delightful 20-second win and genuinely tempting, but it's list-only
+and can't touch the diamond. Consider adding it alongside Motion for the roster and
+directory lists if Motion's `layout` prop feels like too much ceremony there.
+
+**⚠️ The caveat that matters — Motion and `@dnd-kit` must not both animate the same
+element.** `@dnd-kit` positions a dragging item by writing `transform`, and Motion's
+`layout` prop animates `transform` too. Put both on one node and the item lags the finger,
+drifts, or snaps back. The rule: **`@dnd-kit` owns everything during a drag; Motion owns
+everything else.** Concretely — no `layout` prop on sortable items or diamond drop targets;
+use `@dnd-kit`'s own `transition` for drag settling; use Motion for page and route
+transitions, the Finalize confirmation, RSVP toggles, empty-state and toast entrances, and
+the diamond's initial reveal on the view page. If a reorder animation outside of dragging
+is wanted later, `dnd-kit`'s `DragOverlay` plus its sortable transition is the supported
+path, not `layout`.
+
+**Budget note:** animation is the first thing to cut if week 4 is tight. It's genuinely
+additive, and nothing else depends on it.
+
 ## Stack Summary
 
 | Layer | Choice | Team familiarity | Est. monthly cost | Notes |
@@ -292,6 +363,7 @@ editing interactions this app doesn't have.
 | Drag & drop | `@dnd-kit` | Medium | $0 | `TouchSensor` delay is a stated requirement |
 | UI | Tailwind + shadcn/ui | High | $0 | Components copied in, not imported |
 | Dates | `date-fns` + custom views | High | $0 | Read-only calendar; no library warranted |
+| Animation | Motion (`LazyMotion` + `m`) | Medium–High | $0 | **Never `layout` on a `@dnd-kit` node** — see Decision 14 |
 | Domain | Registrar of choice | High | ~$1 | ~$12/year; needed for email deliverability |
 
 **Innovation token:** **spent on Web Push** (`web-push`, VAPID, and a service worker) —
@@ -310,7 +382,8 @@ Plus roughly $12/year for a domain.
 
 | Decision | Revisit if… |
 |---|---|
-| Single-team scope (whole architecture) | Another coach asks to use it. This is the expensive one — multi-tenancy is cheap to design in and costly to retrofit. If there's any real chance, say so *before* the schema is written. |
+| Single-**owner** scope | Another coach asks for their own teams in the same instance. Per-team scoping (Decision 13) already covers most of the work; what's missing is team ownership, a creation flow, and billing. Still the most expensive change on this list. |
+| URL-based team scoping | The `/t/[teamId]/…` prefix makes URLs ugly enough to complain about. The fix is a default-team redirect at the root, not moving the scope into a cookie. |
 | Neon free tier | Cold-start latency on the autosuspended database becomes noticeable at the field, or storage passes the free limit. Upgrade to the paid tier; it's a plan change, not a migration. |
 | Prisma | Serverless cold starts become a felt problem, or the bundle size starts to matter. Drizzle is the migration target. |
 | Auth.js v5 | Wiring the magic-link flow eats more than ~4 days. Fall back to Clerk and accept the two-system user sync. |
