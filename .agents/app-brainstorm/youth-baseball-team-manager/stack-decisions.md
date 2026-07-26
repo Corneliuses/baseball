@@ -21,7 +21,7 @@ Written before any technology is named.
 | Layer | Requirements (technology-agnostic) |
 |---|---|
 | **Client** | Installable to a phone home screen. Mobile-first. Touch drag-and-drop with an activation delay so page scrolling never triggers a drag. Must render a labeled baseball diamond with arbitrary drop targets, plus a reorderable vertical list. Realtime sync **not** required — a refresh is acceptable. Offline read of the finalized lineup is desirable, not required, for MVP. |
-| **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs gate which players may appear in a lineup. **Team-scoped throughout** — `Player`, `Event`, `Message`, and `Invitation` each belong to exactly one `Team`, and access is mediated by a `Membership` join table carrying a per-team role. Entities: `Team`, `Membership`, `Player`, `Guardian`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
+| **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs gate which players may appear in a lineup. **Two tiers** — people (`User`, `Player`) persist across seasons; participation (`Membership`, `RosterEntry`) is team-scoped, as is everything a team produces (`Event`, `Message`, `Invitation`). See Decision 15. Entities: `Team`, `Membership`, `Player`, `RosterEntry`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
 | **Auth** | Passwordless. Invitation-gated: no self-serve signup exists. Onboarding is one-time, expiring email links. Three roles — owner, coach, parent — assigned **per team** and checked server-side on every mutation, against the team that owns the record being touched. Long-lived sessions so parents are not re-authenticating on a phone at a ballfield. |
 | **Backgrounding** | Send transactional email (invites, coach broadcasts, parent→coaches). Fan out web push to stored subscriptions. Optionally, a scheduled pre-game RSVP reminder. Fan-out size is ~25 recipients — no queue, no worker infrastructure justified. |
 | **Scale** | ~15 players, ~25 guardians, ~40 accounts *per team*, growing by one team a season. Peak concurrency is one coach and a handful of parents on a Saturday morning, all on the active team. Archived teams are cold data that must remain readable. Explicitly do not design for growth. |
@@ -124,9 +124,10 @@ signup path.
 
 **Rationale:** Auth.js's Email provider *is* the mechanism the proposal describes — a
 one-time, expiring link — so it's a direct fit rather than something bent into shape. It
-keeps every user record in the same database as players and guardians, which matters
-because the interesting relationships here are `User → Guardian → Player`; roles become
-plain columns and joins rather than metadata in a second system. Clerk is faster to a
+keeps every user record in the same database as players, which matters because the
+interesting relationships here are `User → GuardianPlayer → Player` and
+`User → Membership → Team`; roles become plain joins rather than metadata in a second
+system. It also tolerates the `User` rows that exist before anyone signs in (Decision 15). Clerk is faster to a
 login screen and free at this scale, but it splits identity across two systems and would
 require webhook syncing to keep the guardian graph aligned with Clerk's user list —
 avoidable complexity for 40 accounts that never self-register. The hand-rolled option is
@@ -309,6 +310,12 @@ through every connection.
 compiler guarantee — the mitigation is to keep all scoped queries behind a thin data
 module rather than calling Prisma directly from components, so there's one place to audit.
 
+**Scoped is not the same as global.** Per Decision 15, `Player` and `User` deliberately
+have no `teamId` — they're people. Reading a roster means querying `RosterEntry` filtered
+by team, not `Player`. The only place a global read is legitimate is the returning-player
+picker, which is owner-only by definition; every other path reaches people *through* the
+team's `RosterEntry` or `Membership` rows.
+
 ### Decision 14: Animation & Motion
 
 **Options considered:**
@@ -347,6 +354,63 @@ path, not `layout`.
 **Budget note:** animation is the first thing to cut if week 4 is tight. It's genuinely
 additive, and nothing else depends on it.
 
+### Decision 15: Person & Roster Identity Model
+
+**The requirement:** the owner builds a new season's roster by picking returning kids from
+past teams. Doing so must pull their guardians onto the new team automatically, as
+parents, without re-inviting anyone.
+
+**Options considered:**
+- **People are global; participation is team-scoped.** `Player` and `User` are person
+  records that outlive any team. `RosterEntry` puts a player on a team; `Membership` puts
+  a user on a team with a role.
+- **Everything is team-scoped.** A returning kid is a fresh `Player` row each season, and
+  "adding a returning player" copies fields from an old row.
+- **Global with a season pointer.** One `Player` row carrying `currentTeamId`, rewritten
+  each season.
+
+**Decision:** **People are global; participation is team-scoped.**
+
+```
+User      (person: email, name, phone — may exist before ever signing in)
+Player    (person: name, DOB — no team column)
+Team      (season, archivedAt)
+Membership   (userId, teamId, role)          -- per-team access + role
+RosterEntry  (playerId, teamId, jerseyNumber) -- per-team roster spot
+GuardianPlayer (userId, playerId)             -- family link, NOT team-scoped
+```
+
+**Rationale:** The requirement is a join-table shape. Once `Player` has no `teamId`,
+"add a returning kid" is one `RosterEntry` insert plus a `Membership` upsert per linked
+guardian — and the guardian link is already there because it was never team-scoped in the
+first place. The copy-rows alternative has to duplicate the kid, re-derive the family
+links, and then answer "which of these three Jimmy Kelleher rows is the real one" forever.
+The `currentTeamId` variant can't represent a kid on two teams at once and destroys last
+season the moment you write to it.
+
+Jersey number lives on `RosterEntry`, not `Player`, because numbers get reassigned every
+season — that placement is the small detail that makes the model correct rather than
+merely tidy.
+
+**Corollary — `Guardian` is gone, folded into `User`.** The earlier entity list had both,
+which forced an awkward question: a parent invited but not yet signed in still needs a
+`Membership`, so does membership point at the guardian or the account? Collapsing them
+answers it — a `User` row is created when the owner enters an email, carries name and
+phone, and simply hasn't verified yet. Auth.js's Prisma adapter attaches the session on
+first magic-link click. This also handles the coach-who-is-also-a-parent case for free,
+since a role is a `Membership`, not a property of the person. **What it gives up:** a
+guardian with no email address cannot exist. That's already true of an invite-by-email
+app, but it's a real constraint if a grandparent should ever be a phone-only contact.
+
+**The cascade, precisely.** Adding player P to team T:
+1. Insert `RosterEntry(P, T)`, prompting for a jersey number.
+2. For each `GuardianPlayer` of P, upsert `Membership(user, T, role: parent)`.
+3. Never touch an existing `Membership` — roles do not inherit. A guardian who coached
+   last season arrives as a parent and is elevated on T individually.
+
+Step 3 is the one an implementer will get wrong by being helpful, so it belongs in
+`AGENTS.md` as a rule, not just here.
+
 ## Stack Summary
 
 | Layer | Choice | Team familiarity | Est. monthly cost | Notes |
@@ -384,6 +448,8 @@ Plus roughly $12/year for a domain.
 |---|---|
 | Single-**owner** scope | Another coach asks for their own teams in the same instance. Per-team scoping (Decision 13) already covers most of the work; what's missing is team ownership, a creation flow, and billing. Still the most expensive change on this list. |
 | URL-based team scoping | The `/t/[teamId]/…` prefix makes URLs ugly enough to complain about. The fix is a default-team redirect at the root, not moving the scope into a cookie. |
+| Folding `Guardian` into `User` | A guardian needs to exist without an email address — a phone-only emergency contact, say. Re-introducing a contact record is additive and doesn't disturb `Membership`. |
+| Global `Player` identity | Never — this is the load-bearing one. Adding returning kids to a new team depends on it (Decision 15), and reversing it means reconstructing family links per season. |
 | Neon free tier | Cold-start latency on the autosuspended database becomes noticeable at the field, or storage passes the free limit. Upgrade to the paid tier; it's a plan change, not a migration. |
 | Prisma | Serverless cold starts become a felt problem, or the bundle size starts to matter. Drizzle is the migration target. |
 | Auth.js v5 | Wiring the magic-link flow eats more than ~4 days. Fall back to Clerk and accept the two-system user sync. |

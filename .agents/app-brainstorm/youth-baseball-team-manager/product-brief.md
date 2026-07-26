@@ -52,10 +52,19 @@ Scoped to fit **6 weeks of evenings and weekends**.
   stay readable. Team-scoped settings live here, including `allPlay`.
 - **Roles** — owner, coach, parent, assigned **per team**. The same person can be a coach
   on this year's team and a parent on last year's. Owner can elevate a parent to coach on
-  the team they're viewing. Coaches and parents see only the teams they're assigned to;
-  the owner sees all of them.
-- **Roster** — players with jersey numbers (editable); guardians linked to players
-  many-to-many (a player can have several guardians; a guardian can have several kids).
+  the team they're viewing. **Roles never inherit across teams** — someone joining a new
+  team always arrives as a parent and is elevated individually, even if they coached last
+  season. Coaches and parents see only the teams they're assigned to; the owner sees all
+  of them.
+- **Roster** — players with jersey numbers (editable, per team — numbers change between
+  seasons); guardians linked to players many-to-many (a player can have several guardians;
+  a guardian can have several kids). Players and guardians are **people who persist across
+  seasons**, not per-team records.
+- **Add returning players** — when building a new team's roster, the owner picks from
+  players on any past team instead of retyping them. Adding a returning player
+  automatically pulls their linked guardians onto the new team as **parents**, so the
+  family is reachable immediately and nobody re-onboards. Explicitly *not* a bulk "copy
+  last year's roster" — it's a deliberate pick, because rosters genuinely change.
 - **Directory** — parent name, phone, email, and their kids. Visible to all signed-in
   members.
 - **Schedule** — coach creates games and practices with location and time; parents see a
@@ -96,9 +105,10 @@ Deliberately deferred past the 6-week mark, in the order I'd add them:
   owns every team in the instance and is the only one who can create one. There is no
   self-serve signup for other coaches, no org or league layer above the team, and no
   billing. Another coach wanting their own teams means running a second instance.
-- **Cross-team views.** No "all my teams" combined schedule, no roster carried forward
-  automatically from last season, no season-over-season reporting. Teams are siloed and
-  you switch between them.
+- **Cross-team views.** No "all my teams" combined schedule, no season-over-season
+  reporting, no player history page. You switch teams to see a team. The one deliberate
+  seam between teams is picking returning players onto a new roster; nothing else reads
+  across them.
 - **Score, stats, and box scores.** This app schedules and assigns; it does not record
   what happened.
 - **Inning-by-inning position rotation.** Positions are static for the whole game, by
@@ -177,11 +187,13 @@ decision.
 
 ## Open Questions
 
-- **Is a returning kid the same player record or a new one?** Assumed **new** — a `Player`
-  is a roster entry belonging to one team, so a kid who plays three seasons has three
-  rows. Guardians and user accounts are global and carry over, so a returning family
-  doesn't re-onboard. The alternative (one player identity across teams) only pays off if
-  you ever want season-over-season history, which is explicitly out of scope.
+- **Does adding a returning player email their guardians?** They already have accounts, so
+  no invitation is needed — but landing on a new team's schedule with no warning is
+  strange. Assumed a short "you've been added to <team>" notification, distinct from the
+  invitation email. Confirm, or say no email at all.
+- **Can a player be on two active teams at once?** Assumed **yes**, the model allows it
+  (travel team plus rec team is common) and nothing prevents it. Say so if it should be
+  blocked.
 - **Are past teams read-only?** Assumed **yes** — an archived team renders fully but
   blocks mutations, which removes a whole class of "edited the wrong season's lineup"
   mistakes. Cheap to add now, and easy to relax later if it turns out to be annoying.
