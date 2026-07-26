@@ -23,7 +23,7 @@ Written before any technology is named.
 | **Client** | Installable to a phone home screen. Mobile-first. Touch drag-and-drop with an activation delay so page scrolling never triggers a drag. Must render a labeled baseball diamond with arbitrary drop targets, plus a reorderable vertical list. Realtime sync **not** required — a refresh is acceptable. Offline read of the finalized lineup is desirable, not required, for MVP. |
 | **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs gate which players may appear in a lineup. **Two tiers** — people (`User`, `Player`) persist across seasons and hold no team-specific attributes; participation (`Membership`, `RosterEntry`) is team-scoped, as is everything a team produces (`Event`, `Message`, `Invitation`) and everything downstream of an event (`Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`). A player may be on two active teams at once, so jersey number, batting slot, and position are per-team by necessity, not merely by preference. See Decision 15. Entities: `Team`, `Membership`, `Player`, `RosterEntry`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
 | **Auth** | Passwordless. Invitation-gated: no self-serve signup exists. Onboarding is one-time, expiring email links. Three roles — owner, coach, parent — assigned **per team** and checked server-side on every mutation, against the team that owns the record being touched. Long-lived sessions so parents are not re-authenticating on a phone at a ballfield. |
-| **Backgrounding** | Send transactional email (invites, coach broadcasts, parent→coaches). Fan out web push to stored subscriptions. Optionally, a scheduled pre-game RSVP reminder. Fan-out size is ~25 recipients — no queue, no worker infrastructure justified. |
+| **Backgrounding** | Send transactional email — invitations, **added-to-team notices** (sent to existing accounts when a returning player pulls their guardians onto a new team; a heads-up and a link, *not* a magic link), coach broadcasts, and parent→coaches. Fan out web push to stored subscriptions. Optionally, a scheduled pre-game RSVP reminder. Fan-out size is ~25 recipients — no queue, no worker infrastructure justified. |
 | **Scale** | ~15 players, ~25 guardians, ~40 accounts *per team*, growing by one team a season. Peak concurrency is one coach and a handful of parents on a Saturday morning, all on the active team. Archived teams are cold data that must remain readable. Explicitly do not design for growth. |
 | **Integrations** | A transactional email provider and browser Web Push. No payments, no AI, no third-party sports data. |
 
@@ -403,9 +403,26 @@ holds only what's true of the child: name and date of birth.
 Lineup and position data is already team-specific by construction and needs no `teamId` of
 its own: `PositionAssignment` and `LineupSlot` hang off `Lineup`, which hangs off `Event`,
 which belongs to a `Team`. Reach them through that chain rather than denormalizing a team
-column onto them. The one thing to enforce explicitly is the player pool — a lineup may
-only contain players with a `RosterEntry` on *that* event's team, which is a validation on
-write, not something the foreign keys catch on their own.
+column onto them.
+
+**Roster containment is a hard rule, enforced server-side.** A `LineupSlot` or
+`PositionAssignment` may only reference a player holding a `RosterEntry` on that event's
+team — owners and coaches included, with no override. The foreign keys do *not* catch
+this: `LineupSlot.playerId` points at the global `Player` table, so nothing structural
+stops a kid from another of the owner's teams landing in this team's batting order. Three
+layers, because the first two are convenience and only the third is the guarantee:
+
+1. The drag UI only offers players from the team's roster who are RSVP'd attending.
+2. The server action re-derives that eligible set from `RosterEntry` and rejects any
+   player outside it — never trusting IDs from the request body.
+3. A composite foreign key from lineup rows to `RosterEntry(playerId, teamId)` rather
+   than to `Player(id)`, so the database refuses the write outright. Worth the slightly
+   awkward schema: it is the only version of this rule that cannot be bypassed by a bug
+   in application code.
+
+An owner running two teams is precisely the person who can trip this — two rosters open,
+two games the same weekend, adjacent tabs — so it should fail loudly rather than quietly
+recording a kid at shortstop for a team they aren't on.
 
 **Corollary — `Guardian` is gone, folded into `User`.** The earlier entity list had both,
 which forced an awkward question: a parent invited but not yet signed in still needs a
@@ -422,9 +439,13 @@ app, but it's a real constraint if a grandparent should ever be a phone-only con
 2. For each `GuardianPlayer` of P, upsert `Membership(user, T, role: parent)`.
 3. Never touch an existing `Membership` — roles do not inherit. A guardian who coached
    last season arrives as a parent and is elevated on T individually.
+4. Email each guardian whose membership was newly created a plain "you've been added to
+   T" notice. No magic link — they have an account already. Skip anyone who was already
+   a member, so re-adding a sibling doesn't re-notify the household.
 
 Step 3 is the one an implementer will get wrong by being helpful, so it belongs in
-`AGENTS.md` as a rule, not just here.
+`AGENTS.md` as a rule, not just here. Step 4 keys off *newly created* memberships rather
+than the guardian list, which is what keeps it quiet when adding two kids from one family.
 
 ## Stack Summary
 

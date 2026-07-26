@@ -65,21 +65,26 @@ Scoped to fit **6 weeks of evenings and weekends**.
 - **Add returning players** — when building a new team's roster, the owner picks from
   players on any past team instead of retyping them. Adding a returning player
   automatically pulls their linked guardians onto the new team as **parents**, so the
-  family is reachable immediately and nobody re-onboards. Explicitly *not* a bulk "copy
-  last year's roster" — it's a deliberate pick, because rosters genuinely change.
+  family is reachable immediately and nobody re-onboards. Each affected guardian gets a
+  short **"you've been added to <team>"** email — no magic link, since they already have an
+  account; just a heads-up and a way in. Explicitly *not* a bulk "copy last year's
+  roster" — it's a deliberate pick, because rosters genuinely change.
 - **Directory** — parent name, phone, email, and their kids. Visible to all signed-in
   members.
 - **Schedule** — coach creates games and practices with location and time; parents see a
   month calendar view and a chronological list view.
 - **RSVP** — parent toggles attending / not attending per kid per event.
-- **Lineup** — drag-and-drop batting order over *attending* players, drawn from the
-  **current team's roster only**. `allPlay = true` → slots equal the attending count;
-  `allPlay = false` → 9 slots. Dropping onto an occupied slot swaps. Cancel / Finalize.
+- **Lineup** — drag-and-drop batting order over *attending* players. The eligible pool is
+  **players rostered on the event's own team, and nobody else** — a kid on another of the
+  owner's teams is not offered, and the server rejects them even if the request is hand-
+  built. `allPlay = true` → slots equal the attending count; `allPlay = false` → 9 slots.
+  Dropping onto an occupied slot swaps. Cancel / Finalize.
 - **Positions** — drag players onto a labeled diamond, set once per game (no inning
   rotation). The nine standard defensive positions: **P, C, 1B, 2B, 3B, SS, LF, CF, RF**
   — `C` is Catcher, `CF` is Center Field. `allPlay = true` → one kid per infield position
   (P, C, 1B, 2B, 3B, SS), outfield holds all remaining players. `allPlay = false` → one
-  kid per position, remainder go to a Bench/Dugout zone. Cancel / Finalize.
+  kid per position, remainder go to a Bench/Dugout zone. Same roster restriction as the
+  lineup — only the event's own team. Cancel / Finalize.
 - **View page** — one mobile-friendly page with the labeled diamond and the ordered
   lineup, stacked vertically on phones, with touch-activation delay so scrolling never
   triggers a drag.
@@ -193,10 +198,6 @@ decision.
 
 ## Open Questions
 
-- **Does adding a returning player email their guardians?** They already have accounts, so
-  no invitation is needed — but landing on a new team's schedule with no warning is
-  strange. Assumed a short "you've been added to <team>" notification, distinct from the
-  invitation email. Confirm, or say no email at all.
 - **Are past teams read-only?** Assumed **yes** — an archived team renders fully but
   blocks mutations, which removes a whole class of "edited the wrong season's lineup"
   mistakes. Cheap to add now, and easy to relax later if it turns out to be annoying.
