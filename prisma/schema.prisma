@@ -1,0 +1,306 @@
+// Youth Baseball Team Manager — data model.
+//
+// The shape here is load-bearing and is explained in
+// .agents/app-brainstorm/youth-baseball-team-manager/stack-decisions.md
+// (Decisions 13, 15 and 16). Two rules survive from those decisions:
+//
+//   1. People are global; participation is team-scoped.
+//      `User` and `Player` are persons and carry NO team-specific column.
+//      `Membership` and `RosterEntry` are where a person meets a team.
+//
+//   2. The batting order and positions chart are STANDING per team, not
+//      per game. They live as nullable columns on `RosterEntry`, which is
+//      why there is no Lineup / LineupSlot / PositionAssignment model. A
+//      batting slot is a property of a roster spot, so a player cannot be
+//      in a lineup they are not rostered on — the invalid state is
+//      unrepresentable rather than merely rejected.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Per-team role. Never inherited across teams — someone added to a new team
+/// always arrives as PARENT and is elevated on that team individually.
+enum Role {
+  OWNER
+  COACH
+  PARENT
+}
+
+enum EventType {
+  GAME
+  PRACTICE
+}
+
+/// The nine standard defensive positions. C is Catcher; CENTER_FIELD is CF.
+enum Position {
+  PITCHER
+  CATCHER
+  FIRST_BASE
+  SECOND_BASE
+  THIRD_BASE
+  SHORTSTOP
+  LEFT_FIELD
+  CENTER_FIELD
+  RIGHT_FIELD
+}
+
+// ---------------------------------------------------------------------------
+// People — global, no team column, persist across seasons
+// ---------------------------------------------------------------------------
+
+/// A person with an account, or who will have one. Rows are created when the
+/// owner enters an email, BEFORE that person ever signs in — which is what
+/// lets a not-yet-verified parent hold a Membership. Auth.js attaches the
+/// session on first magic-link click.
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?
+  createdAt     DateTime  @default(now())
+
+  accounts          Account[]
+  sessions          Session[]
+  memberships       Membership[]
+  guardianOf        GuardianPlayer[]
+  sentMessages      Message[]
+  pushSubscriptions PushSubscription[]
+}
+
+/// A child. Holds only what is true of the child regardless of team.
+/// Do NOT add jerseyNumber, preferredPosition, or battingOrder here — a player
+/// may be on two active teams at once and those differ per team.
+model Player {
+  id          String    @id @default(cuid())
+  name        String
+  dateOfBirth DateTime?
+  createdAt   DateTime  @default(now())
+
+  rosterEntries RosterEntry[]
+  guardians     GuardianPlayer[]
+  rsvps         Rsvp[]
+}
+
+/// Family link. Deliberately NOT team-scoped: it is what makes adding a
+/// returning player able to pull their guardians onto a new team without
+/// reconstructing anything.
+model GuardianPlayer {
+  userId   String
+  playerId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@id([userId, playerId])
+  @@index([playerId])
+}
+
+// ---------------------------------------------------------------------------
+// Teams and participation
+// ---------------------------------------------------------------------------
+
+model Team {
+  id     String  @id @default(cuid())
+  name   String
+  season String?
+
+  /// Team setting: every kid bats and fields.
+  allPlay Boolean @default(true)
+
+  /// Non-null means archived. Archived teams render fully but reject every
+  /// mutation, for every role including OWNER — enforced in requireTeamAccess.
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  memberships   Membership[]
+  rosterEntries RosterEntry[]
+  events        Event[]
+  invitations   Invitation[]
+  messages      Message[]
+}
+
+/// A person's access to one team, with the role they hold on it.
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String
+  role      Role     @default(PARENT)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@index([teamId])
+}
+
+/// A player's spot on one team — and, via the two nullable chart columns, that
+/// team's standing lineup and positions chart.
+///
+/// `battingOrder` and `position` are null for a benched player, which is how
+/// allPlay = false is expressed. The chart is simply this table ordered by
+/// battingOrder. There is no separate lineup model and no per-game copy: see
+/// Decision 16 before adding one.
+model RosterEntry {
+  id           String @id @default(cuid())
+  playerId     String
+  teamId       String
+  jerseyNumber Int?
+
+  /// Standing batting order slot. Null = not in the batting order.
+  battingOrder Int?
+
+  /// Standing defensive position. Null = bench / dugout.
+  position Position?
+
+  createdAt DateTime @default(now())
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, teamId])
+  @@unique([teamId, battingOrder])
+  @@unique([teamId, position])
+  @@unique([teamId, jerseyNumber])
+  @@index([teamId])
+}
+
+/// Gates account creation — there is no self-serve signup. Scoped to the team
+/// the person is being invited onto.
+model Invitation {
+  id         String    @id @default(cuid())
+  teamId     String
+  email      String
+  role       Role      @default(PARENT)
+  token      String    @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([email])
+}
+
+// ---------------------------------------------------------------------------
+// Schedule
+// ---------------------------------------------------------------------------
+
+model Event {
+  id       String    @id @default(cuid())
+  teamId   String
+  type     EventType
+  startsAt DateTime
+  location String?
+  opponent String?
+  notes    String?
+
+  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  rsvps Rsvp[]
+
+  @@index([teamId, startsAt])
+}
+
+/// One player's attendance for one event. Practices have RSVPs too; only games
+/// are read by the next-game readiness check.
+model Rsvp {
+  id        String   @id @default(cuid())
+  eventId   String
+  playerId  String
+  attending Boolean
+  updatedAt DateTime @updatedAt
+
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, playerId])
+  @@index([playerId])
+}
+
+// ---------------------------------------------------------------------------
+// Messaging and push
+// ---------------------------------------------------------------------------
+
+model Message {
+  id       String   @id @default(cuid())
+  teamId   String
+  senderId String
+  subject  String
+  body     String
+  sentAt   DateTime @default(now())
+
+  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id])
+
+  @@index([teamId, sentAt])
+  @@index([senderId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (NextAuth) adapter models
+// ---------------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
