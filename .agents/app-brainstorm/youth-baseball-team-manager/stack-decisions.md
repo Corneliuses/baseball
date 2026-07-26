@@ -21,7 +21,7 @@ Written before any technology is named.
 | Layer | Requirements (technology-agnostic) |
 |---|---|
 | **Client** | Installable to a phone home screen. Mobile-first. Touch drag-and-drop with an activation delay so page scrolling never triggers a drag. Must render a labeled baseball diamond with arbitrary drop targets, plus a reorderable vertical list. Realtime sync **not** required — a refresh is acceptable. Offline read of the finalized lineup is desirable, not required, for MVP. |
-| **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs gate which players may appear in a lineup. **Two tiers** — people (`User`, `Player`) persist across seasons; participation (`Membership`, `RosterEntry`) is team-scoped, as is everything a team produces (`Event`, `Message`, `Invitation`). See Decision 15. Entities: `Team`, `Membership`, `Player`, `RosterEntry`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
+| **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs gate which players may appear in a lineup. **Two tiers** — people (`User`, `Player`) persist across seasons and hold no team-specific attributes; participation (`Membership`, `RosterEntry`) is team-scoped, as is everything a team produces (`Event`, `Message`, `Invitation`) and everything downstream of an event (`Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`). A player may be on two active teams at once, so jersey number, batting slot, and position are per-team by necessity, not merely by preference. See Decision 15. Entities: `Team`, `Membership`, `Player`, `RosterEntry`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
 | **Auth** | Passwordless. Invitation-gated: no self-serve signup exists. Onboarding is one-time, expiring email links. Three roles — owner, coach, parent — assigned **per team** and checked server-side on every mutation, against the team that owns the record being touched. Long-lived sessions so parents are not re-authenticating on a phone at a ballfield. |
 | **Backgrounding** | Send transactional email (invites, coach broadcasts, parent→coaches). Fan out web push to stored subscriptions. Optionally, a scheduled pre-game RSVP reminder. Fan-out size is ~25 recipients — no queue, no worker infrastructure justified. |
 | **Scale** | ~15 players, ~25 guardians, ~40 accounts *per team*, growing by one team a season. Peak concurrency is one coach and a handful of parents on a Saturday morning, all on the active team. Archived teams are cold data that must remain readable. Explicitly do not design for growth. |
@@ -391,6 +391,21 @@ season the moment you write to it.
 Jersey number lives on `RosterEntry`, not `Player`, because numbers get reassigned every
 season — that placement is the small detail that makes the model correct rather than
 merely tidy.
+
+**A player may be on two active teams simultaneously**, which is the case that turns that
+detail into a hard rule: **`Player` carries no team-specific attribute, ever.** A kid
+playing travel and rec at once has two jersey numbers, two batting orders, and two
+position assignments live on the same Saturday, and every one of them belongs to a team.
+The temptations to resist are a `jerseyNumber`, a `preferredPosition`, or a
+`battingOrderDefault` on `Player` — each looks harmless, each is wrong here. `Player`
+holds only what's true of the child: name and date of birth.
+
+Lineup and position data is already team-specific by construction and needs no `teamId` of
+its own: `PositionAssignment` and `LineupSlot` hang off `Lineup`, which hangs off `Event`,
+which belongs to a `Team`. Reach them through that chain rather than denormalizing a team
+column onto them. The one thing to enforce explicitly is the player pool — a lineup may
+only contain players with a `RosterEntry` on *that* event's team, which is a validation on
+write, not something the foreign keys catch on their own.
 
 **Corollary — `Guardian` is gone, folded into `User`.** The earlier entity list had both,
 which forced an awkward question: a parent invited but not yet signed in still needs a

@@ -59,7 +59,9 @@ Scoped to fit **6 weeks of evenings and weekends**.
 - **Roster** — players with jersey numbers (editable, per team — numbers change between
   seasons); guardians linked to players many-to-many (a player can have several guardians;
   a guardian can have several kids). Players and guardians are **people who persist across
-  seasons**, not per-team records.
+  seasons**, not per-team records. A player may be on **two active teams at once** — travel
+  plus rec is normal — and carries nothing team-specific with them: jersey number, batting
+  slot, and field position all belong to the team, never to the kid.
 - **Add returning players** — when building a new team's roster, the owner picks from
   players on any past team instead of retyping them. Adding a returning player
   automatically pulls their linked guardians onto the new team as **parents**, so the
@@ -70,9 +72,9 @@ Scoped to fit **6 weeks of evenings and weekends**.
 - **Schedule** — coach creates games and practices with location and time; parents see a
   month calendar view and a chronological list view.
 - **RSVP** — parent toggles attending / not attending per kid per event.
-- **Lineup** — drag-and-drop batting order over *attending* players. `allPlay = true` →
-  slots equal the attending count; `allPlay = false` → 9 slots. Dropping onto an occupied
-  slot swaps. Cancel / Finalize.
+- **Lineup** — drag-and-drop batting order over *attending* players, drawn from the
+  **current team's roster only**. `allPlay = true` → slots equal the attending count;
+  `allPlay = false` → 9 slots. Dropping onto an occupied slot swaps. Cancel / Finalize.
 - **Positions** — drag players onto a labeled diamond, set once per game (no inning
   rotation). The nine standard defensive positions: **P, C, 1B, 2B, 3B, SS, LF, CF, RF**
   — `C` is Catcher, `CF` is Center Field. `allPlay = true` → one kid per infield position
@@ -96,6 +98,10 @@ Deliberately deferred past the 6-week mark, in the order I'd add them:
   no signal.
 - **Calendar subscription** — ICS feed so the schedule lands in parents' phone calendars.
 - **Lineup templates** — start from last game's order instead of a blank slate.
+- **Double-booking warning** — a kid on two active teams can have two games at the same
+  time. Detecting the clash at RSVP time is a small query and a genuinely useful nudge,
+  but it's the only feature that reads across teams, so it waits until the single-team
+  paths are solid.
 - **Accessible non-drag input mode** — tap-to-select then tap-to-place, as an alternative
   to dragging.
 
@@ -191,9 +197,6 @@ decision.
   no invitation is needed — but landing on a new team's schedule with no warning is
   strange. Assumed a short "you've been added to <team>" notification, distinct from the
   invitation email. Confirm, or say no email at all.
-- **Can a player be on two active teams at once?** Assumed **yes**, the model allows it
-  (travel team plus rec team is common) and nothing prevents it. Say so if it should be
-  blocked.
 - **Are past teams read-only?** Assumed **yes** — an archived team renders fully but
   blocks mutations, which removes a whole class of "edited the wrong season's lineup"
   mistakes. Cheap to add now, and easy to relax later if it turns out to be annoying.
