@@ -32,13 +32,16 @@ The weekly rhythm this app has to make effortless:
 1. Coach adds the week's game or practice (date, time, location).
 2. Parents get an email (and, later, a push notification) and toggle their kid
    **Attending / Not attending**.
-3. On game day the coach opens the roster filtered to *attending players only*, drags a
-   batting order and drags kids onto a baseball diamond, and hits **Finalize**.
-4. Parents open the app at the field and see the batting order and the diamond, labeled.
-5. Repeat next game.
+3. As RSVPs land, the app tells the coach whether the team's standing chart still works
+   for the next game — who's out, and which field positions that leaves uncovered.
+4. The coach patches the chart if it needs it. Usually it doesn't, and this step is
+   skipped entirely.
+5. Parents open the app at the field and see the batting order and the diamond, labeled.
 
-Step 2 feeding step 3 is the whole point — RSVPs are not a courtesy, they are the input
-that makes lineup-setting fast.
+**The chart is standing, not per-game.** The coach sets a batting order and a positions
+chart once, and it stays until they change it. Steps 3 and 4 are exception handling, not a
+weekly ritual — the win is that a normal week needs no lineup work at all, and RSVPs earn
+their keep by telling the coach when a week *isn't* normal.
 
 ## MVP Features
 
@@ -48,8 +51,11 @@ Scoped to fit **6 weeks of evenings and weekends**.
   clicking it issues a one-time, expiring magic link and creates the account. No
   passwords. No self-serve signup.
 - **Teams** — the owner creates a team per season and keeps past teams around. Every
-  screen operates on exactly one **active team**, chosen from a team switcher; past teams
-  stay readable. Team-scoped settings live here, including `allPlay`.
+  screen operates on exactly one **active team**, chosen from a team switcher. **Past
+  teams are read-only** — they render completely but reject every mutation, so there's no
+  way to edit last season by accident. Members keep that read-only access indefinitely
+  rather than being removed at season's end. Team-scoped settings live here, including
+  `allPlay`.
 - **Roles** — owner, coach, parent, assigned **per team**. The same person can be a coach
   on this year's team and a parent on last year's. Owner can elevate a parent to coach on
   the team they're viewing. **Roles never inherit across teams** — someone joining a new
@@ -62,6 +68,8 @@ Scoped to fit **6 weeks of evenings and weekends**.
   seasons**, not per-team records. A player may be on **two active teams at once** — travel
   plus rec is normal — and carries nothing team-specific with them: jersey number, batting
   slot, and field position all belong to the team, never to the kid.
+  The owner seeds each roster by hand through the UI — **no CSV import**, since the
+  returning-player picker below covers the repeat case and a first season is one sitting.
 - **Add returning players** — when building a new team's roster, the owner picks from
   players on any past team instead of retyping them. Adding a returning player
   automatically pulls their linked guardians onto the new team as **parents**, so the
@@ -73,21 +81,29 @@ Scoped to fit **6 weeks of evenings and weekends**.
   members.
 - **Schedule** — coach creates games and practices with location and time; parents see a
   month calendar view and a chronological list view.
-- **RSVP** — parent toggles attending / not attending per kid per event.
-- **Lineup** — drag-and-drop batting order over *attending* players. The eligible pool is
-  **players rostered on the event's own team, and nobody else** — a kid on another of the
-  owner's teams is not offered, and the server rejects them even if the request is hand-
-  built. `allPlay = true` → slots equal the attending count; `allPlay = false` → 9 slots.
-  Dropping onto an occupied slot swaps. Cancel / Finalize.
-- **Positions** — drag players onto a labeled diamond, set once per game (no inning
-  rotation). The nine standard defensive positions: **P, C, 1B, 2B, 3B, SS, LF, CF, RF**
-  — `C` is Catcher, `CF` is Center Field. `allPlay = true` → one kid per infield position
-  (P, C, 1B, 2B, 3B, SS), outfield holds all remaining players. `allPlay = false` → one
-  kid per position, remainder go to a Bench/Dugout zone. Same roster restriction as the
-  lineup — only the event's own team. Cancel / Finalize.
+- **RSVP** — parent toggles attending / not attending per kid per event, **only for kids
+  they're linked to as a guardian**. Applies to practices as well as games.
+- **Lineup** — a drag-and-drop batting order over the team's roster, held as the team's
+  **standing order**. It persists until the coach changes it; edits are permanent. Players
+  can only ever come from this team's roster. `allPlay = true` → every rostered player
+  gets a slot; `allPlay = false` → 9 slots and the rest are unassigned. Dropping onto an
+  occupied slot swaps. Cancel / Save.
+- **Positions** — drag players onto a labeled diamond, likewise **standing** and likewise
+  permanent (no inning rotation, no per-game chart). The nine standard defensive
+  positions: **P, C, 1B, 2B, 3B, SS, LF, CF, RF** — `C` is Catcher, `CF` is Center Field.
+  `allPlay = true` → one kid per infield position (P, C, 1B, 2B, 3B, SS), outfield holds
+  all remaining players. `allPlay = false` → one kid per position, remainder sit in a
+  Bench/Dugout zone. Cancel / Save.
+- **Next-game readiness** — the one place attendance meets the chart. For the team's
+  **next game only** — not practices, not later games — the app shows who's out and which
+  positions that leaves uncovered. It never rearranges the chart on the coach's behalf;
+  it only tells them what's broken so they can decide. A patch made here is a normal chart
+  edit and therefore permanent, exactly like any other.
 - **View page** — one mobile-friendly page with the labeled diamond and the ordered
   lineup, stacked vertically on phones, with touch-activation delay so scrolling never
-  triggers a drag.
+  triggers a drag. Viewed in the context of the next game, players who aren't attending
+  are shown greyed rather than removed, so a parent sees the real chart and who's missing
+  from it.
 - **Email messaging** — coach broadcasts to all parents in one click, or targets
   individuals; parents can message all coaches at once. No parent-to-parent messaging.
 - **Installable PWA** — manifest, icons, add-to-home-screen.
@@ -102,7 +118,6 @@ Deliberately deferred past the 6-week mark, in the order I'd add them:
 - **Offline read caching** — service-worker caching so the lineup renders at a field with
   no signal.
 - **Calendar subscription** — ICS feed so the schedule lands in parents' phone calendars.
-- **Lineup templates** — start from last game's order instead of a blank slate.
 - **Double-booking warning** — a kid on two active teams can have two games at the same
   time. Detecting the clash at RSVP time is a small query and a genuinely useful nudge,
   but it's the only feature that reads across teams, so it waits until the single-team
@@ -137,8 +152,10 @@ TeamSnap, GameChanger, and SportsEngine all solve this — and all of them are h
 one coach needs, paywall the useful parts, or push parents into yet another account and
 app install. This app wins on exactly three things:
 
-1. **The RSVP-to-lineup pipeline is the product**, not a feature buried three screens
-   deep. Attending players are the only players you can drag.
+1. **A standing chart, not a weekly chore.** The competition assumes you build a lineup
+   every game. Here the batting order and diamond persist, and RSVPs exist to tell the
+   coach the one thing that actually matters: whether this week breaks the chart, and
+   which position it leaves empty. A normal week needs no lineup work at all.
 2. **`allPlay` is a first-class team setting.** Recreational youth leagues where every kid
    bats and every kid fields are the norm, and the big products model them as an
    exception.
@@ -198,16 +215,12 @@ decision.
 
 ## Open Questions
 
-- **Are past teams read-only?** Assumed **yes** — an archived team renders fully but
-  blocks mutations, which removes a whole class of "edited the wrong season's lineup"
-  mistakes. Cheap to add now, and easy to relax later if it turns out to be annoying.
-- **Do parents keep access to past teams they were on?** Assumed **yes**, read-only —
-  membership persists rather than being revoked at season end.
-- **Does the batting order persist between games as a default?** Assumed no for MVP;
-  every game starts blank.
-- **Can a parent RSVP on behalf of a kid they aren't linked to?** Assumed no — guardians
-  RSVP only for players they're linked to.
-- **What happens to a finalized lineup when a kid's RSVP changes afterward?** Assumed the
-  lineup is a snapshot and the coach is warned but not auto-edited. Needs confirming.
-- **Who seeds the initial roster** — is the owner typing in 15 players and 25 guardians by
-  hand, or is a CSV import worth the hour it costs?
+None outstanding. Every question raised during brainstorming has been answered and folded
+into the sections above; the decisions are recorded there rather than kept as a list here.
+
+The one thing to watch during the build, since it was the last decision made and the least
+tested against reality: **the standing chart's edits are permanent, with no undo and no
+history.** Patch the order because a kid is out on Saturday, and that patch is simply the
+order now. If that turns out to feel wrong in real use, the fix is per-game overrides
+(see Revisit Triggers in `stack-decisions.md`) — worth noticing early rather than
+discovering in week 5.

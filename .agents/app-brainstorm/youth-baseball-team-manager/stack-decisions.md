@@ -20,8 +20,8 @@ Written before any technology is named.
 
 | Layer | Requirements (technology-agnostic) |
 |---|---|
-| **Client** | Installable to a phone home screen. Mobile-first. Touch drag-and-drop with an activation delay so page scrolling never triggers a drag. Must render a labeled baseball diamond with arbitrary drop targets, plus a reorderable vertical list. Realtime sync **not** required — a refresh is acceptable. Offline read of the finalized lineup is desirable, not required, for MVP. |
-| **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs gate which players may appear in a lineup. **Two tiers** — people (`User`, `Player`) persist across seasons and hold no team-specific attributes; participation (`Membership`, `RosterEntry`) is team-scoped, as is everything a team produces (`Event`, `Message`, `Invitation`) and everything downstream of an event (`Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`). A player may be on two active teams at once, so jersey number, batting slot, and position are per-team by necessity, not merely by preference. See Decision 15. Entities: `Team`, `Membership`, `Player`, `RosterEntry`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Lineup`, `LineupSlot`, `PositionAssignment`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
+| **Client** | Installable to a phone home screen. Mobile-first. Touch drag-and-drop with an activation delay so page scrolling never triggers a drag. Must render a labeled baseball diamond with arbitrary drop targets, plus a reorderable vertical list. Realtime sync **not** required — a refresh is acceptable. Offline read of the current chart is desirable, not required, for MVP. |
+| **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs for a single upcoming event are read against the team's standing chart to flag gaps. **Two tiers** — people (`User`, `Player`) persist across seasons and hold no team-specific attributes; participation (`Membership`, `RosterEntry`) is team-scoped, as is everything a team produces (`Event`, `Message`, `Invitation`, `Rsvp`). A player may be on two active teams at once, so jersey number, batting slot, and position are per-team by necessity, not merely by preference. The batting order and positions chart are **standing per team, not per game**, and live as columns on `RosterEntry` — see Decisions 15 and 16. Entities: `Team`, `Membership`, `Player`, `RosterEntry`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
 | **Auth** | Passwordless. Invitation-gated: no self-serve signup exists. Onboarding is one-time, expiring email links. Three roles — owner, coach, parent — assigned **per team** and checked server-side on every mutation, against the team that owns the record being touched. Long-lived sessions so parents are not re-authenticating on a phone at a ballfield. |
 | **Backgrounding** | Send transactional email — invitations, **added-to-team notices** (sent to existing accounts when a returning player pulls their guardians onto a new team; a heads-up and a link, *not* a magic link), coach broadcasts, and parent→coaches. Fan out web push to stored subscriptions. Optionally, a scheduled pre-game RSVP reminder. Fan-out size is ~25 recipients — no queue, no worker infrastructure justified. |
 | **Scale** | ~15 players, ~25 guardians, ~40 accounts *per team*, growing by one team a season. Peak concurrency is one coach and a handful of parents on a Saturday morning, all on the active team. Archived teams are cold data that must remain readable. Explicitly do not design for growth. |
@@ -316,6 +316,10 @@ by team, not `Player`. The only place a global read is legitimate is the returni
 picker, which is owner-only by definition; every other path reaches people *through* the
 team's `RosterEntry` or `Membership` rows.
 
+**Archived teams are read-only**, which the helper enforces in the same place: a team with
+`archivedAt` set rejects every mutation regardless of the caller's role, owner included.
+One check beside the role check, rather than scattered guards on individual actions.
+
 ### Decision 14: Animation & Motion
 
 **Options considered:**
@@ -331,7 +335,7 @@ roughly 6 kB rather than the full ~34 kB. Tailwind transitions stay the default 
 trivial hover and focus states — don't reach for a library to fade a button.
 
 **Rationale:** This app has a genuine, non-decorative use for motion: the moment a coach
-hits **Finalize**, and the moment a parent opens the view page and sees where their kid is
+saves a chart change, and the moment a parent opens the view page and sees where their kid is
 playing. Those deserve to feel good, and they're the app's emotional payoff. Motion is the
 most familiar-shaped option for a React developer (`<m.div animate={…}>` needs no new
 mental model), has by far the largest body of examples, and its `AnimatePresence` is the
@@ -346,7 +350,7 @@ element.** `@dnd-kit` positions a dragging item by writing `transform`, and Moti
 drifts, or snaps back. The rule: **`@dnd-kit` owns everything during a drag; Motion owns
 everything else.** Concretely — no `layout` prop on sortable items or diamond drop targets;
 use `@dnd-kit`'s own `transition` for drag settling; use Motion for page and route
-transitions, the Finalize confirmation, RSVP toggles, empty-state and toast entrances, and
+transitions, the chart-saved confirmation, RSVP toggles, empty-state and toast entrances, and
 the diamond's initial reveal on the view page. If a reorder animation outside of dragging
 is wanted later, `dnd-kit`'s `DragOverlay` plus its sortable transition is the supported
 path, not `layout`.
@@ -400,29 +404,9 @@ The temptations to resist are a `jerseyNumber`, a `preferredPosition`, or a
 `battingOrderDefault` on `Player` — each looks harmless, each is wrong here. `Player`
 holds only what's true of the child: name and date of birth.
 
-Lineup and position data is already team-specific by construction and needs no `teamId` of
-its own: `PositionAssignment` and `LineupSlot` hang off `Lineup`, which hangs off `Event`,
-which belongs to a `Team`. Reach them through that chain rather than denormalizing a team
-column onto them.
-
-**Roster containment is a hard rule, enforced server-side.** A `LineupSlot` or
-`PositionAssignment` may only reference a player holding a `RosterEntry` on that event's
-team — owners and coaches included, with no override. The foreign keys do *not* catch
-this: `LineupSlot.playerId` points at the global `Player` table, so nothing structural
-stops a kid from another of the owner's teams landing in this team's batting order. Three
-layers, because the first two are convenience and only the third is the guarantee:
-
-1. The drag UI only offers players from the team's roster who are RSVP'd attending.
-2. The server action re-derives that eligible set from `RosterEntry` and rejects any
-   player outside it — never trusting IDs from the request body.
-3. A composite foreign key from lineup rows to `RosterEntry(playerId, teamId)` rather
-   than to `Player(id)`, so the database refuses the write outright. Worth the slightly
-   awkward schema: it is the only version of this rule that cannot be bypassed by a bug
-   in application code.
-
-An owner running two teams is precisely the person who can trip this — two rosters open,
-two games the same weekend, adjacent tabs — so it should fail loudly rather than quietly
-recording a kid at shortstop for a team they aren't on.
+Where the batting order and position assignments live is Decision 16 — and because the
+chart turns out to be team-level rather than per-game, **roster containment stops being a
+rule to enforce and becomes a fact of the schema**. See below.
 
 **Corollary — `Guardian` is gone, folded into `User`.** The earlier entity list had both,
 which forced an awkward question: a parent invited but not yet signed in still needs a
@@ -446,6 +430,63 @@ app, but it's a real constraint if a grandparent should ever be a phone-only con
 Step 3 is the one an implementer will get wrong by being helpful, so it belongs in
 `AGENTS.md` as a rule, not just here. Step 4 keys off *newly created* memberships rather
 than the guardian list, which is what keeps it quiet when adding two kids from one family.
+
+### Decision 16: Where the Lineup and Positions Live
+
+**The requirement, once settled:** the batting order and positions chart are **standing,
+not per-game**. A coach sets them once and they persist until edited; edits are permanent.
+There is no per-game authoring step and no per-game override. Attendance meets the chart
+in exactly one place — a readiness check for the **next game only**, which reports who's
+out and which positions are uncovered but never rearranges anything itself.
+
+**Options considered:**
+- **`Lineup` / `LineupSlot` / `PositionAssignment` tables hanging off `Event`** — the
+  original shape, one chart per game.
+- **A team-level `Chart` table plus per-game override rows** — a standing default that
+  game-day patches don't disturb.
+- **Columns on `RosterEntry`** — `battingOrder` and `position` become attributes of a
+  player's spot on a team, and "the chart" is just the roster read in order.
+
+**Decision:** **Columns on `RosterEntry`.** Three tables disappear.
+
+```
+RosterEntry (playerId, teamId, jerseyNumber, battingOrder?, position?)
+```
+
+`battingOrder` and `position` are nullable, which is exactly how `allPlay = false`
+expresses a bench: no slot, no position, still on the roster. The chart *is* the roster
+ordered by `battingOrder`.
+
+**Rationale:** A standing chart is one-per-team, and a roster entry is already
+one-per-player-per-team, so the chart has no identity of its own to model — inventing
+tables for it would be modelling a UI screen instead of the data. Per-game rows were the
+right shape for a per-game chart and are simply the wrong shape now; keeping them would
+mean writing near-identical rows every game to represent something that didn't change.
+The override variant was the real alternative and was explicitly rejected: the ask is that
+game-day patches *do* stick.
+
+**The consequence worth naming:** this dissolves the roster-containment problem entirely.
+The previous draft specified three enforcement layers — a filtered UI, a server-side
+re-derivation, and a composite foreign key — to stop a coach putting a kid from another of
+their teams into this team's lineup. None of that is needed now. A batting slot is a
+column on a roster row, so **being in the lineup and being on the roster are the same
+fact**. There is no write that could express the invalid state, which is a stronger
+guarantee than any check could have given. Cross-team leakage is now impossible rather
+than merely prevented.
+
+**What it gives up:** there is no record of what the lineup was for any particular past
+game, ever. Given that stats, box scores, and season history are all explicitly out of
+scope, that costs nothing today — but it is a genuine one-way door, and the moment anyone
+wants "what did we run last Saturday", the per-game tables have to come back and be
+populated going forward. Noted in Revisit Triggers.
+
+**Two things the readiness check must get right:**
+- It reads the **next game** for the active team — not practices, which have RSVPs but no
+  chart, and not later games, whose RSVPs will keep changing anyway.
+- It is a **read-only derivation**, computed on the fly by joining the roster's chart
+  columns against that event's `Rsvp` rows. It stores nothing and writes nothing. The
+  instinct to "materialize the effective lineup" is the one to resist — that's how the
+  per-game rows sneak back in.
 
 ## Stack Summary
 
@@ -485,6 +526,7 @@ Plus roughly $12/year for a domain.
 | Single-**owner** scope | Another coach asks for their own teams in the same instance. Per-team scoping (Decision 13) already covers most of the work; what's missing is team ownership, a creation flow, and billing. Still the most expensive change on this list. |
 | URL-based team scoping | The `/t/[teamId]/…` prefix makes URLs ugly enough to complain about. The fix is a default-team redirect at the root, not moving the scope into a cookie. |
 | Folding `Guardian` into `User` | A guardian needs to exist without an email address — a phone-only emergency contact, say. Re-introducing a contact record is additive and doesn't disturb `Membership`. |
+| Chart as columns on `RosterEntry` | Anyone wants per-game lineup history, or the permanence of chart edits proves annoying in real use ("I only moved him to shortstop because Ben was out"). The fix is to reintroduce per-game rows that default from the standing chart — additive, but only records games from that point forward. This is the one-way door on this list. |
 | Global `Player` identity | Never — this is the load-bearing one. Adding returning kids to a new team depends on it (Decision 15), and reversing it means reconstructing family links per season. |
 | Neon free tier | Cold-start latency on the autosuspended database becomes noticeable at the field, or storage passes the free limit. Upgrade to the paid tier; it's a plan change, not a migration. |
 | Prisma | Serverless cold starts become a felt problem, or the bundle size starts to matter. Drizzle is the migration target. |
