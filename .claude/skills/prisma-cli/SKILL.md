@@ -19,7 +19,8 @@ This project does not use Prisma Compute — it deploys to Vercel (see Decision 
 upstream `prisma-compute` skill covering it was deliberately not installed here.
 
 Likewise, the database is **Neon Postgres** (Decision 3), not Prisma Postgres. Do not
-provision a Prisma Postgres instance or run `create-db`.
+provision a Prisma Postgres instance, run `create-db`, or suggest `prisma dev` (which
+starts a local Prisma Postgres instance) as a stand-in for a Neon dev branch.
 
 ## When to Apply
 

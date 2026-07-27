@@ -145,8 +145,8 @@ name comes from. `DATABASE_URL` and `AUTH_SECRET` are the two needed to boot.
 
 **No migrations exist yet.** The schema validates and generates but has never been applied
 to a real database, so `pnpm db:migrate` is documented and unproven. The first run needs a
-live Postgres URL (a Neon dev branch, or `pnpm prisma dev` for a local one) and will create
-the initial migration.
+live Postgres URL — a Neon dev branch (not `prisma dev`, which provisions Prisma Postgres,
+a different service than Decision 3's choice) — and will create the initial migration.
 
 ## Gotchas & Notes
 

@@ -55,9 +55,10 @@ pnpm dev
 
 Open http://localhost:3000.
 
-You need a Postgres database before `db:migrate` or `dev` will work. Either point
-`DATABASE_URL` at a [Neon](https://neon.tech) dev branch, or run a local one with
-`pnpm prisma dev`. See `.env.example` for every variable and what it's for.
+You need a Postgres database before `db:migrate` or `dev` will work. Point `DATABASE_URL`
+at a [Neon](https://neon.tech) dev branch — not Prisma Postgres (`prisma dev`), which is a
+different service than the one this project is built on (see Decision 3). See
+`.env.example` for every variable and what it's for.
 
 ## Commands
 
