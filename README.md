@@ -15,10 +15,12 @@ the application itself is not built yet. `src/app/` is still the starter page.
 What exists today:
 
 - `prisma/schema.prisma` — the full domain model
+- `prisma/migrations/` — the initial migration, verified against a local Postgres 16 but
+  **not yet applied to the project's Neon database**
 - `src/lib/` — team access rules, next-game readiness, position labels, all unit-tested
 - Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline
 
-What does not exist yet: any UI, any database migration, auth wiring, or email sending.
+What does not exist yet: any UI, auth wiring, or email sending.
 
 ## How it works
 
@@ -49,7 +51,7 @@ Requires **Node 22** and **pnpm 10**.
 pnpm install
 cp .env.example .env     # then fill in DATABASE_URL and AUTH_SECRET
 pnpm db:generate         # required — the Prisma client is gitignored
-pnpm db:migrate          # creates the first migration; needs a live database
+pnpm db:migrate          # applies prisma/migrations to your database
 pnpm dev
 ```
 
@@ -59,6 +61,12 @@ You need a Postgres database before `db:migrate` or `dev` will work. Point `DATA
 at a [Neon](https://neon.tech) dev branch — not Prisma Postgres (`prisma dev`), which is a
 different service than the one this project is built on (see Decision 3). See
 `.env.example` for every variable and what it's for.
+
+**Migrating needs the unpooled URL.** Set `DATABASE_URL_UNPOOLED` as well — Neon's pooled
+endpoint is PgBouncer in transaction mode and cannot hold the advisory lock `prisma
+migrate` takes, so migrating through it hangs. It is the same connection string with
+`-pooler` dropped from the hostname, and the Prisma CLI picks it up automatically via
+`prisma.config.ts`. The app itself keeps using the pooled `DATABASE_URL`.
 
 ## Commands
 
