@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Youth Baseball Team Manager
 
-## Getting Started
+An invite-only PWA for coaching youth baseball. One person runs the team; parents RSVP
+their kids and see the batting order and field positions on their phone, at the field,
+often on one bar of signal.
 
-First, run the development server:
+It replaces a group text, a league website nobody checks, and a lineup card written in the
+parking lot fifteen minutes before first pitch.
+
+## Status
+
+**Pre-alpha — scaffold only.** The data model, tooling, and domain guards are in place;
+the application itself is not built yet. `src/app/` is still the starter page.
+
+What exists today:
+
+- `prisma/schema.prisma` — the full domain model
+- `src/lib/` — team access rules, next-game readiness, position labels, all unit-tested
+- Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline
+
+What does not exist yet: any UI, any database migration, auth wiring, or email sending.
+
+## How it works
+
+**The chart is standing, not per-game.** Most team apps make you build a lineup before
+every game. Here the coach sets a batting order and a positions chart once and it persists
+until they change it. A normal week needs no lineup work at all.
+
+RSVPs earn their keep by flagging the weeks that *aren't* normal: for the next game only,
+the app reports who is out and which field positions that leaves uncovered. It never
+rearranges the chart on the coach's behalf — it says what's broken and lets the coach
+decide.
+
+Other things worth knowing:
+
+- **`allPlay` is a team setting.** When on, every kid bats and fields — the norm in
+  recreational youth leagues, and something the big products treat as an exception.
+- **Parents never create an account.** They click a link in an email and they're in.
+  There is no self-serve signup anywhere in the app.
+- **Multiple teams, one owner.** A team per season, with past seasons kept read-only.
+  Players and guardians persist across seasons, so adding a returning kid to a new roster
+  also brings their parents onto that team.
+
+## Getting started
+
+Requires **Node 22** and **pnpm 10**.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env     # then fill in DATABASE_URL and AUTH_SECRET
+pnpm db:generate         # required — the Prisma client is gitignored
+pnpm db:migrate          # creates the first migration; needs a live database
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+You need a Postgres database before `db:migrate` or `dev` will work. Either point
+`DATABASE_URL` at a [Neon](https://neon.tech) dev branch, or run a local one with
+`pnpm prisma dev`. See `.env.example` for every variable and what it's for.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Commands
 
-## Learn More
+| Purpose | Command |
+|---|---|
+| Dev server | `pnpm dev` |
+| Production build | `pnpm build` |
+| Lint | `pnpm lint` |
+| Type check | `pnpm typecheck` |
+| Tests | `pnpm test` |
+| Tests (watch) | `pnpm test:watch` |
+| **Everything** | `pnpm check` |
+| Regenerate Prisma client | `pnpm db:generate` |
+| Create + apply a migration | `pnpm db:migrate` |
+| Browse data | `pnpm db:studio` |
 
-To learn more about Next.js, take a look at the following resources:
+Run `pnpm check` before pushing — it chains lint, typecheck, and tests.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Prisma 7 on Neon
+Postgres · Auth.js v5 magic links · `@dnd-kit` · Motion · Resend · Vitest · deployed on
+Vercel.
 
-## Deploy on Vercel
+Every one of those was chosen deliberately, with alternatives considered and rejected in
+writing — see the stack decisions below.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Documentation
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **[`AGENTS.md`](AGENTS.md)** — conventions, commands, and the model rules that are easy
+  to break by accident. Read this before changing code.
+- **[Product brief](.agents/app-brainstorm/youth-baseball-team-manager/product-brief.md)** —
+  scope, the core loop, and what is deliberately out of scope.
+- **[Stack decisions](.agents/app-brainstorm/youth-baseball-team-manager/stack-decisions.md)** —
+  16 numbered decisions with options considered, rationale, and the conditions under which
+  each should be revisited.
+
+## A note on the data
+
+The app stores children's names and jersey numbers alongside guardian contact details. It
+is invite-only by design, should stay out of search engine indexes, and any future photo
+feature is a consent decision before it is a feature decision.

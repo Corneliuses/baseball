@@ -140,10 +140,13 @@ pnpm install
 pnpm db:generate     # required — the client is gitignored
 ```
 
-`DATABASE_URL` must be set before any `db:*` command or dev run. There is no `.env.example`
-yet and **no migrations have been created** — the schema has never been applied to a real
-database. First run needs a Postgres URL (a Neon dev branch, or `prisma dev` for a local
-one) and an initial `pnpm db:migrate`.
+Copy `.env.example` to `.env` and fill it in — it documents every variable and where its
+name comes from. `DATABASE_URL` and `AUTH_SECRET` are the two needed to boot.
+
+**No migrations exist yet.** The schema validates and generates but has never been applied
+to a real database, so `pnpm db:migrate` is documented and unproven. The first run needs a
+live Postgres URL (a Neon dev branch, or `pnpm prisma dev` for a local one) and will create
+the initial migration.
 
 ## Gotchas & Notes
 
@@ -167,8 +170,8 @@ one) and an initial `pnpm db:migrate`.
   by writing `transform`, and Motion's `layout` prop animates `transform` too — together
   the item lags or snaps back. dnd-kit owns everything during a drag; Motion owns page
   transitions, confirmations, and reveals.
-- **`README.md` is still create-next-app boilerplate** and tells you to run `npm run dev`.
-  Ignore it; it needs replacing.
+- **`.env.example` is gitignore-exempt** via an explicit `!.env.example` negation, since
+  the Next.js scaffold ignores `.env*`. Keep that negation if you touch `.gitignore`.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.
