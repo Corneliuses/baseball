@@ -26,7 +26,8 @@ export async function getPublicTeams(): Promise<Team[]> {
       },
     });
   } catch (error) {
-    console.error("Failed to fetch public teams:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to fetch public teams:", message);
     return [];
   }
 }
@@ -54,7 +55,8 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
       },
     });
   } catch (error) {
-    console.error("Failed to fetch user teams:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to fetch user teams:", message);
     return [];
   }
 }

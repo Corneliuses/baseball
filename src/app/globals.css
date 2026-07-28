@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  /* Background & foreground */
-  --background: #ffffff;
-  --foreground: #0f172a;
+  /* Background & foreground in HSL */
+  --background: 0 0% 100%;
+  --foreground: 217 33% 16%;
 
-  /* Baseball theme: diamond green, field brown, sky blue, warning red */
-  --baseball-green: #2d5016;
-  --baseball-brown: #8b6914;
-  --baseball-blue: #1e3a8a;
-  --baseball-red: #dc2626;
+  /* Baseball theme (hex → HSL) */
+  --baseball-green: 104 48% 24%;
+  --baseball-brown: 43 60% 33%;
+  --baseball-blue: 217 100% 29%;
+  --baseball-red: 0 90% 56%;
 
   /* shadcn/ui design tokens */
   --primary: 24 9% 98%;
@@ -40,8 +40,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f172a;
-    --foreground: #f8fafc;
+    --background: 217 33% 6%;
+    --foreground: 200 10% 98%;
 
     --primary: 24 100% 10%;
     --primary-foreground: 24 9% 98%;

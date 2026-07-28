@@ -1,5 +1,3 @@
-"use client";
-
 import { type Team } from "@/lib/teams";
 import { TeamCard } from "./TeamCard";
 

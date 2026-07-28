@@ -6,6 +6,8 @@ function BaseballCornIcon() {
       className="w-8 h-8 inline-block mr-2"
       viewBox="0 0 200 200"
       xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
     >
       {/* Baseball circle base */}
       <circle cx="100" cy="100" r="95" fill="#f5f5dc" stroke="#8b7355" strokeWidth="2" />

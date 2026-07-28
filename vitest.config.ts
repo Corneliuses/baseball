@@ -9,10 +9,5 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     globals: true,
     include: ["src/**/*.test.{ts,tsx}"],
-    env: {
-      DATABASE_URL:
-        process.env.DATABASE_URL ||
-        "postgresql://fake:fake@localhost/fake",
-    },
   },
 });
