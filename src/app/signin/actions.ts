@@ -4,6 +4,7 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { signIn } from "@/auth";
+import { safeCallbackUrl } from "@/lib/callback-url";
 
 const emailSchema = z.email();
 
@@ -43,18 +44,4 @@ export async function requestSignInLink(formData: FormData) {
   }
 
   redirect("/signin/check-email");
-}
-
-/// Only same-site paths. A caller-supplied absolute URL here would make the
-/// sign-in flow an open redirect.
-function safeCallbackUrl(value: FormDataEntryValue | null): string {
-  if (typeof value !== "string") {
-    return "/";
-  }
-
-  if (!value.startsWith("/") || value.startsWith("//")) {
-    return "/";
-  }
-
-  return value;
 }

@@ -14,12 +14,38 @@ export const metadata = {
   title: "Sign in — Youth Baseball Team Manager",
 };
 
+/// `pages.error` points at this page, so Auth.js's own error screen never
+/// renders and its copy has to live here instead. Without this map a parent
+/// whose link expired lands on a bare form with no idea what went wrong.
+///
+/// The two link failures say the same thing on purpose. AccessDenied only
+/// reaches this page from a click — the send path always ends on
+/// /signin/check-email — but naming the reason would still leak whether an
+/// invitation exists, so both get the neutral wording.
+const ERROR_MESSAGES: Record<string, string> = {
+  "invalid-email":
+    "That doesn't look like an email address — check it and try again.",
+  Verification:
+    "That sign-in link has expired or was already used. Enter your email and we'll send a fresh one.",
+  AccessDenied:
+    "That sign-in link is no longer valid. Enter your email to try again, or ask your coach to send a new invite.",
+  Configuration:
+    "Something is wrong on our end, and it has been logged. Please try again in a few minutes.",
+};
+
+const FALLBACK_ERROR_MESSAGE =
+  "Something went wrong signing you in. Enter your email and try again.";
+
 export default async function SignInPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; callbackUrl?: string }>;
 }) {
   const { error, callbackUrl } = await searchParams;
+
+  const errorMessage = error
+    ? (ERROR_MESSAGES[error] ?? FALLBACK_ERROR_MESSAGE)
+    : null;
 
   return (
     <PageContainer>
@@ -53,13 +79,12 @@ export default async function SignInPage({
                   spellCheck={false}
                   required
                   placeholder="you@example.com"
-                  aria-describedby={error ? "email-error" : undefined}
+                  aria-describedby={errorMessage ? "email-error" : undefined}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                {error === "invalid-email" ? (
+                {errorMessage ? (
                   <p id="email-error" role="alert" className="text-sm text-destructive">
-                    That doesn&apos;t look like an email address — check it and
-                    try again.
+                    {errorMessage}
                   </p>
                 ) : null}
               </div>

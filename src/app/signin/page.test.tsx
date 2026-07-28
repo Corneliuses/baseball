@@ -45,6 +45,54 @@ describe("SignInPage", () => {
     );
   });
 
+  // pages.error points here, so Auth.js's own error screen never renders and
+  // its copy has to be reproduced. A silent form is the bug these cover.
+  describe("Auth.js error codes", () => {
+    it("explains an expired or already-used link", async () => {
+      await renderPage({ error: "Verification" });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /expired or was already used/i,
+      );
+    });
+
+    it("explains a denied link without naming the reason", async () => {
+      await renderPage({ error: "AccessDenied" });
+
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent(/no longer valid/i);
+      // Must not reveal whether an invitation exists for the address.
+      expect(alert).not.toHaveTextContent(/invit(ed|ation)\b.*(not|no)\b/i);
+    });
+
+    it("reports a server misconfiguration", async () => {
+      await renderPage({ error: "Configuration" });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /wrong on our end/i,
+      );
+    });
+
+    it("falls back to a generic message for an unrecognized code", async () => {
+      await renderPage({ error: "SomethingNew" });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /something went wrong signing you in/i,
+      );
+    });
+
+    it("describes the email field with whichever error is showing", async () => {
+      const { container } = render(
+        await SignInPage({ searchParams: Promise.resolve({ error: "Verification" }) }),
+      );
+
+      expect(container.querySelector("#email")).toHaveAttribute(
+        "aria-describedby",
+        "email-error",
+      );
+    });
+  });
+
   it("carries callbackUrl through the form so the link lands where the visitor was headed", async () => {
     const { container } = render(
       await SignInPage({
