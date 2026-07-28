@@ -375,6 +375,17 @@ Recorded because the framework versions here diverge from common training data:
 | Proxy file belongs beside `app` — i.e. `src/proxy.ts` here | `next/dist/docs/.../proxy.md:23` |
 | All auth tables already migrated | `prisma/migrations/20260728053521_001/migration.sql` |
 
+### Confirmed at implementation time, against a running server
+
+| Claim | Result |
+|---|---|
+| `src/proxy.ts` actually runs | `/t/team-a/roster?tab=chart` with no cookie → `307` to `/signin?callbackUrl=%2Ft%2Fteam-a%2Froster%3Ftab%3Dchart` |
+| Proxy passes through with a session cookie | Request proceeds to the app (404 — `/t/[teamId]` routes arrive in #3) |
+| Proxy leaves unmatched routes alone | `/` → 200 with no cookie |
+| Auth.js config initializes | `/api/auth/providers` lists `resend`; `/api/auth/csrf` → 200; `/api/auth/session` → `null` |
+| Lazy config defers env access past build | `pnpm build` compiles with no auth env set; a request then fails with `EMAIL_FROM is not set — see .env.example` |
+| **Auth.js calls the adapter before the `signIn` callback** | With an unreachable database, `POST /api/auth/signin/resend` fails at `getUserByEmail` with an `AdapterError` → redirect to `?error=Configuration`, before the gate runs. No mail is sent either way, so the outcome is still closed — the callback's try/catch is the second layer, not the only one |
+
 ## Edge Cases & Risks
 
 | Scenario | Impact | Mitigation |

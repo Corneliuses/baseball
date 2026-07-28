@@ -102,7 +102,18 @@ asserting and are what makes `src/auth.ts` thin.
       following `src/app/page.test.tsx`
 - [ ] Add `OWNER_EMAIL` to `.env.example` with a comment covering what it grants (always
       may sign in; sole team creator, enforced in #3) and what happens when it is unset
-      (nobody gets the exception; invited users still sign in; no team can be created)
+      (nobody gets the exception; invited users still sign in; no team can be created).
+      **Still outstanding** — a tool permission rule denied all access to `.env*` during
+      implementation. Ready to paste:
+
+      ```sh
+      # The single global owner of this instance. This address can always sign in,
+      # with no invitation, which is how the first account comes into being — and it
+      # is the only account permitted to create teams. Creating a team grants it
+      # Membership(OWNER) on that team. Leave it unset and nobody holds the
+      # exception: invited users still sign in, but no team can be created.
+      OWNER_EMAIL="coach@example.com"
+      ```
 - [ ] Confirm `RESEND_API_KEY` and `EMAIL_FROM` are documented in `.env.example` and add
       them if not — planning could not read `.env*` (tool permission), so verify rather
       than assume
