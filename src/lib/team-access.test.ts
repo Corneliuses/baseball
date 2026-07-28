@@ -206,4 +206,32 @@ describe("requireTeamAccess", () => {
       requireTeamAccess("team-1", { intent: "read" }),
     ).rejects.toThrow("connection refused");
   });
+
+  // The request-scoped dedupe itself only happens inside a React render, so it
+  // can't be asserted here. What this does lock in is the shape that makes it
+  // possible: the cached loader is keyed on (teamId, userId) — two strings —
+  // rather than on the options object, whose fresh literal at each call site
+  // would miss React's reference-identity cache key every time.
+  it("keys its cached query on teamId and userId only, so differing intents still share it", async () => {
+    findUniqueTeam.mockResolvedValue({
+      archivedAt: ACTIVE,
+      memberships: [{ role: "OWNER" }],
+    });
+
+    await requireTeamAccess("team-1", { intent: "read" });
+    await requireTeamAccess("team-1", { intent: "read", minRole: "OWNER" });
+
+    for (const call of findUniqueTeam.mock.calls) {
+      expect(call[0]).toEqual({
+        where: { id: "team-1" },
+        select: {
+          archivedAt: true,
+          memberships: {
+            where: { userId: "user-1" },
+            select: { role: true },
+          },
+        },
+      });
+    }
+  });
 });

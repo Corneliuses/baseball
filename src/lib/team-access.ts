@@ -74,21 +74,50 @@ export type RequireTeamAccessInput = {
 };
 
 /**
+ * The one query behind requireTeamAccess, cached per request.
+ *
+ * `cache()` is deliberately applied HERE rather than to requireTeamAccess
+ * itself. React's cache keys on argument identity, and object arguments
+ * compare by reference — so a `cache()`d requireTeamAccess(teamId, { intent })
+ * would miss on every single call, because each call site builds a fresh
+ * options literal. Verified in a real server render: three calls passing an
+ * equivalent object literal ran the body three times, while three calls
+ * passing the same two strings ran it once.
+ *
+ * Keying on (teamId, userId) is also the better cache boundary on its own
+ * merits: the layout asks for `{ intent: "read" }` and the settings page for
+ * `{ intent: "read", minRole: "OWNER" }`, which are different questions about
+ * the same two facts. Caching the facts lets both share one round trip; the
+ * decision itself is pure and costs nothing to repeat.
+ */
+const loadTeamAccessFacts = cache(async function loadTeamAccessFacts(
+  teamId: string,
+  userId: string,
+) {
+  return db.team.findUnique({
+    where: { id: teamId },
+    select: {
+      archivedAt: true,
+      memberships: {
+        where: { userId },
+        select: { role: true },
+      },
+    },
+  });
+});
+
+/**
  * Resolve who is calling and whether they may act on this team, in one
  * database round trip. Every scoped page loader and server action calls this
  * first — layouts do NOT re-run on client-side navigation, so a page that
  * skips this call is unprotected on the very transitions that matter most.
  * See AGENTS.md and design-doc.md #3 Decision 6.
  *
- * Wrapped in React `cache()` so the several calls a single request makes
- * (layout, page, and — on a submit — the server action) collapse to one
- * query rather than three.
- *
  * A database error is allowed to propagate rather than being caught and
  * turned into a TeamAccessError: "we couldn't tell" must fail closed, not be
  * silently reported as a denial that looks routine.
  */
-export const requireTeamAccess = cache(async function requireTeamAccess(
+export async function requireTeamAccess(
   teamId: string,
   { intent, minRole }: RequireTeamAccessInput,
 ): Promise<{ role: Role; userId: string }> {
@@ -97,16 +126,7 @@ export const requireTeamAccess = cache(async function requireTeamAccess(
     throw new TeamAccessError("Not signed in", "no-membership");
   }
 
-  const team = await db.team.findUnique({
-    where: { id: teamId },
-    select: {
-      archivedAt: true,
-      memberships: {
-        where: { userId: user.id },
-        select: { role: true },
-      },
-    },
-  });
+  const team = await loadTeamAccessFacts(teamId, user.id);
 
   if (!team) {
     throw new TeamAccessError("Team not found", "no-membership");
@@ -120,4 +140,4 @@ export const requireTeamAccess = cache(async function requireTeamAccess(
   });
 
   return { role, userId: user.id };
-});
+}

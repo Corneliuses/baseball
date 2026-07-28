@@ -226,9 +226,16 @@ the layout *and* each page loader to check independently — and a server action
 again on submit — the same lookup fires two to three times per request. Prisma calls are
 not deduped the way `fetch` is. The Next.js authentication guide's own DAL pattern wraps
 `verifySession` and `getUser` in `cache(...)` for exactly this reason
-(`node_modules/next/dist/docs/01-app/02-guides/authentication.md:1143,1176`). Wrapping
-`requireTeamAccess` the same way collapses the repeat checks back to a single query while
-leaving each call site independently safe.
+(`node_modules/next/dist/docs/01-app/02-guides/authentication.md:1143,1176`).
+
+**`cache()` must wrap the query, not `requireTeamAccess` itself** — a correction made
+during implementation after the first attempt measurably did nothing. React keys the cache
+on argument identity, so a function taking an options object misses on every call, since
+each call site builds a fresh literal. The cached unit is therefore a private
+`loadTeamAccessFacts(teamId, userId)` taking two strings; `requireTeamAccess` stays an
+ordinary async function that calls it and then applies the pure decision. `getCurrentUser()`
+is wrapped the same way (no arguments, trivially stable key). See "Corrections made during
+implementation" for the measurements.
 
 ### Decision 5: A missing team and a missing membership produce the same error
 
@@ -474,6 +481,14 @@ instead. The fix is a single boundary at `src/app/not-found.tsx`, above `/t`, wh
 catches both cases correctly. `pnpm build`'s route table confirms it: `○ /_not-found`
 compiles as its own static route.
 
+**`TeamSelector` printed an empty "My Teams" heading.** The section was gated on
+`userTeamIds.length > 0` while its grid rendered only *active* teams. A caller whose sole
+team is archived has a non-empty `userTeamIds` and an empty active list, so the heading
+rendered above nothing while the team appeared correctly under "Archived Teams". Both
+active sections are now gated on the list each actually renders. The original archived-team
+tests missed it because every fixture gave the caller at least one active team alongside
+the archived one; a regression test now covers the archived-only case.
+
 **`revalidatePath` needs the bracketed pattern plus `type: "layout"`, not the resolved
 `` `/t/${teamId}` `` literal.** `03-api-reference/04-functions/revalidatePath.md:26-27`:
 a literal path only invalidates that specific page; a dynamic-segment pattern requires
@@ -484,14 +499,38 @@ beneath that same layout, the actions in `settings/actions.ts` call
 `revalidatePath("/t/[teamId]", "layout")` — the literal bracket string, not an
 interpolated value.
 
-Separately, a nuance worth recording rather than a bug: **React `cache()` only memoizes
-inside an active render.** Verified directly — calling a `cache()`-wrapped function three
-times outside of any render (as a plain unit test does) runs the underlying function three
-times, not once. `requireTeamAccess`'s tests were written to assert query *shape*, not
-call-count deduplication, because the latter isn't observable outside a real request.
-Decision 4 remains correct for production traffic (layout, page, and action calls all
-happen inside one render), it just cannot be unit-tested the way a first read of the
-decision might suggest.
+**`cache()` was applied to the wrong function, and did nothing.** Decision 4 originally
+wrapped `requireTeamAccess(teamId, { intent, minRole })` itself. React's `cache` keys on
+argument *identity*, and object arguments compare by reference — so every call site,
+each building a fresh `{ intent: "read" }` literal, missed the cache every single time.
+The decision's headline claim ("collapses the repeat checks back to a single query") was
+false as written: it produced three queries, exactly the behavior it was introduced to
+prevent.
+
+Measured in a real server render, three calls each passing an equivalent object literal
+versus three passing the same two strings:
+
+| Cached function signature | Underlying calls for 3 invocations |
+|---|---|
+| `(teamId: string, opts: { intent })` | **3** — no deduplication at all |
+| `(teamId: string, userId: string)` | **1** |
+
+The fix moves `cache()` off the public function and onto a private
+`loadTeamAccessFacts(teamId, userId)` that performs only the query. That keys on two
+strings, so it actually dedupes — and it is the better boundary independently: the layout
+asks `{ intent: "read" }` and the settings page `{ intent: "read", minRole: "OWNER" }`,
+which are different questions about the same two facts and would have been separate cache
+entries even under a working object-keyed cache. Caching the facts lets every call site
+share one round trip while each still reaches its own decision. `getCurrentUser()` was
+wrapped in `cache()` for the same reason — it takes no arguments, so its key is trivially
+stable, and it too is now called several times per render.
+
+A related nuance: **`cache()` only memoizes inside an active render.** Three calls outside
+any render — which is what a plain unit test does — run the body three times regardless of
+argument shape. So the dedupe itself is not unit-testable; the regression test added to
+`team-access.test.ts` instead locks in the *shape* that makes it possible (the query keyed
+on `teamId` and `userId` only). This is also why the original bug survived a green test
+suite: nothing in a Vitest run can observe the difference.
 
 ## Verified against the installed packages
 

@@ -49,7 +49,8 @@ installed packages rather than assumed:
 
 1. `requireTeamAccess(teamId, { intent, minRole })` exists in `src/lib/team-access.ts`,
    resolves the caller's session and `Membership`, loads `archivedAt`, delegates to the
-   unmodified `checkTeamAccess`, and is wrapped in React `cache()`
+   unmodified `checkTeamAccess`; its underlying query is wrapped in React `cache()`, keyed
+   on `(teamId, userId)`, so the repeated per-request checks share one round trip
 2. The `/t/[teamId]/` layout **and every page loader beneath it** call `requireTeamAccess`
 3. Team creation at `/t/new` is restricted to `OWNER_EMAIL` and grants the creator
    `Membership(OWNER)` on the new team in a single atomic write

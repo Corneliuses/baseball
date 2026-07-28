@@ -92,6 +92,32 @@ describe("TeamSelector", () => {
     expect(myTeamsSection?.textContent).not.toContain("Retired Team");
   });
 
+  it("should not render an empty 'My Teams' heading when the caller's only team is archived", () => {
+    const onlyArchived = [
+      {
+        id: "team-3",
+        name: "Retired Team",
+        season: "2024",
+        allPlay: true,
+        archivedAt: new Date("2024-09-01"),
+        createdAt: new Date("2024-01-01"),
+      },
+    ];
+
+    render(<TeamSelector teams={onlyArchived} userTeamIds={["team-3"]} />);
+
+    // userTeamIds is non-empty, but there is no active team to list under it.
+    expect(screen.queryByText("My Teams")).not.toBeInTheDocument();
+    expect(screen.getByText("Archived Teams")).toBeInTheDocument();
+    expect(screen.getByText("Retired Team")).toBeInTheDocument();
+  });
+
+  it("should not render an empty 'All Teams' heading when every active team belongs to the caller", () => {
+    render(<TeamSelector teams={mockTeams} userTeamIds={["team-1", "team-2"]} />);
+
+    expect(screen.queryByText("All Teams")).not.toBeInTheDocument();
+  });
+
   it("should link to an archived team the caller is a member of, but not one they aren't", () => {
     const teamsWithArchived = [
       {

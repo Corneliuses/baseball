@@ -11,15 +11,21 @@
 ## Phase 1: Authorization — `requireTeamAccess`
 
 - [x] Add `requireTeamAccess` to `src/lib/team-access.ts`, below the existing pure
-      `checkTeamAccess`, **wrapped in React `cache()`** (design-doc Decision 4):
+      `checkTeamAccess`. **`cache()` wraps the query, not `requireTeamAccess` itself** —
+      React keys on argument identity, so caching a function that takes an options object
+      misses on every call (measured: 3 calls → 3 queries). See design-doc Decision 4 and
+      "Corrections made during implementation".
 
   ```ts
   import { cache } from "react";
 
-  export const requireTeamAccess = cache(async function requireTeamAccess(
+  // cached: two string args, so the key is stable across call sites
+  const loadTeamAccessFacts = cache(async (teamId: string, userId: string) => { … });
+
+  export async function requireTeamAccess(
     teamId: string,
     { intent, minRole }: { intent: "read" | "write"; minRole?: Role },
-  ): Promise<{ role: Role; userId: string }> { … });
+  ): Promise<{ role: Role; userId: string }> { … }
   ```
 
   It must:
@@ -178,7 +184,8 @@ Per `AGENTS.md`'s `## Commands` section:
 
 | File | Change |
 |---|---|
-| `src/lib/team-access.ts` | Add `cache()`-wrapped `requireTeamAccess`; `checkTeamAccess` untouched |
+| `src/lib/team-access.ts` | Add `requireTeamAccess` + `cache()`d `loadTeamAccessFacts`; `checkTeamAccess` untouched |
+| `src/lib/session.ts` | Wrap `getCurrentUser` in `cache()` — now called several times per render |
 | `src/lib/team-access.test.ts` | Add `requireTeamAccess` suite |
 | `src/lib/teams.ts` | Replace `getPublicTeams`/`getUserTeams` with `getAllTeams`, `getMemberTeams`, `getTeamById`, `createTeam`, `updateTeam`, `archiveTeam`, `unarchiveTeam` |
 | `src/lib/teams.test.ts` | Rewrite for the new function set |
