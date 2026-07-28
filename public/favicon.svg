@@ -1,0 +1,55 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Baseball circle base -->
+  <circle cx="100" cy="100" r="95" fill="#f5f5dc" stroke="#8b7355" stroke-width="2"/>
+
+  <!-- Corn kernel pattern on baseball -->
+  <g id="kernels" fill="#ffd700" opacity="0.7">
+    <!-- Top left cluster -->
+    <circle cx="65" cy="65" r="8"/>
+    <circle cx="75" cy="60" r="7"/>
+    <circle cx="82" cy="68" r="8"/>
+    <circle cx="72" cy="75" r="7"/>
+
+    <!-- Top right cluster -->
+    <circle cx="135" cy="65" r="8"/>
+    <circle cx="125" cy="60" r="7"/>
+    <circle cx="118" cy="68" r="8"/>
+    <circle cx="128" cy="75" r="7"/>
+
+    <!-- Bottom left cluster -->
+    <circle cx="65" cy="135" r="8"/>
+    <circle cx="75" cy="140" r="7"/>
+    <circle cx="82" cy="132" r="8"/>
+    <circle cx="72" cy="125" r="7"/>
+
+    <!-- Bottom right cluster -->
+    <circle cx="135" cy="135" r="8"/>
+    <circle cx="125" cy="140" r="7"/>
+    <circle cx="118" cy="132" r="8"/>
+    <circle cx="128" cy="125" r="7"/>
+
+    <!-- Center kernels -->
+    <circle cx="100" cy="100" r="6"/>
+    <circle cx="110" cy="95" r="6"/>
+    <circle cx="90" cy="105" r="6"/>
+  </g>
+
+  <!-- Baseball stitching (red curves) -->
+  <path d="M 50 85 Q 70 75, 100 70 Q 130 75, 150 85"
+        stroke="#dc2626" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 50 115 Q 70 125, 100 130 Q 130 125, 150 115"
+        stroke="#dc2626" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Stitching details (small dashes) -->
+  <g stroke="#8b4513" stroke-width="1.5" stroke-linecap="round">
+    <line x1="65" y1="78" x2="68" y2="75"/>
+    <line x1="85" y1="72" x2="88" y2="69"/>
+    <line x1="115" y1="72" x2="118" y2="69"/>
+    <line x1="135" y1="78" x2="138" y2="75"/>
+
+    <line x1="65" y1="122" x2="68" y2="125"/>
+    <line x1="85" y1="128" x2="88" y2="131"/>
+    <line x1="115" y1="128" x2="118" y2="131"/>
+    <line x1="135" y1="122" x2="138" y2="125"/>
+  </g>
+</svg>

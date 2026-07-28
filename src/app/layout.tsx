@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   title: "Youth Baseball Team Manager",
   description:
     "Manage your youth baseball team's roster, schedule, and lineup with ease.",
+  icons: {
+    icon: "/favicon.svg",
+  },
   robots: {
     index: false,
     follow: false,
