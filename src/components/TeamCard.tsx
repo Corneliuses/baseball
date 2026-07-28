@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 interface TeamCardProps {
   id: string;
   name: string;
-  season?: string | null;
+  season: string | null;
   allPlay: boolean;
   isClickable: boolean;
 }

@@ -1,6 +1,14 @@
 import { db } from "./db";
 
-export async function getPublicTeams() {
+export interface Team {
+  id: string;
+  name: string;
+  season: string | null;
+  allPlay: boolean;
+  createdAt: Date;
+}
+
+export async function getPublicTeams(): Promise<Team[]> {
   try {
     return await db.team.findMany({
       where: {
@@ -23,7 +31,7 @@ export async function getPublicTeams() {
   }
 }
 
-export async function getUserTeams(userId: string) {
+export async function getUserTeams(userId: string): Promise<Team[]> {
   try {
     return await db.team.findMany({
       where: {

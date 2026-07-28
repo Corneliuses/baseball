@@ -1,14 +1,7 @@
 "use client";
 
+import { type Team } from "@/lib/teams";
 import { TeamCard } from "./TeamCard";
-
-interface Team {
-  id: string;
-  name: string;
-  season?: string | null;
-  allPlay: boolean;
-  createdAt: Date;
-}
 
 interface TeamSelectorProps {
   teams: Team[];
