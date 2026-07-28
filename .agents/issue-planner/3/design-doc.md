@@ -454,6 +454,45 @@ between two `/t/[teamId]` pages still enforces access (the Decision 6 case).
 | Owner archives a team in one tab while editing it in another | Low | The write check re-reads `archivedAt` on submit; the stale form is rejected on save |
 | `TeamSelector`'s dormant "All Teams" bucket bit-rotting | Low | Decision 2 — deliberately retained, documented as dormant |
 
+## Corrections made during implementation
+
+Two claims above turned out to be wrong once actually built, caught by testing rather
+than review. Recorded here rather than silently edited away.
+
+**`not-found.tsx` belongs at `src/app/not-found.tsx`, not
+`src/app/t/[teamId]/not-found.tsx`.** The route tree and Decision 7 originally called for
+the latter. `node_modules/next/dist/docs/.../file-conventions/layout.md:24` states
+`layout.js` "is the outermost component in a route segment. It wraps... `not-found.js`...
+and `page.js`." A `not-found.tsx` inside `[teamId]/` would therefore itself be wrapped by
+`[teamId]/layout.tsx` — so it can only catch a `notFound()` thrown by something the
+layout successfully rendered (a page beneath it, e.g. `settings/page.tsx` failing its
+OWNER check). It cannot catch a `notFound()` thrown by the layout's *own* access check —
+the single most common failure path, an ordinary member hitting a team they don't belong
+to — because at that point the layout never finished rendering, so nothing inside it,
+not-found.tsx included, ever mounts. That case bubbles to the nearest ancestor boundary
+instead. The fix is a single boundary at `src/app/not-found.tsx`, above `/t`, which
+catches both cases correctly. `pnpm build`'s route table confirms it: `○ /_not-found`
+compiles as its own static route.
+
+**`revalidatePath` needs the bracketed pattern plus `type: "layout"`, not the resolved
+`` `/t/${teamId}` `` literal.** `03-api-reference/04-functions/revalidatePath.md:26-27`:
+a literal path only invalidates that specific page; a dynamic-segment pattern requires
+the `type` parameter and additionally invalidates "the layout... all nested layouts
+beneath it, and all pages beneath them." Since editing a team's name needs the
+`[teamId]/layout.tsx` chrome (which renders the name) to refresh, and settings is nested
+beneath that same layout, the actions in `settings/actions.ts` call
+`revalidatePath("/t/[teamId]", "layout")` — the literal bracket string, not an
+interpolated value.
+
+Separately, a nuance worth recording rather than a bug: **React `cache()` only memoizes
+inside an active render.** Verified directly — calling a `cache()`-wrapped function three
+times outside of any render (as a plain unit test does) runs the underlying function three
+times, not once. `requireTeamAccess`'s tests were written to assert query *shape*, not
+call-count deduplication, because the latter isn't observable outside a real request.
+Decision 4 remains correct for production traffic (layout, page, and action calls all
+happen inside one render), it just cannot be unit-tested the way a first read of the
+decision might suggest.
+
 ## Verified against the installed packages
 
 Recorded because this plan's first draft was written without `node_modules` present, and

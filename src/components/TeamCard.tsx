@@ -7,6 +7,7 @@ interface TeamCardProps {
   season: string | null;
   allPlay: boolean;
   isClickable: boolean;
+  archivedAt?: Date | null;
 }
 
 export function TeamCard({
@@ -15,13 +16,21 @@ export function TeamCard({
   season,
   allPlay,
   isClickable,
+  archivedAt = null,
 }: TeamCardProps) {
   const content = (
     <Card
       className={isClickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""}
     >
       <CardHeader>
-        <CardTitle className="text-lg">{name}</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-lg">{name}</CardTitle>
+          {archivedAt && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              Archived
+            </span>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2 text-sm">

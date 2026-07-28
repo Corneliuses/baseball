@@ -44,4 +44,23 @@ describe("TeamCard", () => {
 
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
+
+  it("should not show an Archived badge for an active team", () => {
+    render(<TeamCard {...baseProps} archivedAt={null} />);
+
+    expect(screen.queryByText("Archived")).not.toBeInTheDocument();
+  });
+
+  it("should show an Archived badge for an archived team", () => {
+    render(<TeamCard {...baseProps} archivedAt={new Date("2026-09-01")} />);
+
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+  });
+
+  it("should still be clickable when archived", () => {
+    render(<TeamCard {...baseProps} isClickable={true} archivedAt={new Date("2026-09-01")} />);
+
+    const link = screen.getByRole("link");
+    expect(link).toHaveAttribute("href", "/t/team-1");
+  });
 });
