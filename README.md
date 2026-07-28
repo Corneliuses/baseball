@@ -9,23 +9,27 @@ parking lot fifteen minutes before first pitch.
 
 ## Status
 
-**Phase 1 complete — foundation laid.** The data model, tooling, and domain guards are in
-place. The application foundation is now built: design system with shadcn/ui components,
-a responsive mobile-first layout, a public team selector landing page, and a comprehensive
-test suite.
+**Phase 2 complete — auth wired.** Phase 1 laid the data model, tooling, and domain
+guards, and built the app shell. Phase 2 adds sign-in: Auth.js v5 with Resend magic
+links, gated by the `Invitation` table so there is no self-serve signup path.
 
 What exists today:
 
-- `prisma/schema.prisma` — the full domain model
-- `src/lib/` — team access rules, next-game readiness, position labels, all unit-tested
+- `prisma/schema.prisma` — the full domain model, migrated
+- `src/lib/` — team access rules, next-game readiness, position labels, the sign-in gate
+  and owner check, invitation acceptance — all unit-tested
+- `src/auth.ts` — Auth.js v5 config: Prisma adapter, Resend provider, database sessions
+- `src/proxy.ts` — redirects signed-out visitors away from `/t/:path*`
+- `src/app/signin/` — the sign-in form and its confirmation page
 - `src/app/` — landing page displaying all public teams, responsive layout, theme setup
 - `src/components/ui/` — shadcn/ui component library (Button, Card) with baseball-themed styling
 - `src/components/` — reusable components (PageContainer, TeamCard, TeamSelector)
 - Tailwind CSS 4 with HSL color variables (baseball diamond green, field brown, sky blue, warning red)
 - LazyMotion configured for efficient Motion animations
-- Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline with unit tests for all components
+- Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline with unit tests throughout
 
-What does not exist yet: database migrations (schema exists but not applied), auth wiring, team scoping routes, or email sending.
+What does not exist yet: team scoping routes and `requireTeamAccess` (`/t/[teamId]`,
+next up), invite-sending UI, roster and schedule pages.
 
 ## How it works
 

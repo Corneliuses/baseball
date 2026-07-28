@@ -17,7 +17,16 @@ function createClient() {
     // In development/build, throw with a message. Callers wrap in try-catch.
     throw new Error(message);
   }
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  // The connect timeout is load-bearing, not tuning. Without it, node-postgres
+  // waits on the OS TCP timeout, so a query against an unreachable database
+  // hangs rather than failing — measured at over 75 seconds with no rejection.
+  // Callers like getPublicTeams wrap their queries in try/catch, but a catch
+  // block cannot fire on a promise that never settles, and prerendering a page
+  // that hangs blows Next's 60s static-generation budget and fails the build.
+  // Five seconds turns "the build dies" into "the page renders empty".
+  return new PrismaClient({
+    adapter: new PrismaPg({ connectionString, connectionTimeoutMillis: 5_000 }),
+  });
 }
 
 const globalForPrisma = globalThis as unknown as {
