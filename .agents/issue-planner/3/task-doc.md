@@ -3,131 +3,170 @@
 ## Prerequisites
 
 - [x] #1 (App shell) merged — `PageContainer`, `Button`, `Card`, `TeamCard`, `TeamSelector`
-      already exist
-- [x] #2 (Auth) merged — `getCurrentUser()`, `isOwnerEmail()`, `OWNER_EMAIL` all in place
+      exist
+- [x] #2 (Auth) merged — `getCurrentUser()`, `isOwnerEmail()`, `OWNER_EMAIL` in place
+- [ ] `pnpm install && pnpm db:generate` — `node_modules` and `src/generated/prisma` are
+      both gitignored, and nothing typechecks without them
 
 ## Phase 1: Authorization — `requireTeamAccess`
 
-- [ ] Add `requireTeamAccess(teamId: string, { intent, minRole }): Promise<{ role: Role;
-      userId: string }>` to `src/lib/team-access.ts`, below the existing pure
-      `checkTeamAccess`. It must:
-  - Call `getCurrentUser()` (`src/lib/session.ts`); if `null`, throw
-    `TeamAccessError("Not signed in", "no-membership")`
-  - Run a single `db.team.findUnique({ where: { id: teamId }, select: { archivedAt: true,
+- [ ] Add `requireTeamAccess` to `src/lib/team-access.ts`, below the existing pure
+      `checkTeamAccess`, **wrapped in React `cache()`** (design-doc Decision 4):
+
+  ```ts
+  import { cache } from "react";
+
+  export const requireTeamAccess = cache(async function requireTeamAccess(
+    teamId: string,
+    { intent, minRole }: { intent: "read" | "write"; minRole?: Role },
+  ): Promise<{ role: Role; userId: string }> { … });
+  ```
+
+  It must:
+  - Call `getCurrentUser()`; if `null`, throw `TeamAccessError("Not signed in", "no-membership")`
+  - Run one `db.team.findUnique({ where: { id: teamId }, select: { archivedAt: true,
     memberships: { where: { userId }, select: { role: true } } } })`
   - If the team is `null`, throw `TeamAccessError("Team not found", "no-membership")`
-  - Otherwise call the existing `checkTeamAccess({ role: team.memberships[0]?.role ??
-    null, archivedAt: team.archivedAt, intent, minRole })` and return `{ role, userId }`
-  - **Do not modify `checkTeamAccess` itself** — see design-doc.md Decision 3 for why
-    unarchiving must not route through `intent: "write"`
-- [ ] Write `requireTeamAccess` tests in `src/lib/team-access.test.ts`, mocking `./db`
-      and `./session` (follow the `vi.mock("./db", ...)` pattern in
-      `src/lib/invitations.test.ts`): no session → `no-membership`; team not found →
-      `no-membership`; no membership row → `no-membership`; role below `minRole` →
-      `insufficient-role`; `intent: "write"` on an archived team → `archived`; success
-      path returns `{ role, userId }`; confirm exactly one `db.team.findUnique` call
+  - Call the existing `checkTeamAccess({ role: team.memberships[0]?.role ?? null,
+    archivedAt: team.archivedAt, intent, minRole })` and return `{ role, userId }`
+  - **Not** wrap the query in try/catch. A database error must propagate, not be converted
+    into a denial — see design-doc "Error Handling"
+  - **Not modify `checkTeamAccess`** — Decision 3 explains why unarchiving routes around
+    `intent: "write"` instead
+- [ ] Write `requireTeamAccess` tests in `src/lib/team-access.test.ts`, mocking `./db` and
+      `./session` (follow `vi.mock("./db", …)` in `src/lib/invitations.test.ts`; mock
+      specifiers must match the import specifiers, and mocking session is required because
+      it imports `@/auth`): no session; team not found; no membership row; role below
+      `minRole`; `intent: "write"` on archived → `archived`; `intent: "read"` on archived
+      succeeds; the unarchive shape (`intent: "read"`, `minRole: "OWNER"`) succeeds on an
+      archived team; success returns `{ role, userId }`; a thrown DB error propagates
 
 ## Phase 2: Data layer — `src/lib/teams.ts`
 
-- [ ] Replace `getPublicTeams` with `getAllTeams()` — every team, any archived state,
-      ordered `createdAt: "desc"` (matches the existing ordering)
-- [ ] Add `getMemberTeams(userId: string)` — every team with a `Membership` for `userId`,
-      any archived state (drop the existing `archivedAt: null` filter from
-      `getUserTeams` — archived teams must appear so they can render in the switcher's
-      "Archived" section per AC10)
-- [ ] Add `getTeamById(teamId: string): Promise<Team | null>` for the layout, team page,
-      and settings page
 - [ ] Extend the `Team` interface with `archivedAt: Date | null`
-- [ ] Add `createTeam(input: { name: string; season: string | null; allPlay: boolean },
-      ownerId: string): Promise<Team>` — `db.$transaction` inserting `Team` and
-      `Membership(ownerId, team.id, "OWNER")`
-- [ ] Add `updateTeam(teamId: string, input: { name: string; season: string | null;
-      allPlay: boolean }): Promise<Team>`
-- [ ] Add `archiveTeam(teamId: string, now?: Date): Promise<Team>` — sets `archivedAt`
-- [ ] Add `unarchiveTeam(teamId: string): Promise<Team>` — clears `archivedAt`
-- [ ] Update `src/lib/teams.test.ts`: remove the `getPublicTeams` test, add coverage for
-      every new function following the mocked-`db` pattern already in that file and in
-      `invitations.test.ts`
+- [ ] Replace `getPublicTeams` with `getAllTeams()` — every team, any archived state,
+      ordered `createdAt: "desc"`
+- [ ] Add `getMemberTeams(userId)` — teams with a `Membership` for `userId`, any archived
+      state (drop `getUserTeams`'s `archivedAt: null` filter so archived teams can render
+      in the switcher's archived section, per AC10)
+- [ ] Add `getTeamById(teamId): Promise<Team | null>`
+- [ ] Add `createTeam(input, ownerId)` as a **single nested create — not a
+      `$transaction`** (design-doc Decision 8; the array form used in `invitations.ts`
+      cannot reference the not-yet-created `team.id`):
+
+  ```ts
+  db.team.create({
+    data: { name, season, allPlay, memberships: { create: { userId: ownerId, role: "OWNER" } } },
+  })
+  ```
+- [ ] Add `updateTeam(teamId, { name, season, allPlay })`
+- [ ] Add `archiveTeam(teamId, now?)` — sets `archivedAt`
+- [ ] Add `unarchiveTeam(teamId)` — clears `archivedAt`
+- [ ] Decide error handling per function: the read helpers may keep the existing
+      `try/catch → []` shape from `getPublicTeams`, but **the four mutations must not
+      swallow errors** — a silent failure that reports success is worse than a thrown one
+- [ ] Rewrite `src/lib/teams.test.ts` for the new function set, asserting `createTeam`
+      issues exactly one `team.create` carrying the nested membership with `role: "OWNER"`
 
 ## Phase 3: Routes & UI
 
-- [ ] Create `src/app/t/[teamId]/layout.tsx` — call `requireTeamAccess(teamId, { intent:
-      "read" })`; on `TeamAccessError` call `notFound()` (design-doc.md Decision 6); on
-      success render team chrome (reuse `PageContainer` or a thin wrapper) around
-      `children`
-- [ ] Create `src/app/t/[teamId]/page.tsx` — team home: name, season, `allPlay` status;
-      a link to `/t/[teamId]/settings` shown only when the caller's role (returned by
-      `requireTeamAccess`) is `OWNER`
-- [ ] Create `src/app/t/[teamId]/settings/page.tsx` — call
-      `requireTeamAccess(teamId, { intent: "read", minRole: "OWNER" })` to gate the page
-      itself; render an edit form (name/season/allPlay) and an archive/unarchive button
-      based on `getTeamById`'s `archivedAt`
-- [ ] Create `src/app/t/[teamId]/settings/actions.ts`:
-  - `updateTeamAction` — `requireTeamAccess(teamId, { intent: "write", minRole: "OWNER"
-    })`, Zod-validate `{ name: z.string().min(1), season: z.string().optional(), allPlay:
-    z.boolean() }`, call `updateTeam`
-  - `archiveTeamAction` — `requireTeamAccess(teamId, { intent: "write", minRole: "OWNER"
-    })`, call `archiveTeam`
-  - `unarchiveTeamAction` — `requireTeamAccess(teamId, { intent: "read", minRole: "OWNER"
-    })` (**not** `"write"` — design-doc.md Decision 3), call `unarchiveTeam`
-- [ ] Create `src/app/t/new/page.tsx` — check `getCurrentUser()` +
-      `isOwnerEmail(user.email, process.env.OWNER_EMAIL)` directly (no `teamId` exists
-      yet); `notFound()` if not the owner; otherwise render a creation form matching the
-      `Card` + hand-styled-`<input>` pattern in `src/app/signin/page.tsx`
-- [ ] Create `src/app/t/new/actions.ts` — `createTeamAction`: re-check `isOwnerEmail`
-      (never trust the page-level gate alone), Zod-validate, call `createTeam`, then
-      `redirect` to `/t/[newTeamId]`
-- [ ] Rewrite `src/app/page.tsx`: signed-out (`getCurrentUser()` is `null`) renders the
-      existing welcome copy with a sign-in call to action and **no team query**;
-      signed-in calls `getMemberTeams(user.id)` always, and additionally `getAllTeams()`
-      when `isOwnerEmail(user.email, process.env.OWNER_EMAIL)` is true, passing
-      `teams`/`userTeamIds` to `TeamSelector`; show a "Create a team" link to `/t/new`
-      only for the owner
-- [ ] Update `src/app/page.test.tsx` for the new signed-out/signed-in branches, mocking
-      `@/lib/session`, `@/lib/teams`, and `process.env.OWNER_EMAIL`
-- [ ] Extend `src/components/TeamCard.tsx`: accept `archivedAt: Date | null`; render an
-      "Archived" badge when non-null; keep it clickable/linkable either way (archived
-      teams are viewable, just read-only)
-- [ ] Extend `src/components/TeamSelector.tsx`: split `teams` into active and archived
+### Authorization plumbing
+
+- [ ] `src/app/t/[teamId]/layout.tsx` — call `requireTeamAccess(teamId, { intent: "read" })`;
+      catch **`instanceof TeamAccessError` only** and call `notFound()`; render chrome
+      (team name + `TeamSwitcher`) around `children`
+- [ ] `src/app/t/[teamId]/not-found.tsx` — scoped not-found boundary
+- [ ] `src/app/t/[teamId]/page.tsx` — **call `requireTeamAccess` again** (design-doc
+      Decision 6: the layout does not re-run on client-side navigation, so it is not the
+      boundary); render name, season, `allPlay`, and a settings link only when the returned
+      role is `OWNER`
+
+### Team settings
+
+- [ ] `src/app/t/[teamId]/settings/page.tsx` — `requireTeamAccess(teamId, { intent:
+      "read", minRole: "OWNER" })` (read, so the owner can reach this page on an archived
+      team to unarchive it); render the edit form and an archive/unarchive button chosen by
+      `archivedAt`; surface `searchParams.error` the way `src/app/signin/page.tsx:25-47` does
+- [ ] `src/app/t/[teamId]/settings/actions.ts` — all three actions `revalidatePath` and
+      redirect on validation failure (Decision 9):
+  - `updateTeamAction` — `requireTeamAccess(teamId, { intent: "write", minRole: "OWNER" })`,
+    Zod-validate, `updateTeam`, `revalidatePath("/t/[teamId]", "page")` + `revalidatePath("/")`
+  - `archiveTeamAction` — same gate, `archiveTeam`, same revalidation
+  - `unarchiveTeamAction` — **`intent: "read"`, not `"write"`** (Decision 3 — an archived
+    team rejects every write, including this one; leave a comment saying so), `unarchiveTeam`,
+    same revalidation
+
+### Team creation
+
+- [ ] `src/app/t/new/page.tsx` — `getCurrentUser()` +
+      `isOwnerEmail(user?.email, process.env.OWNER_EMAIL)`; `notFound()` if not the owner;
+      render a creation form matching the `Card` + hand-styled-`<input>` pattern in
+      `src/app/signin/page.tsx`
+- [ ] `src/app/t/new/actions.ts` — `createTeamAction`: **re-check `isOwnerEmail`** (the
+      page gate never covers the action), Zod-validate `{ name: z.string().min(1), season:
+      z.string().optional(), allPlay: z.boolean() }`, `createTeam`, `revalidatePath("/")`,
+      then `redirect(\`/t/${team.id}\`)`
+
+### Switcher and landing page
+
+- [ ] `src/components/TeamSwitcher.tsx` — compact switcher for the team-page chrome, so a
+      team is reachable from inside another team and not only from `/` (AC5). Takes the
+      already-loaded team list as props; does not query
+- [ ] Rewrite `src/app/page.tsx`: signed-out (`getCurrentUser()` returns `null`) renders
+      the welcome copy and a sign-in CTA with **no team query at all**; signed-in calls
+      `getMemberTeams(user.id)`, and additionally `getAllTeams()` when the caller is the
+      owner, passing `teams` + `userTeamIds` to `TeamSelector`; show a "Create a team" link
+      to `/t/new` only for the owner
+- [ ] Extend `src/components/TeamCard.tsx` — accept `archivedAt: Date | null`, render an
+      "Archived" badge when non-null, stay linkable either way (archived teams are
+      viewable, just read-only)
+- [ ] Extend `src/components/TeamSelector.tsx` — split `teams` into active and archived
       before the existing My-Teams/All-Teams grouping; render a third "Archived Teams"
-      section beneath the existing two when any archived team is present
-- [ ] Update `TeamCard.test.tsx` and `TeamSelector.test.tsx` for the archived cases
-- [ ] Add smoke tests for the three new pages (`t/new/page.test.tsx`,
-      `t/[teamId]/page.test.tsx`, `t/[teamId]/settings/page.test.tsx`) following the
-      "importable, exports a function" pattern in `src/app/page.test.tsx` /
-      `src/app/signin/page.test.tsx`
+      section when any archived team is present
+
+### Tests
+
+- [ ] Update `TeamCard.test.tsx` and `TeamSelector.test.tsx` for the archived cases (note
+      the existing `mockTeams` fixtures need `archivedAt` once the `Team` interface gains it)
+- [ ] Rewrite `src/app/page.test.tsx` for the signed-out / member / owner branches, mocking
+      `@/lib/session`, `@/lib/teams`, and `process.env.OWNER_EMAIL`; assert the signed-out
+      branch performs no team query
+- [ ] Add smoke tests for the three new pages, following the "importable, exports a
+      function" pattern in `src/app/page.test.tsx`
 
 ## Pre-Commit Gate
 
 Per `AGENTS.md`'s `## Commands` section:
 
 - [ ] `pnpm lint` ✅
-- [ ] `pnpm typecheck` ✅ — run `pnpm db:generate` first if `src/generated/prisma` is
-      missing (gitignored; a fresh checkout won't typecheck without it)
+- [ ] `pnpm typecheck` ✅
 - [ ] `pnpm test` ✅
 - [ ] `pnpm build` ✅
-- [ ] Manual verification against a running server (`pnpm dev`, with a real
-      `DATABASE_URL`): sign in as `OWNER_EMAIL`, create a team at `/t/new`, confirm
-      redirect to `/t/[id]`, edit it at `/t/[id]/settings`, archive it, confirm a write
-      (e.g. re-submitting the edit form) is rejected, unarchive it, confirm a
-      non-member's request to that `teamId` 404s
+- [ ] Manual verification against a running server (`pnpm dev` with a real `DATABASE_URL`):
+      sign in as `OWNER_EMAIL`; create a team at `/t/new` and confirm the redirect; edit it
+      and confirm the change is visible immediately (proves `revalidatePath`); archive it;
+      confirm a further edit is rejected; unarchive it (proves Decision 3); confirm
+      `/t/<other-cuid>` 404s; and **navigate client-side between two `/t/[teamId]` pages
+      and confirm access is still enforced** (the Decision 6 case the layout alone misses)
 
 ## Files Modified / Created
 
 | File | Change |
 |---|---|
-| `src/lib/team-access.ts` | Add `requireTeamAccess`; `checkTeamAccess` untouched |
-| `src/lib/team-access.test.ts` | Add `requireTeamAccess` test suite |
+| `src/lib/team-access.ts` | Add `cache()`-wrapped `requireTeamAccess`; `checkTeamAccess` untouched |
+| `src/lib/team-access.test.ts` | Add `requireTeamAccess` suite |
 | `src/lib/teams.ts` | Replace `getPublicTeams`/`getUserTeams` with `getAllTeams`, `getMemberTeams`, `getTeamById`, `createTeam`, `updateTeam`, `archiveTeam`, `unarchiveTeam` |
 | `src/lib/teams.test.ts` | Rewrite for the new function set |
-| `src/app/t/[teamId]/layout.tsx` | New — `requireTeamAccess` gate + chrome |
-| `src/app/t/[teamId]/page.tsx` | New — team home shell |
+| `src/app/t/[teamId]/layout.tsx` | New — chrome + switcher + fail-fast check |
+| `src/app/t/[teamId]/not-found.tsx` | New — scoped 404 boundary |
+| `src/app/t/[teamId]/page.tsx` | New — team home, checks access itself |
 | `src/app/t/[teamId]/settings/page.tsx` | New — edit + archive/unarchive |
-| `src/app/t/[teamId]/settings/actions.ts` | New — `updateTeamAction`, `archiveTeamAction`, `unarchiveTeamAction` |
+| `src/app/t/[teamId]/settings/actions.ts` | New — three actions, each gated and revalidating |
 | `src/app/t/new/page.tsx` | New — owner-gated creation form |
-| `src/app/t/new/actions.ts` | New — `createTeamAction` |
-| `src/app/page.tsx` | Rewrite — auth-gated switcher, no anonymous team data |
-| `src/app/page.test.tsx` | Rewrite for signed-out/signed-in/owner branches |
+| `src/app/t/new/actions.ts` | New — `createTeamAction`, re-checks ownership |
+| `src/components/TeamSwitcher.tsx` | New — switcher for team-page chrome |
+| `src/app/page.tsx` | Rewrite — auth-gated, no anonymous team data |
+| `src/app/page.test.tsx` | Rewrite for signed-out / member / owner branches |
 | `src/components/TeamCard.tsx` | Add archived badge |
 | `src/components/TeamCard.test.tsx` | Add archived case |
 | `src/components/TeamSelector.tsx` | Add "Archived Teams" section |
