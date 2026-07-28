@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db } from "./db";
 import type { GateInvitation } from "@/lib/signin-gate";
 
 /// Data loading for the sign-in gate, and the one write that turns an accepted
