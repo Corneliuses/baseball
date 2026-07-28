@@ -9,16 +9,23 @@ parking lot fifteen minutes before first pitch.
 
 ## Status
 
-**Pre-alpha — scaffold only.** The data model, tooling, and domain guards are in place;
-the application itself is not built yet. `src/app/` is still the starter page.
+**Phase 1 complete — foundation laid.** The data model, tooling, and domain guards are in
+place. The application foundation is now built: design system with shadcn/ui components,
+a responsive mobile-first layout, a public team selector landing page, and a comprehensive
+test suite.
 
 What exists today:
 
 - `prisma/schema.prisma` — the full domain model
 - `src/lib/` — team access rules, next-game readiness, position labels, all unit-tested
-- Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline
+- `src/app/` — landing page displaying all public teams, responsive layout, theme setup
+- `src/components/ui/` — shadcn/ui component library (Button, Card) with baseball-themed styling
+- `src/components/` — reusable components (PageContainer, TeamCard, TeamSelector)
+- Tailwind CSS 4 with HSL color variables (baseball diamond green, field brown, sky blue, warning red)
+- LazyMotion configured for efficient Motion animations
+- Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline with unit tests for all components
 
-What does not exist yet: any UI, any database migration, auth wiring, or email sending.
+What does not exist yet: database migrations (schema exists but not applied), auth wiring, team scoping routes, or email sending.
 
 ## How it works
 
