@@ -47,11 +47,17 @@ export default async function TeamHomePage({
         )}
       </div>
 
-      {role === "OWNER" && (
+      <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline">
-          <Link href={`/t/${teamId}/settings`}>Team settings</Link>
+          <Link href={`/t/${teamId}/roster`}>Roster</Link>
         </Button>
-      )}
+
+        {role === "OWNER" && (
+          <Button asChild variant="outline">
+            <Link href={`/t/${teamId}/settings`}>Team settings</Link>
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
