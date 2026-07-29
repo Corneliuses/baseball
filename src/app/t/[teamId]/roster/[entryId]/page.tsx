@@ -11,7 +11,13 @@ import {
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRosterEntry } from "@/lib/roster";
 
-import { removeRosterEntryAction, updateRosterEntryAction } from "../actions";
+import {
+  linkGuardianAction,
+  removeRosterEntryAction,
+  resendInvitationAction,
+  unlinkGuardianAction,
+  updateRosterEntryAction,
+} from "../actions";
 
 export const metadata = {
   title: "Player — Youth Baseball Team Manager",
@@ -21,6 +27,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   "invalid-name": "Player name is required.",
   "invalid-jersey": "Jersey number must be a whole number between 0 and 99.",
   "jersey-taken": "That jersey number is already in use on this team.",
+  "invalid-email": "Enter a valid email address.",
+  "email-failed": "The invitation could not be sent. Try again.",
   access: "You no longer have access to make this change.",
 };
 
@@ -37,10 +45,10 @@ export default async function RosterEntryPage({
   searchParams,
 }: {
   params: Promise<{ teamId: string; entryId: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; invited?: string }>;
 }) {
   const { teamId, entryId } = await params;
-  const { error, saved } = await searchParams;
+  const { error, saved, invited } = await searchParams;
 
   let role;
   try {
@@ -142,6 +150,94 @@ export default async function RosterEntryPage({
                 : "No date of birth on file."}
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Guardians</CardTitle>
+          <CardDescription>
+            Guardians linked here get access to this team as parents, and are mailed an
+            invitation the first time they&apos;re linked to anyone on this team.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {invited && !errorMessage ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              Invitation sent.
+            </p>
+          ) : null}
+
+          {entry.guardians.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No guardians linked yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {entry.guardians.map((guardian) => (
+                <li
+                  key={guardian.id}
+                  className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {guardian.name ?? guardian.email}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{guardian.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {guardian.isMember ? "Has access" : "Invitation pending"}
+                    </p>
+                  </div>
+                  {canEdit ? (
+                    <div className="flex shrink-0 gap-2">
+                      {!guardian.isMember ? (
+                        <form action={resendInvitationAction}>
+                          <input type="hidden" name="teamId" value={teamId} />
+                          <input type="hidden" name="entryId" value={entryId} />
+                          <input type="hidden" name="email" value={guardian.email} />
+                          <Button type="submit" variant="outline" size="sm">
+                            Resend
+                          </Button>
+                        </form>
+                      ) : null}
+                      <form action={unlinkGuardianAction}>
+                        <input type="hidden" name="teamId" value={teamId} />
+                        <input type="hidden" name="entryId" value={entryId} />
+                        <input type="hidden" name="playerId" value={entry.player.id} />
+                        <input type="hidden" name="userId" value={guardian.id} />
+                        <Button type="submit" variant="outline" size="sm">
+                          Unlink
+                        </Button>
+                      </form>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {canEdit ? (
+            <form action={linkGuardianAction} className="space-y-2 border-t border-border pt-4">
+              <input type="hidden" name="teamId" value={teamId} />
+              <input type="hidden" name="entryId" value={entryId} />
+              <input type="hidden" name="playerId" value={entry.player.id} />
+
+              <label htmlFor="guardianEmail" className="block text-sm font-medium text-foreground">
+                Add a guardian by email
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="guardianEmail"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="parent@example.com"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <Button type="submit" variant="outline">
+                  Add
+                </Button>
+              </div>
+            </form>
+          ) : null}
         </CardContent>
       </Card>
 
