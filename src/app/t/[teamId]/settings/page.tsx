@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,10 @@ export default async function TeamSettingsPage({
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
+      <Button asChild variant="outline" size="sm">
+        <Link href={`/t/${teamId}/members`}>Members &amp; invitations</Link>
+      </Button>
+
       <Card>
         <CardHeader>
           <CardTitle>Team settings</CardTitle>
