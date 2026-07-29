@@ -97,10 +97,10 @@ describe("getTeamById", () => {
     });
   });
 
-  it("returns null when the query fails", async () => {
+  it("lets a read failure propagate", async () => {
     findUniqueTeam.mockRejectedValue(new Error("db down"));
 
-    await expect(getTeamById("team-1")).resolves.toBeNull();
+    await expect(getTeamById("team-1")).rejects.toThrow("db down");
   });
 });
 

@@ -16,6 +16,14 @@ const updateTeamSchema = z.object({
   allPlay: z.boolean(),
 });
 
+function extractTeamId(formData: FormData): string {
+  const teamId = String(formData.get("teamId")).trim();
+  if (!teamId || teamId === "null" || teamId === "undefined") {
+    throw new Error("Invalid team ID");
+  }
+  return teamId;
+}
+
 /// A literal page path only revalidates that one page — revalidating the
 /// dynamic-segment pattern with `type: "layout"` is what the docs specify
 /// for refreshing a layout (the team name shown in the switcher chrome) and
@@ -27,7 +35,7 @@ function revalidateTeamPaths() {
 }
 
 export async function updateTeamAction(formData: FormData) {
-  const teamId = String(formData.get("teamId"));
+  const teamId = extractTeamId(formData);
 
   const parsed = updateTeamSchema.safeParse({
     name: formData.get("name") ?? "",
@@ -55,7 +63,7 @@ export async function updateTeamAction(formData: FormData) {
 }
 
 export async function archiveTeamAction(formData: FormData) {
-  const teamId = String(formData.get("teamId"));
+  const teamId = extractTeamId(formData);
 
   try {
     await requireTeamAccess(teamId, { intent: "write", minRole: "OWNER" });
@@ -73,7 +81,7 @@ export async function archiveTeamAction(formData: FormData) {
 }
 
 export async function unarchiveTeamAction(formData: FormData) {
-  const teamId = String(formData.get("teamId"));
+  const teamId = extractTeamId(formData);
 
   try {
     // Deliberately `intent: "read"`, not "write". checkTeamAccess rejects

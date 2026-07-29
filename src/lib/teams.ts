@@ -64,16 +64,10 @@ export async function getMemberTeams(userId: string): Promise<Team[]> {
 }
 
 export async function getTeamById(teamId: string): Promise<Team | null> {
-  try {
-    return await db.team.findUnique({
-      where: { id: teamId },
-      select: TEAM_SELECT,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Failed to fetch team:", message);
-    return null;
-  }
+  return await db.team.findUnique({
+    where: { id: teamId },
+    select: TEAM_SELECT,
+  });
 }
 
 export type CreateTeamInput = {
