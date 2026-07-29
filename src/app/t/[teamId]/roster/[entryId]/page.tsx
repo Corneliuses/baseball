@@ -25,6 +25,7 @@ export const metadata = {
 
 const ERROR_MESSAGES: Record<string, string> = {
   "invalid-name": "Player name is required.",
+  "invalid-dob": "Enter a valid date, or leave it blank.",
   "invalid-jersey": "Jersey number must be a whole number between 0 and 99.",
   "jersey-taken": "That jersey number is already in use on this team.",
   "invalid-email": "Enter a valid email address.",

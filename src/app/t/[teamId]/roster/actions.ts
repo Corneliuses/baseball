@@ -74,14 +74,31 @@ async function sendInvitationEmail(
 
 const playerSchema = z.object({
   name: z.string().trim().min(1),
+  // z.iso.date() validates a real calendar date (leap years, days-per-month),
+  // not just the YYYY-MM-DD shape — a malformed or tampered value is rejected
+  // here rather than becoming an Invalid Date that reaches Prisma and fails
+  // as an unhandled error instead of a friendly one.
   dateOfBirth: z
     .string()
     .trim()
+    .refine(
+      (value) => value === "" || z.iso.date().safeParse(value).success,
+      "Invalid date of birth",
+    )
     .transform((value) => (value === "" ? null : value)),
 });
 
+/// Safe by construction: playerSchema has already rejected anything that
+/// isn't "" or a calendar-valid ISO date, so this can never produce an
+/// Invalid Date.
 function parseDateOfBirth(raw: string | null): Date | null {
   return raw ? new Date(raw) : null;
+}
+
+function playerValidationErrorCode(error: z.ZodError): "invalid-name" | "invalid-dob" {
+  return error.issues.some((issue) => issue.path[0] === "dateOfBirth")
+    ? "invalid-dob"
+    : "invalid-name";
 }
 
 export async function addPlayerAction(formData: FormData) {
@@ -93,7 +110,7 @@ export async function addPlayerAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    redirect(`/t/${teamId}/roster?error=invalid-name`);
+    redirect(`/t/${teamId}/roster?error=${playerValidationErrorCode(parsed.error)}`);
   }
 
   let jerseyNumber: number | null;
@@ -136,7 +153,9 @@ export async function updateRosterEntryAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    redirect(`/t/${teamId}/roster/${entryId}?error=invalid-name`);
+    redirect(
+      `/t/${teamId}/roster/${entryId}?error=${playerValidationErrorCode(parsed.error)}`,
+    );
   }
 
   let jerseyNumber: number | null;

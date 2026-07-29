@@ -54,33 +54,49 @@ export class LastOwnerError extends Error {
  * Refuses to demote the team's last OWNER — doing so would strand the team
  * with no one able to manage it. Any other change, including elevating a
  * parent to coach or coach to owner, proceeds unconditionally.
+ *
+ * A team can hold more than one OWNER (this function is how a second one
+ * gets promoted), so "two people demoting two different owners at once" is a
+ * real race, not a hypothetical: under Postgres's default READ COMMITTED
+ * isolation, two concurrent calls could each read "another owner exists" and
+ * both proceed, leaving zero. `Serializable` isolation makes Postgres itself
+ * detect that conflict and abort one side (a `P2034` write-conflict error)
+ * rather than let both succeed — the guarantee that matters here is "never
+ * silently strands the team," not a graceful retry, since two admins
+ * racing to change roles on the same team in the same instant is vanishingly
+ * rare for this single-coach app.
  */
 export async function setMemberRole(
   teamId: string,
   userId: string,
   role: Role,
 ): Promise<void> {
-  const current = await db.membership.findUnique({
-    where: { userId_teamId: { userId, teamId } },
-    select: { role: true },
-  });
+  await db.$transaction(
+    async (tx) => {
+      const current = await tx.membership.findUnique({
+        where: { userId_teamId: { userId, teamId } },
+        select: { role: true },
+      });
 
-  if (!current) {
-    throw new Error("No membership found for this user on this team");
-  }
+      if (!current) {
+        throw new Error("No membership found for this user on this team");
+      }
 
-  if (current.role === "OWNER" && role !== "OWNER") {
-    const ownerCount = await db.membership.count({
-      where: { teamId, role: "OWNER" },
-    });
+      if (current.role === "OWNER" && role !== "OWNER") {
+        const otherOwners = await tx.membership.count({
+          where: { teamId, role: "OWNER", userId: { not: userId } },
+        });
 
-    if (ownerCount <= 1) {
-      throw new LastOwnerError();
-    }
-  }
+        if (otherOwners === 0) {
+          throw new LastOwnerError();
+        }
+      }
 
-  await db.membership.update({
-    where: { userId_teamId: { userId, teamId } },
-    data: { role },
-  });
+      await tx.membership.update({
+        where: { userId_teamId: { userId, teamId } },
+        data: { role },
+      });
+    },
+    { isolationLevel: "Serializable" },
+  );
 }

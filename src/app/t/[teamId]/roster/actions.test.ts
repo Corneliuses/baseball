@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const requireTeamAccess = vi.fn();
 const getRosterEntry = vi.fn();
+const addPlayerToRoster = vi.fn();
+const updateRosterEntry = vi.fn();
 const linkGuardian = vi.fn();
 const unlinkGuardian = vi.fn();
 const createInvitation = vi.fn();
@@ -14,9 +16,9 @@ vi.mock("@/lib/team-access", () => ({
 
 vi.mock("@/lib/roster", () => ({
   getRosterEntry: (...args: unknown[]) => getRosterEntry(...args),
-  addPlayerToRoster: vi.fn(),
+  addPlayerToRoster: (...args: unknown[]) => addPlayerToRoster(...args),
   removeRosterEntry: vi.fn(),
-  updateRosterEntry: vi.fn(),
+  updateRosterEntry: (...args: unknown[]) => updateRosterEntry(...args),
 }));
 
 vi.mock("@/lib/invitations", () => ({
@@ -54,9 +56,11 @@ vi.mock("next/navigation", () => ({
 
 import { TeamAccessError } from "@/lib/team-access";
 import {
+  addPlayerAction,
   linkGuardianAction,
   resendInvitationAction,
   unlinkGuardianAction,
+  updateRosterEntryAction,
 } from "./actions";
 
 const ENTRY = {
@@ -233,5 +237,84 @@ describe("guardian actions do not trust ids from the form", () => {
     expect(url).toContain("error=access");
     expect(getRosterEntry).not.toHaveBeenCalled();
     expect(linkGuardian).not.toHaveBeenCalled();
+  });
+});
+
+/// A malformed dateOfBirth used to reach `new Date(raw)` unvalidated and
+/// become an Invalid Date that flowed into a Prisma write — see
+/// src/app/t/[teamId]/roster/actions.ts's playerSchema.
+describe("date of birth validation", () => {
+  it("rejects a calendar-invalid date and does not write anything", async () => {
+    const url = await redirectUrlOf(
+      addPlayerAction(
+        form({ teamId: "team-1", name: "Ada", dateOfBirth: "2026-02-30" }),
+      ),
+    );
+
+    expect(url).toContain("error=invalid-dob");
+    expect(addPlayerToRoster).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-date string", async () => {
+    const url = await redirectUrlOf(
+      addPlayerAction(
+        form({ teamId: "team-1", name: "Ada", dateOfBirth: "not-a-date" }),
+      ),
+    );
+
+    expect(url).toContain("error=invalid-dob");
+    expect(addPlayerToRoster).not.toHaveBeenCalled();
+  });
+
+  it("accepts a real calendar date, including a leap day", async () => {
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-1",
+      jerseyNumber: null,
+      player: { id: "player-1", name: "Ada", dateOfBirth: new Date("2024-02-29") },
+    });
+
+    await redirectUrlOf(
+      addPlayerAction(
+        form({ teamId: "team-1", name: "Ada", dateOfBirth: "2024-02-29" }),
+      ),
+    );
+
+    expect(addPlayerToRoster).toHaveBeenCalledWith(
+      "team-1",
+      expect.objectContaining({ dateOfBirth: new Date("2024-02-29") }),
+    );
+  });
+
+  it("treats a blank date of birth as absent, not invalid", async () => {
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-1",
+      jerseyNumber: null,
+      player: { id: "player-1", name: "Ada", dateOfBirth: null },
+    });
+
+    await redirectUrlOf(
+      addPlayerAction(form({ teamId: "team-1", name: "Ada", dateOfBirth: "" })),
+    );
+
+    expect(addPlayerToRoster).toHaveBeenCalledWith(
+      "team-1",
+      expect.objectContaining({ dateOfBirth: null }),
+    );
+  });
+
+  it("rejects a bad date on update, distinctly from a bad name", async () => {
+    const url = await redirectUrlOf(
+      updateRosterEntryAction(
+        form({
+          teamId: "team-1",
+          entryId: "entry-1",
+          name: "Ada",
+          dateOfBirth: "2026-13-01",
+        }),
+      ),
+    );
+
+    expect(url).toContain("error=invalid-dob");
+    expect(updateRosterEntry).not.toHaveBeenCalled();
   });
 });

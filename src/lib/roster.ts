@@ -3,12 +3,18 @@ import { db } from "./db";
 /// Team-scoped roster reads and writes, per AGENTS.md — "Never call Prisma
 /// directly from a component."
 ///
-/// Read helpers swallow database errors and return an empty result, matching
-/// teams.ts's rationale: a dead database should render an empty page, not
-/// hang a build or crash a request. The mutations do NOT swallow errors —
-/// callers (server actions) run requireTeamAccess before calling any of
-/// these, and a write that silently fails and still looks like it succeeded
-/// is worse than one that throws.
+/// Error handling differs by shape, not by read-vs-write:
+///   - `getRoster` (a list) swallows database errors and returns an empty
+///     result, matching teams.ts's rationale — a dead database should render
+///     an empty page, not hang a build or crash a request.
+///   - `getRosterEntry` (a single lookup) does NOT swallow errors — its
+///     caller turns a null return into `notFound()`, so a caught outage would
+///     misreport "this player doesn't exist" instead of failing loudly. Same
+///     fix `getTeamById` got in #3 (commit 9709481). See its own docstring.
+///   - Every mutation propagates too: callers (server actions) run
+///     requireTeamAccess before calling any of these, and a write that
+///     silently fails and still looks like it succeeded is worse than one
+///     that throws.
 ///
 /// `Player` carries only `name` and `dateOfBirth` — see the schema comment at
 /// prisma/schema.prisma:82-84. `battingOrder` and `position` on `RosterEntry`
