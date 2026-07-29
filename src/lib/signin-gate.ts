@@ -1,4 +1,5 @@
 import { isOwnerEmail } from "@/lib/owner";
+import { isLiveInvitation } from "@/lib/invitation-token";
 
 /// Who is allowed to obtain a magic link, and therefore an account.
 ///
@@ -63,7 +64,7 @@ export function decideSignIn({
     return { allowed: true, reason: "owner" };
   }
 
-  if (invitations.some((invitation) => isLive(invitation, now))) {
+  if (invitations.some((invitation) => isLiveInvitation(invitation, now))) {
     return { allowed: true, reason: "invitation" };
   }
 
@@ -73,13 +74,4 @@ export function decideSignIn({
   }
 
   return { allowed: false, reason: "no-invitation" };
-}
-
-function isLive(invitation: GateInvitation, now: Date): boolean {
-  if (invitation.acceptedAt !== null) {
-    return false;
-  }
-
-  // Strictly greater than: an invitation expiring exactly now is expired.
-  return invitation.expiresAt.getTime() > now.getTime();
 }
