@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
-import { getRosterEntry } from "@/lib/roster";
+import { getRosterEntry, type RosterEntryGuardian } from "@/lib/roster";
 
 import {
   linkGuardianAction,
@@ -29,11 +29,22 @@ const ERROR_MESSAGES: Record<string, string> = {
   "jersey-taken": "That jersey number is already in use on this team.",
   "invalid-email": "Enter a valid email address.",
   "email-failed": "The invitation could not be sent. Try again.",
+  "not-a-guardian": "That person is not a guardian of this player.",
   access: "You no longer have access to make this change.",
 };
 
 function toDateInputValue(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : "";
+}
+
+/// A guardian holds their Membership from the moment they are linked, so
+/// membership alone never means "onboarded" — only a completed sign-in does.
+/// See RosterEntryGuardian in src/lib/roster.ts.
+function guardianStatus(guardian: RosterEntryGuardian): string {
+  if (!guardian.isMember) {
+    return "No access to this team";
+  }
+  return guardian.hasSignedIn ? "Signed in" : "Invitation pending";
 }
 
 /// Every member reads. Editing and removal require COACH+, enforced both by
@@ -183,16 +194,16 @@ export default async function RosterEntryPage({
                     </p>
                     <p className="text-sm text-muted-foreground">{guardian.email}</p>
                     <p className="text-xs text-muted-foreground">
-                      {guardian.isMember ? "Has access" : "Invitation pending"}
+                      {guardianStatus(guardian)}
                     </p>
                   </div>
                   {canEdit ? (
                     <div className="flex shrink-0 gap-2">
-                      {!guardian.isMember ? (
+                      {!guardian.hasSignedIn ? (
                         <form action={resendInvitationAction}>
                           <input type="hidden" name="teamId" value={teamId} />
                           <input type="hidden" name="entryId" value={entryId} />
-                          <input type="hidden" name="email" value={guardian.email} />
+                          <input type="hidden" name="userId" value={guardian.id} />
                           <Button type="submit" variant="outline" size="sm">
                             Resend
                           </Button>
@@ -201,7 +212,6 @@ export default async function RosterEntryPage({
                       <form action={unlinkGuardianAction}>
                         <input type="hidden" name="teamId" value={teamId} />
                         <input type="hidden" name="entryId" value={entryId} />
-                        <input type="hidden" name="playerId" value={entry.player.id} />
                         <input type="hidden" name="userId" value={guardian.id} />
                         <Button type="submit" variant="outline" size="sm">
                           Unlink
@@ -218,7 +228,6 @@ export default async function RosterEntryPage({
             <form action={linkGuardianAction} className="space-y-2 border-t border-border pt-4">
               <input type="hidden" name="teamId" value={teamId} />
               <input type="hidden" name="entryId" value={entryId} />
-              <input type="hidden" name="playerId" value={entry.player.id} />
 
               <label htmlFor="guardianEmail" className="block text-sm font-medium text-foreground">
                 Add a guardian by email

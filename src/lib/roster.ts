@@ -29,7 +29,18 @@ export type RosterEntryGuardian = {
   name: string | null;
   email: string;
   phone: string | null;
+  /// Holds a Membership on *this* team. Effectively always true for a guardian
+  /// linked through linkGuardian, which creates the membership up front — but
+  /// not guaranteed once #5 can put a player on a second team, so it is read
+  /// rather than assumed.
   isMember: boolean;
+  /// Has actually signed in at least once. `User.emailVerified` is set by the
+  /// Auth.js adapter on the first magic-link click, and a row exists well
+  /// before that (prisma/schema.prisma:61-64) — so this, NOT isMember, is what
+  /// separates "invitation still outstanding" from "onboarded". Membership is
+  /// created the moment a guardian is linked, so isMember would report every
+  /// guardian as onboarded the instant they were added.
+  hasSignedIn: boolean;
 };
 
 export type RosterEntryDetail = RosterEntry & {
@@ -61,32 +72,43 @@ export async function getRoster(teamId: string): Promise<RosterEntry[]> {
   }
 }
 
+/**
+ * One roster spot on one team, with the player's guardians.
+ *
+ * Database errors are deliberately NOT swallowed. Callers turn a null return
+ * into `notFound()`, so a caught outage would render "this player doesn't
+ * exist" for a player who does — the same bug `getTeamById` was fixed for in
+ * #3 (commit 9709481). Null here means "not on this team", nothing else.
+ *
+ * This is also the authoritative resolver for a player's id: it is scoped by
+ * `teamId`, so server actions derive `playerId` from it rather than trusting
+ * a form field.
+ */
 export async function getRosterEntry(
   teamId: string,
   entryId: string,
 ): Promise<RosterEntryDetail | null> {
-  try {
-    const entry = await db.rosterEntry.findFirst({
-      where: { id: entryId, teamId },
-      select: {
-        ...ROSTER_ENTRY_SELECT,
-        player: {
-          select: {
-            id: true,
-            name: true,
-            dateOfBirth: true,
-            guardians: {
-              select: {
-                user: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    phone: true,
-                    memberships: {
-                      where: { teamId },
-                      select: { role: true },
-                    },
+  const entry = await db.rosterEntry.findFirst({
+    where: { id: entryId, teamId },
+    select: {
+      ...ROSTER_ENTRY_SELECT,
+      player: {
+        select: {
+          id: true,
+          name: true,
+          dateOfBirth: true,
+          guardians: {
+            select: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  emailVerified: true,
+                  memberships: {
+                    where: { teamId },
+                    select: { role: true },
                   },
                 },
               },
@@ -94,33 +116,30 @@ export async function getRosterEntry(
           },
         },
       },
-    });
+    },
+  });
 
-    if (!entry) {
-      return null;
-    }
-
-    return {
-      id: entry.id,
-      jerseyNumber: entry.jerseyNumber,
-      player: {
-        id: entry.player.id,
-        name: entry.player.name,
-        dateOfBirth: entry.player.dateOfBirth,
-      },
-      guardians: entry.player.guardians.map(({ user }) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        isMember: user.memberships.length > 0,
-      })),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Failed to fetch roster entry:", message);
+  if (!entry) {
     return null;
   }
+
+  return {
+    id: entry.id,
+    jerseyNumber: entry.jerseyNumber,
+    player: {
+      id: entry.player.id,
+      name: entry.player.name,
+      dateOfBirth: entry.player.dateOfBirth,
+    },
+    guardians: entry.player.guardians.map(({ user }) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      isMember: user.memberships.length > 0,
+      hasSignedIn: user.emailVerified !== null,
+    })),
+  };
 }
 
 export type AddPlayerInput = {

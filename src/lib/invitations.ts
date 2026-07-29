@@ -147,39 +147,42 @@ export type InvitationByToken = {
   acceptedAt: Date | null;
 };
 
+/**
+ * Look up one invitation by its token.
+ *
+ * Database errors propagate rather than being caught. `/invite/[token]`
+ * renders "this invitation isn't valid" on a null return, and telling an
+ * invited parent their link is bad because the database blinked sends them
+ * back to the coach for a replacement that would fail the same way. Null
+ * means "no such token", nothing else — same rule as `getTeamById`.
+ */
 export async function getInvitationByToken(
   token: string,
 ): Promise<InvitationByToken | null> {
-  try {
-    const invitation = await db.invitation.findUnique({
-      where: { token },
-      select: {
-        teamId: true,
-        email: true,
-        role: true,
-        expiresAt: true,
-        acceptedAt: true,
-        team: { select: { name: true } },
-      },
-    });
+  const invitation = await db.invitation.findUnique({
+    where: { token },
+    select: {
+      teamId: true,
+      email: true,
+      role: true,
+      expiresAt: true,
+      acceptedAt: true,
+      team: { select: { name: true } },
+    },
+  });
 
-    if (!invitation) {
-      return null;
-    }
-
-    return {
-      teamId: invitation.teamId,
-      teamName: invitation.team.name,
-      email: invitation.email,
-      role: invitation.role,
-      expiresAt: invitation.expiresAt,
-      acceptedAt: invitation.acceptedAt,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Failed to fetch invitation by token:", message);
+  if (!invitation) {
     return null;
   }
+
+  return {
+    teamId: invitation.teamId,
+    teamName: invitation.team.name,
+    email: invitation.email,
+    role: invitation.role,
+    expiresAt: invitation.expiresAt,
+    acceptedAt: invitation.acceptedAt,
+  };
 }
 
 export type TeamInvitation = {

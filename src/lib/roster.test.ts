@@ -100,6 +100,7 @@ describe("getRosterEntry", () => {
               name: "Sam",
               email: "sam@example.com",
               phone: null,
+              emailVerified: new Date("2026-04-01"),
               memberships: [{ role: "PARENT" }],
             },
           },
@@ -116,8 +117,42 @@ describe("getRosterEntry", () => {
         email: "sam@example.com",
         phone: null,
         isMember: true,
+        hasSignedIn: true,
       },
     ]);
+  });
+
+  // The distinction the UI depends on: linkGuardian creates the Membership up
+  // front, so isMember is true from the moment a guardian is added. Only
+  // emailVerified separates "invitation still outstanding" from "onboarded",
+  // and the Resend button is gated on it.
+  it("reports a linked but never-signed-in guardian as a member who has not signed in", async () => {
+    findFirstRosterEntry.mockResolvedValue({
+      id: "entry-1",
+      jerseyNumber: 7,
+      player: {
+        id: "player-1",
+        name: "Ada",
+        dateOfBirth: null,
+        guardians: [
+          {
+            user: {
+              id: "user-1",
+              name: null,
+              email: "sam@example.com",
+              phone: null,
+              emailVerified: null,
+              memberships: [{ role: "PARENT" }],
+            },
+          },
+        ],
+      },
+    });
+
+    const entry = await getRosterEntry("team-1", "entry-1");
+
+    expect(entry?.guardians[0].isMember).toBe(true);
+    expect(entry?.guardians[0].hasSignedIn).toBe(false);
   });
 
   it("maps a guardian with no membership on this team to isMember: false", async () => {
@@ -131,6 +166,7 @@ describe("getRosterEntry", () => {
             name: null,
             email: "sam@example.com",
             phone: null,
+            emailVerified: null,
             memberships: [],
           },
         },
@@ -142,10 +178,15 @@ describe("getRosterEntry", () => {
     expect(entry?.guardians[0].isMember).toBe(false);
   });
 
-  it("returns null when the database throws", async () => {
+  // Callers turn null into notFound(). Swallowing the error would render
+  // "this player doesn't exist" during an outage — the bug getTeamById was
+  // fixed for in #3.
+  it("lets a database error propagate rather than reporting the player as missing", async () => {
     findFirstRosterEntry.mockRejectedValue(new Error("connection refused"));
 
-    await expect(getRosterEntry("team-1", "entry-1")).resolves.toBeNull();
+    await expect(getRosterEntry("team-1", "entry-1")).rejects.toThrow(
+      "connection refused",
+    );
   });
 });
 

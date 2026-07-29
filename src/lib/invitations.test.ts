@@ -303,10 +303,15 @@ describe("getInvitationByToken", () => {
     await expect(getInvitationByToken("unknown")).resolves.toBeNull();
   });
 
-  it("returns null when the database throws", async () => {
+  // /invite/[token] renders "this invitation isn't valid" on null. Swallowing
+  // the error would send an invited parent back to their coach for a
+  // replacement link that would fail identically.
+  it("lets a database error propagate rather than reporting the token as unknown", async () => {
     findUniqueInvitation.mockRejectedValue(new Error("connection refused"));
 
-    await expect(getInvitationByToken("tok-1")).resolves.toBeNull();
+    await expect(getInvitationByToken("tok-1")).rejects.toThrow(
+      "connection refused",
+    );
   });
 });
 

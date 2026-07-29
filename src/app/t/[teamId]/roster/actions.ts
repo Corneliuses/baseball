@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import {
   addPlayerToRoster,
+  getRosterEntry,
   removeRosterEntry,
   updateRosterEntry,
 } from "@/lib/roster";
@@ -35,14 +36,6 @@ function extractEntryId(formData: FormData): string {
     throw new Error("Invalid roster entry ID");
   }
   return entryId;
-}
-
-function extractPlayerId(formData: FormData): string {
-  const playerId = String(formData.get("playerId")).trim();
-  if (!playerId || playerId === "null" || playerId === "undefined") {
-    throw new Error("Invalid player ID");
-  }
-  return playerId;
 }
 
 /// Builds and sends the invitation email, reporting whether it went out.
@@ -200,10 +193,33 @@ const guardianSchema = z.object({
   email: z.email(),
 });
 
+/**
+ * Resolve the roster entry this request claims to act on, scoped by teamId.
+ *
+ * `requireTeamAccess` proves the caller may write to *this team*; it cannot
+ * prove the record they named belongs to it, because a server action POSTs to
+ * the current page URL and only the action knows what it is about to mutate
+ * (see the note in src/proxy.ts). So `playerId` is never taken from the form:
+ * it is read back from the entry, which is looked up with `teamId` in the
+ * where clause. Without this a coach on team A could POST any `playerId` and
+ * create or delete `GuardianPlayer` rows for a child on team B — and
+ * `GuardianPlayer` is global, so that write is exactly what #5's
+ * returning-player cascade later reads.
+ */
+async function requireRosterEntry(teamId: string, entryId: string) {
+  await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
+
+  const entry = await getRosterEntry(teamId, entryId);
+  if (!entry) {
+    redirect(`/t/${teamId}/roster`);
+  }
+
+  return entry;
+}
+
 export async function linkGuardianAction(formData: FormData) {
   const teamId = extractTeamId(formData);
   const entryId = extractEntryId(formData);
-  const playerId = extractPlayerId(formData);
 
   const parsed = guardianSchema.safeParse({
     email: formData.get("email") ?? "",
@@ -214,11 +230,11 @@ export async function linkGuardianAction(formData: FormData) {
   }
 
   try {
-    await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
+    const entry = await requireRosterEntry(teamId, entryId);
 
     const result = await linkGuardian({
       teamId,
-      playerId,
+      playerId: entry.player.id,
       email: parsed.data.email,
     });
 
@@ -247,15 +263,22 @@ export async function linkGuardianAction(formData: FormData) {
 export async function unlinkGuardianAction(formData: FormData) {
   const teamId = extractTeamId(formData);
   const entryId = extractEntryId(formData);
-  const playerId = extractPlayerId(formData);
   const userId = String(formData.get("userId") ?? "").trim();
   if (!userId) {
     throw new Error("Invalid user ID");
   }
 
   try {
-    await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
-    await unlinkGuardian(playerId, userId);
+    const entry = await requireRosterEntry(teamId, entryId);
+
+    // Only a guardian actually linked to this player can be unlinked through
+    // this page, so a forged userId cannot reach an unrelated family link.
+    const guardian = entry.guardians.find((g) => g.id === userId);
+    if (!guardian) {
+      redirect(`/t/${teamId}/roster/${entryId}?error=not-a-guardian`);
+    }
+
+    await unlinkGuardian(entry.player.id, guardian.id);
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
@@ -271,21 +294,29 @@ export async function unlinkGuardianAction(formData: FormData) {
 export async function resendInvitationAction(formData: FormData) {
   const teamId = extractTeamId(formData);
   const entryId = extractEntryId(formData);
-  const email = String(formData.get("email") ?? "").trim();
-  if (!email) {
-    throw new Error("Invalid email");
+  const userId = String(formData.get("userId") ?? "").trim();
+  if (!userId) {
+    throw new Error("Invalid user ID");
   }
 
   try {
-    await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
+    const entry = await requireRosterEntry(teamId, entryId);
+
+    // The address comes from the guardian row, never from the form — this is
+    // an authenticated mail-send and must not be steerable to an arbitrary
+    // recipient.
+    const guardian = entry.guardians.find((g) => g.id === userId);
+    if (!guardian) {
+      redirect(`/t/${teamId}/roster/${entryId}?error=not-a-guardian`);
+    }
 
     const invitation = await createInvitation({
       teamId,
-      email,
+      email: guardian.email,
       role: "PARENT",
     });
 
-    const sent = await sendInvitationEmail(teamId, email, invitation);
+    const sent = await sendInvitationEmail(teamId, guardian.email, invitation);
     if (!sent) {
       redirect(`/t/${teamId}/roster/${entryId}?error=email-failed`);
     }
