@@ -1,4 +1,7 @@
+import { cache } from "react";
 import { Role } from "@/generated/prisma/enums";
+import { db } from "./db";
+import { getCurrentUser } from "./session";
 
 /// Authorization for a team-scoped route or server action.
 ///
@@ -63,4 +66,78 @@ export function checkTeamAccess({
   }
 
   return role;
+}
+
+export type RequireTeamAccessInput = {
+  intent: "read" | "write";
+  minRole?: Role;
+};
+
+/**
+ * The one query behind requireTeamAccess, cached per request.
+ *
+ * `cache()` is deliberately applied HERE rather than to requireTeamAccess
+ * itself. React's cache keys on argument identity, and object arguments
+ * compare by reference — so a `cache()`d requireTeamAccess(teamId, { intent })
+ * would miss on every single call, because each call site builds a fresh
+ * options literal. Verified in a real server render: three calls passing an
+ * equivalent object literal ran the body three times, while three calls
+ * passing the same two strings ran it once.
+ *
+ * Keying on (teamId, userId) is also the better cache boundary on its own
+ * merits: the layout asks for `{ intent: "read" }` and the settings page for
+ * `{ intent: "read", minRole: "OWNER" }`, which are different questions about
+ * the same two facts. Caching the facts lets both share one round trip; the
+ * decision itself is pure and costs nothing to repeat.
+ */
+const loadTeamAccessFacts = cache(async function loadTeamAccessFacts(
+  teamId: string,
+  userId: string,
+) {
+  return db.team.findUnique({
+    where: { id: teamId },
+    select: {
+      archivedAt: true,
+      memberships: {
+        where: { userId },
+        select: { role: true },
+      },
+    },
+  });
+});
+
+/**
+ * Resolve who is calling and whether they may act on this team, in one
+ * database round trip. Every scoped page loader and server action calls this
+ * first — layouts do NOT re-run on client-side navigation, so a page that
+ * skips this call is unprotected on the very transitions that matter most.
+ * See AGENTS.md and design-doc.md #3 Decision 6.
+ *
+ * A database error is allowed to propagate rather than being caught and
+ * turned into a TeamAccessError: "we couldn't tell" must fail closed, not be
+ * silently reported as a denial that looks routine.
+ */
+export async function requireTeamAccess(
+  teamId: string,
+  { intent, minRole }: RequireTeamAccessInput,
+): Promise<{ role: Role; userId: string }> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new TeamAccessError("Not signed in", "no-membership");
+  }
+
+  const team = await loadTeamAccessFacts(teamId, user.id);
+
+  if (!team) {
+    throw new TeamAccessError("Team not found", "no-membership");
+  }
+
+  const role = checkTeamAccess({
+    role: team.memberships[0]?.role ?? null,
+    archivedAt: team.archivedAt,
+    intent,
+    minRole,
+  });
+
+  return { role, userId: user.id };
 }

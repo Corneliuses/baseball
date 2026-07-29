@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { auth } from "@/auth";
 
 /// The one place the app asks who is calling.
@@ -16,7 +17,12 @@ export type CurrentUser = {
   name: string | null;
 };
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+/// Cached per request: a single page render asks "who is calling" several
+/// times over (the layout, the page, and requireTeamAccess inside each), and
+/// every `auth()` call is a session row lookup. Taking no arguments means the
+/// cache key is trivially stable — unlike a function taking an options object,
+/// where React's reference-identity keying would miss on every call.
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await auth();
   const user = session?.user;
 
@@ -29,4 +35,4 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     email: user.email ?? null,
     name: user.name ?? null,
   };
-}
+});

@@ -20,38 +20,51 @@ export function TeamSelector({ teams, userTeamIds = [] }: TeamSelectorProps) {
     );
   }
 
+  const activeTeams = teams.filter((t) => !t.archivedAt);
+  const archivedTeams = teams.filter((t) => t.archivedAt);
+
+  // Gate each section on the teams it would actually render, not on
+  // userTeamIds alone: a caller whose only team is archived has a non-empty
+  // userTeamIds and an empty active list, which would otherwise print a
+  // "My Teams" heading above nothing.
+  const myActiveTeams = activeTeams.filter((t) => userTeamIds.includes(t.id));
+  const otherActiveTeams = activeTeams.filter((t) => !userTeamIds.includes(t.id));
+
   return (
     <div className="space-y-8">
-      {userTeamIds.length > 0 && (
+      {myActiveTeams.length > 0 && (
         <div>
           <h2 className="text-xl font-bold mb-4 text-foreground">My Teams</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teams
-              .filter((t) => userTeamIds.includes(t.id))
-              .map((team) => (
-                <TeamCard
-                  key={team.id}
-                  {...team}
-                  isClickable={true}
-                />
-              ))}
+            {myActiveTeams.map((team) => (
+              <TeamCard key={team.id} {...team} isClickable={true} />
+            ))}
           </div>
         </div>
       )}
 
-      {teams.some((t) => !userTeamIds.includes(t.id)) && (
+      {otherActiveTeams.length > 0 && (
         <div>
           <h2 className="text-xl font-bold mb-4 text-foreground">All Teams</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teams
-              .filter((t) => !userTeamIds.includes(t.id))
-              .map((team) => (
-                <TeamCard
-                  key={team.id}
-                  {...team}
-                  isClickable={false}
-                />
-              ))}
+            {otherActiveTeams.map((team) => (
+              <TeamCard key={team.id} {...team} isClickable={false} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {archivedTeams.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold mb-4 text-foreground">Archived Teams</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {archivedTeams.map((team) => (
+              <TeamCard
+                key={team.id}
+                {...team}
+                isClickable={userTeamIds.includes(team.id)}
+              />
+            ))}
           </div>
         </div>
       )}

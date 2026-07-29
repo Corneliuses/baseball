@@ -26,7 +26,8 @@ src/generated/     # Prisma client output — gitignored, regenerate with pnpm d
 .claude/           # Agent config: workflow skills, agent defs, permissions (do not edit)
 ```
 
-The app is not built yet. `src/app/` is still the create-next-app placeholder.
+`src/app/` now has real routes: `/` (auth-gated landing), `/signin`, and `/t/[teamId]/`
+(team home, settings) plus `/t/new` for owner-gated team creation.
 
 ## Tech Stack
 
