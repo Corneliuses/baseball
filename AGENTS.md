@@ -21,13 +21,16 @@ being revised, not to reflect code.
 prisma/            # schema.prisma — the domain model, heavily commented
 src/app/           # Next.js App Router pages and layouts
 src/lib/           # Domain logic. Pure, DB-free modules live here with co-located tests
+src/emails/        # React Email templates plus their pure props builders
 src/generated/     # Prisma client output — gitignored, regenerate with pnpm db:generate
 .agents/           # Product brief and stack decisions (decision record — do not edit)
 .claude/           # Agent config: workflow skills, agent defs, permissions (do not edit)
 ```
 
-`src/app/` now has real routes: `/` (auth-gated landing), `/signin`, and `/t/[teamId]/`
-(team home, settings) plus `/t/new` for owner-gated team creation.
+`src/app/` now has real routes: `/` (auth-gated landing), `/signin`, `/invite/[token]`
+(unauthenticated invitation accept page — deliberately outside proxy.ts's matcher), and
+`/t/[teamId]/` (team home, settings, roster, members) plus `/t/new` for owner-gated team
+creation.
 
 ## Tech Stack
 
@@ -173,6 +176,14 @@ a different service than Decision 3's choice) — and will create the initial mi
   transitions, confirmations, and reveals.
 - **`.env.example` is gitignore-exempt** via an explicit `!.env.example` negation, since
   the Next.js scaffold ignores `.env*`. Keep that negation if you touch `.gitignore`.
+- **`RosterEntry`'s unique indexes surface as Prisma `P2002`, not a friendly error, unless
+  translated.** `src/lib/roster-rules.ts`'s `rosterWriteFailure` duck-types the error rather
+  than importing `PrismaClientKnownRequestError` (the generated client is gitignored, so its
+  internal export path isn't a stable import) and matches both `meta.target` shapes seen
+  across Prisma versions — an array of column names and a single constraint-name string.
+  **Which shape a real write actually returns is unverified** — this repo has not yet run a
+  write against live Postgres that trips one of these constraints. Confirm it before relying
+  on this in production, and adjust the matching in `roster-rules.ts` if it differs.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.

@@ -9,27 +9,34 @@ parking lot fifteen minutes before first pitch.
 
 ## Status
 
-**Phase 2 complete — auth wired.** Phase 1 laid the data model, tooling, and domain
-guards, and built the app shell. Phase 2 adds sign-in: Auth.js v5 with Resend magic
-links, gated by the `Invitation` table so there is no self-serve signup path.
+**Phase 4 complete — roster, invitations, and team membership.** Phase 1 laid the data
+model, tooling, and domain guards. Phase 2 added sign-in. Phase 3 added team scoping
+(`/t/[teamId]`, `requireTeamAccess`). Phase 4 adds the roster itself: players, jersey
+numbers, guardian links, working invitations, and owner-only member/role management.
 
 What exists today:
 
 - `prisma/schema.prisma` — the full domain model, migrated
 - `src/lib/` — team access rules, next-game readiness, position labels, the sign-in gate
-  and owner check, invitation acceptance — all unit-tested
+  and owner check, invitation creation/acceptance, roster and membership data access — all
+  unit-tested
 - `src/auth.ts` — Auth.js v5 config: Prisma adapter, Resend provider, database sessions
 - `src/proxy.ts` — redirects signed-out visitors away from `/t/:path*`
 - `src/app/signin/` — the sign-in form and its confirmation page
+- `src/app/invite/[token]/` — the (unauthenticated) invitation accept page
+- `src/app/t/[teamId]/` — team home, settings, roster (list + player detail with guardian
+  linking), and owner-only member management
+- `src/emails/` — the React Email invitation template, sent through Resend
 - `src/app/` — landing page displaying all public teams, responsive layout, theme setup
 - `src/components/ui/` — shadcn/ui component library (Button, Card) with baseball-themed styling
-- `src/components/` — reusable components (PageContainer, TeamCard, TeamSelector)
+- `src/components/` — reusable components (PageContainer, TeamCard, TeamSelector, TeamSwitcher)
 - Tailwind CSS 4 with HSL color variables (baseball diamond green, field brown, sky blue, warning red)
 - LazyMotion configured for efficient Motion animations
 - Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline with unit tests throughout
 
-What does not exist yet: team scoping routes and `requireTeamAccess` (`/t/[teamId]`,
-next up), invite-sending UI, roster and schedule pages.
+What does not exist yet: the returning-player picker and directory (#5), the schedule
+(#6), RSVP (#7), the view page (#8), the drag-and-drop batting order and positions
+editors (#10, #11), next-game readiness (#12), and broadcast messaging (#13).
 
 ## How it works
 
