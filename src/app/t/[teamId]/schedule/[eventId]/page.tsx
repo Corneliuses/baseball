@@ -10,10 +10,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
+import { getRoster } from "@/lib/roster";
+import { buildRsvpStateMap, type RsvpState } from "@/lib/rsvp";
+import { guardedRosteredPlayerIds, listEventRsvps } from "@/lib/rsvps";
 import { getEvent } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 
-import { deleteEventAction, updateEventAction } from "../actions";
+import { deleteEventAction, rsvpAction, updateEventAction } from "../actions";
 
 export const metadata = {
   title: "Event — Youth Baseball Team Manager",
@@ -25,7 +28,17 @@ const ERROR_MESSAGES: Record<string, string> = {
   "invalid-location": "Location is too long.",
   "invalid-opponent": "Opponent is too long.",
   "invalid-notes": "Notes are too long.",
+  "invalid-rsvp": "Choose a valid response.",
+  "not-your-player": "You can only RSVP for your own kids.",
   access: "You no longer have access to make this change.",
+};
+
+/// `no-response` is deliberately styled distinct from `declined` — it means
+/// the family hasn't answered, not that they said no. See rsvp.ts.
+const RSVP_BADGE: Record<RsvpState, { label: string; className: string }> = {
+  attending: { label: "Going", className: "text-primary" },
+  declined: { label: "Not going", className: "text-destructive" },
+  "no-response": { label: "No response", className: "text-muted-foreground" },
 };
 
 const inputClass =
@@ -46,8 +59,9 @@ export default async function EventPage({
   const { error, saved, confirm } = await searchParams;
 
   let role;
+  let userId;
   try {
-    ({ role } = await requireTeamAccess(teamId, { intent: "read" }));
+    ({ role, userId } = await requireTeamAccess(teamId, { intent: "read" }));
   } catch (caught) {
     if (caught instanceof TeamAccessError) {
       notFound();
@@ -59,6 +73,16 @@ export default async function EventPage({
   if (!event) {
     notFound();
   }
+
+  const [roster, rsvpRows, guardedPlayerIds] = await Promise.all([
+    getRoster(teamId),
+    listEventRsvps(teamId, eventId),
+    guardedRosteredPlayerIds(teamId, userId),
+  ]);
+  const rsvpStateByPlayerId = buildRsvpStateMap(
+    roster.map((entry) => entry.player.id),
+    rsvpRows,
+  );
 
   const canEdit = role !== "PARENT";
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
@@ -90,6 +114,73 @@ export default async function EventPage({
           {event.notes ? (
             <p className="whitespace-pre-line text-muted-foreground">{event.notes}</p>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Attendance</CardTitle>
+          <CardDescription>
+            RSVP is just for planning — every kid stays on the roster and in the chart
+            either way.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {roster.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No players on the roster yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {roster.map((entry) => {
+                const state = rsvpStateByPlayerId.get(entry.player.id) ?? "no-response";
+                const badge = RSVP_BADGE[state];
+                const canRsvp = guardedPlayerIds.has(entry.player.id);
+
+                return (
+                  <li
+                    key={entry.id}
+                    className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {entry.player.name}
+                      </p>
+                      <p className={`text-xs ${badge.className}`}>{badge.label}</p>
+                    </div>
+                    {canRsvp ? (
+                      <div className="flex shrink-0 gap-2">
+                        <form action={rsvpAction}>
+                          <input type="hidden" name="teamId" value={teamId} />
+                          <input type="hidden" name="eventId" value={event.id} />
+                          <input type="hidden" name="playerId" value={entry.player.id} />
+                          <input type="hidden" name="response" value="attending" />
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant={state === "attending" ? "default" : "outline"}
+                          >
+                            Going
+                          </Button>
+                        </form>
+                        <form action={rsvpAction}>
+                          <input type="hidden" name="teamId" value={teamId} />
+                          <input type="hidden" name="eventId" value={event.id} />
+                          <input type="hidden" name="playerId" value={entry.player.id} />
+                          <input type="hidden" name="response" value="declined" />
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant={state === "declined" ? "destructive" : "outline"}
+                          >
+                            Not going
+                          </Button>
+                        </form>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 const requireTeamAccess = vi.fn();
 const getEvent = vi.fn();
+const getRoster = vi.fn();
+const listEventRsvps = vi.fn();
+const guardedRosteredPlayerIds = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -13,9 +16,19 @@ vi.mock("@/lib/schedule", () => ({
   getEvent: (...args: unknown[]) => getEvent(...args),
 }));
 
+vi.mock("@/lib/roster", () => ({
+  getRoster: (...args: unknown[]) => getRoster(...args),
+}));
+
+vi.mock("@/lib/rsvps", () => ({
+  listEventRsvps: (...args: unknown[]) => listEventRsvps(...args),
+  guardedRosteredPlayerIds: (...args: unknown[]) => guardedRosteredPlayerIds(...args),
+}));
+
 vi.mock("../actions", () => ({
   updateEventAction: vi.fn(),
   deleteEventAction: vi.fn(),
+  rsvpAction: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -46,10 +59,18 @@ async function render(searchParams: Record<string, string> = {}) {
   );
 }
 
+const roster = [
+  { id: "entry-1", jerseyNumber: 7, player: { id: "ava", name: "Ava", dateOfBirth: null } },
+  { id: "entry-2", jerseyNumber: 12, player: { id: "ben", name: "Ben", dateOfBirth: null } },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
   getEvent.mockResolvedValue(game);
+  getRoster.mockResolvedValue([]);
+  listEventRsvps.mockResolvedValue([]);
+  guardedRosteredPlayerIds.mockResolvedValue(new Set());
 });
 
 describe("EventPage access", () => {
@@ -179,5 +200,67 @@ describe("EventPage feedback", () => {
 
   it("confirms a save", async () => {
     expect(await render({ saved: "1" })).toContain("Saved.");
+  });
+});
+
+describe("EventPage attendance", () => {
+  it("shows a placeholder when the roster is empty", async () => {
+    expect(await render()).toContain("No players on the roster yet.");
+  });
+
+  it("labels all three RSVP states distinctly", async () => {
+    getRoster.mockResolvedValue(roster);
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: true },
+      { playerId: "ben", attending: false },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Going");
+    expect(html).toContain("Not going");
+    // A third player with no row at all would read "No response" — covered
+    // by the empty-rsvps case below, where every roster player has none.
+  });
+
+  it("defaults every player with no Rsvp row to no-response", async () => {
+    getRoster.mockResolvedValue(roster);
+    listEventRsvps.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain("No response");
+  });
+
+  it("offers Going / Not going toggles only for players the caller guards", async () => {
+    getRoster.mockResolvedValue(roster);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    // Ava's row carries two rsvpAction forms (Going / Not going), each with a
+    // hidden playerId input; Ben isn't guarded, so his row has none.
+    const avaFormCount = html.split('value="ava"').length - 1;
+    const benFormCount = html.split('value="ben"').length - 1;
+    expect(avaFormCount).toBe(2);
+    expect(benFormCount).toBe(0);
+  });
+
+  it("renders the attendance card for a practice, not just games", async () => {
+    getEvent.mockResolvedValue({ ...game, type: "PRACTICE", opponent: null, notes: null });
+    getRoster.mockResolvedValue(roster);
+
+    const html = await render();
+
+    expect(html).toContain("Attendance");
+    expect(html).toContain("Ava");
+  });
+
+  it("scopes the roster, RSVP, and guardian lookups to this team and event", async () => {
+    await render();
+
+    expect(getRoster).toHaveBeenCalledWith("team-1");
+    expect(listEventRsvps).toHaveBeenCalledWith("team-1", "event-1");
+    expect(guardedRosteredPlayerIds).toHaveBeenCalledWith("team-1", "user-1");
   });
 });
