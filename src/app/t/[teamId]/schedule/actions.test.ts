@@ -5,6 +5,8 @@ const getEvent = vi.fn();
 const createEvent = vi.fn();
 const updateEvent = vi.fn();
 const deleteEvent = vi.fn();
+const guardedRosteredPlayerIds = vi.fn();
+const upsertRsvp = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -16,6 +18,11 @@ vi.mock("@/lib/schedule", () => ({
   createEvent: (...args: unknown[]) => createEvent(...args),
   updateEvent: (...args: unknown[]) => updateEvent(...args),
   deleteEvent: (...args: unknown[]) => deleteEvent(...args),
+}));
+
+vi.mock("@/lib/rsvps", () => ({
+  guardedRosteredPlayerIds: (...args: unknown[]) => guardedRosteredPlayerIds(...args),
+  upsertRsvp: (...args: unknown[]) => upsertRsvp(...args),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -35,6 +42,7 @@ import { TeamAccessError } from "@/lib/team-access";
 import {
   createEventAction,
   deleteEventAction,
+  rsvpAction,
   updateEventAction,
 } from "./actions";
 
@@ -86,6 +94,8 @@ beforeEach(() => {
   createEvent.mockResolvedValue({ id: "event-1" });
   updateEvent.mockResolvedValue({ id: "event-1" });
   deleteEvent.mockResolvedValue(undefined);
+  guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1"]));
+  upsertRsvp.mockResolvedValue(undefined);
 });
 
 describe("createEventAction", () => {
@@ -265,5 +275,88 @@ describe("deleteEventAction", () => {
 
     expect(url).toBe("/t/team-1/schedule/event-1?error=access");
     expect(deleteEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("rsvpAction", () => {
+  const rsvpForm = form({
+    teamId: "team-1",
+    eventId: "event-1",
+    playerId: "player-1",
+    response: "attending",
+  });
+
+  it("requires a writable team, open to any role (no minRole)", async () => {
+    await redirectUrlOf(() => rsvpAction(rsvpForm));
+
+    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", { intent: "write" });
+  });
+
+  it("resolves the event through getEvent so the id is scoped to this team", async () => {
+    await redirectUrlOf(() => rsvpAction(rsvpForm));
+
+    expect(getEvent).toHaveBeenCalledWith("team-1", "event-1");
+  });
+
+  it("upserts attending: true for an attending response", async () => {
+    await redirectUrlOf(() => rsvpAction(rsvpForm));
+
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true);
+  });
+
+  it("upserts attending: false for a declined response", async () => {
+    await redirectUrlOf(() =>
+      rsvpAction(form({ ...Object.fromEntries(rsvpForm), response: "declined" })),
+    );
+
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", false);
+  });
+
+  it("redirects to the event with a saved flag on success", async () => {
+    const url = await redirectUrlOf(() => rsvpAction(rsvpForm));
+
+    expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
+  });
+
+  it("rejects a response value outside the enum, without writing", async () => {
+    const url = await redirectUrlOf(() =>
+      rsvpAction(form({ ...Object.fromEntries(rsvpForm), response: "maybe" })),
+    );
+
+    expect(url).toBe("/t/team-1/schedule/event-1?error=invalid-rsvp");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  it("refuses to write when the event belongs to another team", async () => {
+    getEvent.mockResolvedValue(null);
+
+    const url = await redirectUrlOf(() => rsvpAction(rsvpForm));
+
+    expect(url).toBe("/t/team-1/schedule");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  it("refuses to write when the caller does not guard the named player", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["someone-elses-kid"]));
+
+    const url = await redirectUrlOf(() => rsvpAction(rsvpForm));
+
+    expect(url).toBe("/t/team-1/schedule/event-1?error=not-your-player");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  it("redirects with ?error=access when the team is archived", async () => {
+    requireTeamAccess.mockRejectedValue(new TeamAccessError("archived", "archived"));
+
+    const url = await redirectUrlOf(() => rsvpAction(rsvpForm));
+
+    expect(url).toBe("/t/team-1/schedule/event-1?error=access");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  it("throws on a missing player id rather than guessing", async () => {
+    const data = form({ teamId: "team-1", eventId: "event-1", response: "attending" });
+
+    await expect(rsvpAction(data)).rejects.toThrow("Invalid player ID");
   });
 });

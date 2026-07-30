@@ -5,6 +5,7 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { wallClockToInstant } from "@/lib/calendar";
+import { guardedRosteredPlayerIds, upsertRsvp } from "@/lib/rsvps";
 import {
   createEvent,
   deleteEvent,
@@ -36,6 +37,14 @@ function extractEventId(formData: FormData): string {
     throw new Error("Invalid event ID");
   }
   return eventId;
+}
+
+function extractPlayerId(formData: FormData): string {
+  const playerId = String(formData.get("playerId")).trim();
+  if (!playerId || playerId === "null" || playerId === "undefined") {
+    throw new Error("Invalid player ID");
+  }
+  return playerId;
 }
 
 const MAX_SHORT_TEXT = 200;
@@ -210,4 +219,65 @@ export async function deleteEventAction(formData: FormData) {
 
   revalidatePath("/t/[teamId]/schedule", "page");
   redirect(`/t/${teamId}/schedule`);
+}
+
+const rsvpResponseSchema = z.enum(["attending", "declined"]);
+
+/**
+ * Prove the caller may write to this team, that the event they named is on
+ * it, AND that they guard the player they are RSVPing for.
+ *
+ * `requireTeamAccess` alone only proves team membership — any PARENT can
+ * write. It cannot prove which family the named player belongs to, because a
+ * server action POSTs to the current page URL; only this check, run after
+ * resolving the caller's identity, can. `guardedRosteredPlayerIds` also
+ * folds in roster membership on this team, not just `GuardianPlayer` alone,
+ * because that link is global (Decision 15) — guardianship by itself would
+ * let a parent RSVP a kid who only plays on another team onto this one's
+ * event.
+ */
+async function requireGuardedEvent(teamId: string, eventId: string, playerId: string) {
+  const { userId } = await requireTeamAccess(teamId, { intent: "write" });
+
+  const event = await getEvent(teamId, eventId);
+  if (!event) {
+    redirect(`/t/${teamId}/schedule`);
+  }
+
+  const guardedPlayerIds = await guardedRosteredPlayerIds(teamId, userId);
+  if (!guardedPlayerIds.has(playerId)) {
+    redirect(`/t/${teamId}/schedule/${eventId}?error=not-your-player`);
+  }
+
+  return event;
+}
+
+/// RSVP is reporting, never a gate — open to every role (PARENT+), unlike
+/// the COACH+ mutations above. Archived teams still reject the write, same
+/// as every other mutation on this team.
+export async function rsvpAction(formData: FormData) {
+  const teamId = extractTeamId(formData);
+  const eventId = extractEventId(formData);
+  const playerId = extractPlayerId(formData);
+
+  const parsedResponse = rsvpResponseSchema.safeParse(formData.get("response"));
+  if (!parsedResponse.success) {
+    redirect(`/t/${teamId}/schedule/${eventId}?error=invalid-rsvp`);
+  }
+
+  try {
+    // Write against the id `getEvent` resolved, not the raw form field — same
+    // convention as the roster actions deriving playerId from getRosterEntry.
+    const event = await requireGuardedEvent(teamId, eventId, playerId);
+    await upsertRsvp(event.id, playerId, parsedResponse.data === "attending");
+  } catch (error) {
+    unstable_rethrow(error);
+    if (error instanceof TeamAccessError) {
+      redirect(`/t/${teamId}/schedule/${eventId}?error=access`);
+    }
+    throw error;
+  }
+
+  revalidatePath("/t/[teamId]/schedule/[eventId]", "page");
+  redirect(`/t/${teamId}/schedule/${eventId}?saved=1`);
 }
