@@ -164,6 +164,12 @@ export async function nextGame(
   teamId: string,
   now: Date = new Date(),
 ): Promise<ScheduleEvent | null> {
+  // No `take: 1` here, deliberately. If the SQL filter and selectNextGame's
+  // definition of "next" ever diverge — someone loosens the `where` clause
+  // without updating this function, say — the pure function needs every
+  // candidate the loosened query returns to still pick correctly, not just a
+  // single pre-filtered row it may have to reject outright. A season's worth
+  // of games is small enough that fetching all of them is free.
   const candidates = await db.event.findMany({
     where: {
       teamId,
@@ -172,7 +178,6 @@ export async function nextGame(
     },
     select: EVENT_SELECT,
     orderBy: { startsAt: "asc" },
-    take: 1,
   });
 
   return selectNextGame(candidates, now);
