@@ -49,6 +49,10 @@ export default async function TeamHomePage({
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline">
+          <Link href={`/t/${teamId}/schedule`}>Schedule</Link>
+        </Button>
+
+        <Button asChild variant="outline">
           <Link href={`/t/${teamId}/roster`}>Roster</Link>
         </Button>
 
