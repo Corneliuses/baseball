@@ -6,6 +6,7 @@ const createRosterEntry = vi.fn();
 const updateRosterEntry = vi.fn();
 const deleteRosterEntry = vi.fn();
 const findManyPlayers = vi.fn();
+const findFirstPlayer = vi.fn();
 const transaction = vi.fn();
 
 // addReturningPlayer runs its cascade inside an interactive transaction, so
@@ -37,6 +38,7 @@ vi.mock("./db", () => ({
     },
     player: {
       findMany: (...args: unknown[]) => findManyPlayers(...args),
+      findFirst: (...args: unknown[]) => findFirstPlayer(...args),
     },
     $transaction: (...args: unknown[]) => transaction(...args),
   },
@@ -47,6 +49,7 @@ import {
   addReturningPlayer,
   getRoster,
   getRosterEntry,
+  isReturningCandidate,
   listReturningCandidates,
   removeRosterEntry,
   updateRosterEntry as updateRosterEntryFn,
@@ -343,6 +346,42 @@ describe("listReturningCandidates", () => {
     findManyPlayers.mockRejectedValue(new Error("connection refused"));
 
     await expect(listReturningCandidates("team-1")).resolves.toEqual([]);
+  });
+});
+
+describe("isReturningCandidate", () => {
+  it("applies the same predicate as the list, narrowed to one player", async () => {
+    findFirstPlayer.mockResolvedValue({ id: "player-1" });
+
+    await isReturningCandidate("team-1", "player-1");
+
+    expect(findFirstPlayer).toHaveBeenCalledWith({
+      where: {
+        id: "player-1",
+        rosterEntries: { some: { teamId: { not: "team-1" } } },
+        NOT: { rosterEntries: { some: { teamId: "team-1" } } },
+      },
+      select: { id: true },
+    });
+  });
+
+  it("returns true for a match and false for none", async () => {
+    findFirstPlayer.mockResolvedValue({ id: "player-1" });
+    await expect(isReturningCandidate("team-1", "player-1")).resolves.toBe(true);
+
+    findFirstPlayer.mockResolvedValue(null);
+    await expect(isReturningCandidate("team-1", "player-1")).resolves.toBe(false);
+  });
+
+  // Unlike listReturningCandidates, this must NOT swallow — the caller turns
+  // false into "no longer available to add", so a caught outage would report
+  // an addable player as unavailable and silently skip the write.
+  it("lets a database error propagate rather than returning false", async () => {
+    findFirstPlayer.mockRejectedValue(new Error("connection refused"));
+
+    await expect(isReturningCandidate("team-1", "player-1")).rejects.toThrow(
+      "connection refused",
+    );
   });
 });
 

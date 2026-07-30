@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const requireTeamAccess = vi.fn();
-const listReturningCandidates = vi.fn();
+const isReturningCandidate = vi.fn();
 const addReturningPlayer = vi.fn();
 const sendEmail = vi.fn();
+const getTeamById = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -11,7 +12,7 @@ vi.mock("@/lib/team-access", () => ({
 }));
 
 vi.mock("@/lib/roster", () => ({
-  listReturningCandidates: (...args: unknown[]) => listReturningCandidates(...args),
+  isReturningCandidate: (...args: unknown[]) => isReturningCandidate(...args),
   addReturningPlayer: (...args: unknown[]) => addReturningPlayer(...args),
 }));
 
@@ -20,7 +21,7 @@ vi.mock("@/lib/email", () => ({
 }));
 
 vi.mock("@/lib/teams", () => ({
-  getTeamById: vi.fn().mockResolvedValue({ id: "team-1", name: "Cubs" }),
+  getTeamById: (...args: unknown[]) => getTeamById(...args),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -40,14 +41,6 @@ vi.mock("next/navigation", () => ({
 
 import { TeamAccessError } from "@/lib/team-access";
 import { addReturningPlayerAction } from "./actions";
-
-const CANDIDATE = {
-  playerId: "player-1",
-  name: "Ada",
-  dateOfBirth: null,
-  teams: [{ id: "team-2", name: "Rec", season: "2025", archivedAt: null }],
-  guardianCount: 1,
-};
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
@@ -72,12 +65,13 @@ async function redirectUrlOf(promise: Promise<unknown>): Promise<string> {
 beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "owner-1" });
-  listReturningCandidates.mockResolvedValue([CANDIDATE]);
+  isReturningCandidate.mockResolvedValue(true);
   addReturningPlayer.mockResolvedValue({
     entry: { id: "entry-1", jerseyNumber: 7, player: { id: "player-1", name: "Ada", dateOfBirth: null } },
     notify: [],
   });
   sendEmail.mockResolvedValue({ ok: true });
+  getTeamById.mockResolvedValue({ id: "team-1", name: "Cubs" });
 });
 
 describe("addReturningPlayerAction", () => {
@@ -94,8 +88,8 @@ describe("addReturningPlayerAction", () => {
     expect(addReturningPlayer).not.toHaveBeenCalled();
   });
 
-  it("rejects a playerId that is not in the current candidate list", async () => {
-    listReturningCandidates.mockResolvedValue([]);
+  it("rejects a playerId that is no longer a candidate", async () => {
+    isReturningCandidate.mockResolvedValue(false);
 
     const url = await redirectUrlOf(
       addReturningPlayerAction(
@@ -104,6 +98,21 @@ describe("addReturningPlayerAction", () => {
     );
 
     expect(url).toContain("error=not-a-candidate");
+    expect(addReturningPlayer).not.toHaveBeenCalled();
+  });
+
+  /// The candidate re-check must fail loudly, not report an addable player as
+  /// unavailable. listReturningCandidates swallows database errors and returns
+  /// [], so using it here would have turned an outage into a silent no-op with
+  /// a misleading message.
+  it("lets a database error during the candidate check propagate rather than reporting the player unavailable", async () => {
+    isReturningCandidate.mockRejectedValue(new Error("connection refused"));
+
+    await expect(
+      addReturningPlayerAction(
+        form({ teamId: "team-1", playerId: "player-1", jerseyNumber: "7" }),
+      ),
+    ).rejects.toThrow("connection refused");
     expect(addReturningPlayer).not.toHaveBeenCalled();
   });
 
@@ -176,6 +185,26 @@ describe("addReturningPlayerAction", () => {
     );
 
     expect(url).toContain(`/t/team-1/roster`);
+    expect(url).toContain("error=email-failed");
+  });
+
+  /// The roster write has already committed by the time the notices go out, so
+  /// a throw from the notification step (a database outage reaching
+  /// getTeamById, say) must not escape as a 500 implying nothing happened.
+  it("degrades to the email-failed banner when the notification step throws", async () => {
+    addReturningPlayer.mockResolvedValue({
+      entry: { id: "entry-1", jerseyNumber: 7, player: { id: "player-1", name: "Ada", dateOfBirth: null } },
+      notify: [{ userId: "user-1", email: "dad@example.com", name: "Dad" }],
+    });
+    getTeamById.mockRejectedValue(new Error("connection refused"));
+
+    const url = await redirectUrlOf(
+      addReturningPlayerAction(
+        form({ teamId: "team-1", playerId: "player-1", jerseyNumber: "7" }),
+      ),
+    );
+
+    expect(url).toContain("/t/team-1/roster");
     expect(url).toContain("error=email-failed");
   });
 

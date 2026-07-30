@@ -278,6 +278,33 @@ export async function listReturningCandidates(
   }
 }
 
+/**
+ * Whether one specific player is still a valid returning candidate for this
+ * team — the write-path counterpart to `listReturningCandidates`.
+ *
+ * Database errors are deliberately NOT swallowed, unlike the list above. The
+ * caller turns `false` into "that player is no longer available to add", so a
+ * caught outage would report a perfectly addable player as unavailable *and*
+ * silently decline the write — the same bug `getRosterEntry` documents and
+ * `getTeamById` was fixed for in #3. `false` here means "not a candidate",
+ * nothing else.
+ */
+export async function isReturningCandidate(
+  teamId: string,
+  playerId: string,
+): Promise<boolean> {
+  const player = await db.player.findFirst({
+    where: {
+      id: playerId,
+      rosterEntries: { some: { teamId: { not: teamId } } },
+      NOT: { rosterEntries: { some: { teamId } } },
+    },
+    select: { id: true },
+  });
+
+  return player !== null;
+}
+
 export type AddReturningPlayerInput = {
   teamId: string;
   playerId: string;

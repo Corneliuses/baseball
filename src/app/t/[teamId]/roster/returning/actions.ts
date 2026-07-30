@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
-import { addReturningPlayer, listReturningCandidates } from "@/lib/roster";
+import { addReturningPlayer, isReturningCandidate } from "@/lib/roster";
+import type { GuardianLink } from "@/lib/returning-players";
 import { parseJerseyNumber, rosterWriteFailure } from "@/lib/roster-rules";
 import { sendEmail } from "@/lib/email";
 import { AddedToTeamEmail } from "@/emails/AddedToTeamEmail";
@@ -74,7 +75,7 @@ export async function addReturningPlayerAction(formData: FormData) {
     redirect(`/t/${teamId}/roster/returning?error=invalid-jersey`);
   }
 
-  let notify;
+  let notify: GuardianLink[];
   try {
     await requireTeamAccess(teamId, { intent: "write", minRole: "OWNER" });
 
@@ -84,9 +85,11 @@ export async function addReturningPlayerAction(formData: FormData) {
     // page (the player was added by another tab since render) is caught
     // here with a friendly error rather than reaching the database at all,
     // and @@unique([playerId, teamId]) still backstops the race.
-    const candidates = await listReturningCandidates(teamId);
-    const isCandidate = candidates.some((candidate) => candidate.playerId === playerId);
-    if (!isCandidate) {
+    //
+    // isReturningCandidate, not listReturningCandidates: the list swallows
+    // database errors and returns [], which here would report an addable
+    // player as unavailable and silently skip the write during an outage.
+    if (!(await isReturningCandidate(teamId, playerId))) {
       redirect(`/t/${teamId}/roster/returning?error=not-a-candidate`);
     }
 
@@ -104,7 +107,19 @@ export async function addReturningPlayerAction(formData: FormData) {
     throw error;
   }
 
-  const allSent = await notifyNewGuardians(teamId, notify);
+  // Past this point the roster spot and the memberships have committed. A
+  // failure to *notify* must not surface as a 500 that implies nothing
+  // happened — the guardians have access either way (design-doc.md #5
+  // Decision 4), so it degrades to the email-failed banner.
+  let allSent: boolean;
+  try {
+    allSent = await notifyNewGuardians(teamId, notify);
+  } catch (error) {
+    unstable_rethrow(error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to send added-to-team notices:", message);
+    allSent = false;
+  }
 
   revalidatePath("/t/[teamId]/roster", "page");
   revalidatePath("/t/[teamId]/roster/returning", "page");
