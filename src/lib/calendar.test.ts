@@ -10,12 +10,13 @@ import {
   formatMonthLabel,
   GAME_GRACE_MS,
   instantToWallClock,
+  monthGridRange,
   monthParam,
-  monthRange,
   parseMonthParam,
   parseViewParam,
   resolveTimeZone,
   selectNextGame,
+  startOfDayInZone,
   wallClockToInstant,
   type GameCandidate,
 } from "@/lib/calendar";
@@ -245,21 +246,63 @@ describe("bucketEventsByDay", () => {
   });
 });
 
-describe("monthRange", () => {
-  it("bounds the month as it is lived in Central, not UTC", () => {
-    const { start, end } = monthRange({ year: 2026, month: 8 });
+describe("monthGridRange", () => {
+  it("covers the padded grid, not just the month", () => {
+    // The August 2026 grid runs 26 Jul - 5 Sep. Querying only August would
+    // leave the 26-31 July cells empty even when July has events on them.
+    const { start, end } = monthGridRange({ year: 2026, month: 8 });
 
-    // Midnight on 1 Aug Central is 05:00Z; the month ends just before
-    // midnight on 1 Sep Central, which is 04:59:59.999Z.
-    expect(start.toISOString()).toBe("2026-08-01T05:00:00.000Z");
-    expect(end.toISOString()).toBe("2026-09-01T04:59:59.999Z");
+    expect(start.toISOString()).toBe("2026-07-26T05:00:00.000Z");
+    expect(end.toISOString()).toBe("2026-09-06T04:59:59.999Z");
+  });
+
+  it("bounds in Central, not UTC", () => {
+    // Midnight Central is 05:00Z in summer — a UTC-anchored range would be
+    // five hours out at both ends.
+    const { start } = monthGridRange({ year: 2026, month: 8 });
+
+    expect(start.toISOString().endsWith("T05:00:00.000Z")).toBe(true);
   });
 
   it("covers an event on the last evening of the month", () => {
-    const { start, end } = monthRange({ year: 2026, month: 8 });
+    const { start, end } = monthGridRange({ year: 2026, month: 8 });
     const lastEvening = iso("2026-09-01T00:30:00Z"); // 31 Aug, 7:30 PM Central
 
     expect(lastEvening >= start && lastEvening <= end).toBe(true);
+  });
+
+  it("covers every cell the grid renders", () => {
+    const month = { year: 2026, month: 8 };
+    const { start, end } = monthGridRange(month);
+    const cells = buildMonthGrid(month).flatMap((week) => week.days);
+
+    // Midday on the first and last rendered day must fall inside the range.
+    for (const cell of [cells[0], cells.at(-1)!]) {
+      const midday = iso(`${cell.dayKey}T18:00:00Z`);
+      expect(midday >= start && midday <= end).toBe(true);
+    }
+  });
+});
+
+describe("startOfDayInZone", () => {
+  it("returns midnight Central, not midnight UTC", () => {
+    // 3:00 PM Central on 15 July.
+    expect(startOfDayInZone(iso("2026-07-15T20:00:00Z")).toISOString()).toBe(
+      "2026-07-15T05:00:00.000Z",
+    );
+  });
+
+  it("keeps a late-evening Central instant on its own day", () => {
+    // 8:30 PM Central on 30 July, which is already 31 July in UTC.
+    expect(startOfDayInZone(iso("2026-07-31T01:30:00Z")).toISOString()).toBe(
+      "2026-07-30T05:00:00.000Z",
+    );
+  });
+
+  it("uses the winter offset in winter", () => {
+    expect(startOfDayInZone(iso("2026-01-15T20:00:00Z")).toISOString()).toBe(
+      "2026-01-15T06:00:00.000Z",
+    );
   });
 });
 

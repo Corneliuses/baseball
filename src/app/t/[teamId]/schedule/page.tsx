@@ -13,6 +13,7 @@ import {
   adjacentMonth,
   bucketEventsByDay,
   buildMonthGrid,
+  dayKey,
   formatEventDayLabel,
   formatEventTime,
   formatMonthLabel,
@@ -23,7 +24,7 @@ import {
   type CalendarMonth,
 } from "@/lib/calendar";
 import {
-  listEventsInMonth,
+  listEventsInMonthGrid,
   listPastEvents,
   listUpcomingEvents,
   type ScheduleEvent,
@@ -92,7 +93,8 @@ export default async function SchedulePage({
 
   // Only the view actually being rendered is queried — a phone on one bar of
   // signal should not pay for the other one.
-  const monthEvents = view === "month" ? await listEventsInMonth(teamId, month) : [];
+  const monthEvents =
+    view === "month" ? await listEventsInMonthGrid(teamId, month) : [];
   const listEvents =
     view === "list"
       ? showPast
@@ -159,6 +161,16 @@ function MonthView({
   const buckets = bucketEventsByDay(events);
   const previous = adjacentMonth(month, -1);
   const next = adjacentMonth(month, 1);
+
+  // `events` covers the padded grid, so it can be non-empty purely because a
+  // neighbouring month has something on a padding day. The empty state has to
+  // ask about this month specifically, or it would go quiet and claim the
+  // month is busy when it isn't. `dayKey` and `monthParam` are both
+  // APP_TIMEZONE-anchored, so the prefix comparison is sound.
+  const monthPrefix = monthParam(month);
+  const hasEventsThisMonth = events.some((event) =>
+    dayKey(event.startsAt).startsWith(monthPrefix),
+  );
 
   return (
     <div className="space-y-3">
@@ -248,11 +260,11 @@ function MonthView({
         </table>
       </div>
 
-      {events.length === 0 ? (
+      {hasEventsThisMonth ? null : (
         <p className="text-sm text-muted-foreground">
           Nothing scheduled in {formatMonthLabel(month)}.
         </p>
-      ) : null}
+      )}
     </div>
   );
 }

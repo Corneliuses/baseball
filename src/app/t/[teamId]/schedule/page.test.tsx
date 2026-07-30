@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const requireTeamAccess = vi.fn();
-const listEventsInMonth = vi.fn();
+const listEventsInMonthGrid = vi.fn();
 const listUpcomingEvents = vi.fn();
 const listPastEvents = vi.fn();
 
@@ -12,7 +12,7 @@ vi.mock("@/lib/team-access", () => ({
 }));
 
 vi.mock("@/lib/schedule", () => ({
-  listEventsInMonth: (...args: unknown[]) => listEventsInMonth(...args),
+  listEventsInMonthGrid: (...args: unknown[]) => listEventsInMonthGrid(...args),
   listUpcomingEvents: (...args: unknown[]) => listUpcomingEvents(...args),
   listPastEvents: (...args: unknown[]) => listPastEvents(...args),
 }));
@@ -62,7 +62,7 @@ async function render(
 beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
-  listEventsInMonth.mockResolvedValue([]);
+  listEventsInMonthGrid.mockResolvedValue([]);
   listUpcomingEvents.mockResolvedValue([]);
   listPastEvents.mockResolvedValue([]);
 });
@@ -97,7 +97,7 @@ describe("SchedulePage month view", () => {
     expect(html).toContain("August 2026");
     expect(html).toContain("Sun");
     expect(html).toContain("Sat");
-    expect(listEventsInMonth).toHaveBeenCalledWith("team-1", {
+    expect(listEventsInMonthGrid).toHaveBeenCalledWith("team-1", {
       year: 2026,
       month: 8,
     });
@@ -106,13 +106,13 @@ describe("SchedulePage month view", () => {
   it("falls back to the current month on a tampered param", async () => {
     await render({ view: "month", month: "garbage" });
 
-    const [[, month]] = listEventsInMonth.mock.calls;
+    const [[, month]] = listEventsInMonthGrid.mock.calls;
     expect(month.month).toBeGreaterThanOrEqual(1);
     expect(month.month).toBeLessThanOrEqual(12);
   });
 
   it("renders an event in its Central-time day cell", async () => {
-    listEventsInMonth.mockResolvedValue([game]);
+    listEventsInMonthGrid.mockResolvedValue([game]);
 
     const html = await render({ view: "month", month: "2026-08" });
 
@@ -139,6 +139,38 @@ describe("SchedulePage month view", () => {
     const html = await render({ view: "month", month: "2026-08" });
 
     expect(html).toContain("Nothing scheduled in August 2026.");
+  });
+
+  it("renders an event on a padding day borrowed from the previous month", async () => {
+    // The August grid draws cells for 26-31 July. A cell that shows a date
+    // must show that date's events rather than looking empty.
+    listEventsInMonthGrid.mockResolvedValue([
+      { ...game, id: "july-event", startsAt: new Date("2026-07-31T00:00:00Z") },
+    ]);
+
+    const html = await render({ view: "month", month: "2026-08" });
+
+    expect(html).toContain("/t/team-1/schedule/july-event");
+  });
+
+  it("still calls the month empty when only a padding day has an event", async () => {
+    // The grid query is wider than the month, so the empty state must ask
+    // about this month specifically or it would wrongly claim August is busy.
+    listEventsInMonthGrid.mockResolvedValue([
+      { ...game, id: "july-event", startsAt: new Date("2026-07-31T00:00:00Z") },
+    ]);
+
+    const html = await render({ view: "month", month: "2026-08" });
+
+    expect(html).toContain("Nothing scheduled in August 2026.");
+  });
+
+  it("does not call the month empty when the month itself has an event", async () => {
+    listEventsInMonthGrid.mockResolvedValue([game]);
+
+    const html = await render({ view: "month", month: "2026-08" });
+
+    expect(html).not.toContain("Nothing scheduled in August 2026.");
   });
 
   it("does not query the list view's data", async () => {
@@ -183,7 +215,7 @@ describe("SchedulePage list view", () => {
   it("does not query the month view's data", async () => {
     await render({ view: "list" });
 
-    expect(listEventsInMonth).not.toHaveBeenCalled();
+    expect(listEventsInMonthGrid).not.toHaveBeenCalled();
   });
 });
 

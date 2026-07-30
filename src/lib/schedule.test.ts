@@ -22,7 +22,7 @@ import {
   createEvent as createEventFn,
   deleteEvent as deleteEventFn,
   getEvent,
-  listEventsInMonth,
+  listEventsInMonthGrid,
   listPastEvents,
   listUpcomingEvents,
   nextGame,
@@ -50,14 +50,15 @@ beforeEach(() => {
   findFirstEvent.mockResolvedValue(null);
 });
 
-describe("listEventsInMonth", () => {
-  it("bounds the query by the month as lived in Central, not UTC", async () => {
-    await listEventsInMonth("team-1", { year: 2026, month: 8 });
+describe("listEventsInMonthGrid", () => {
+  it("bounds the query by the padded grid, so no rendered cell is silently empty", async () => {
+    await listEventsInMonthGrid("team-1", { year: 2026, month: 8 });
 
     const [[args]] = findManyEvents.mock.calls;
     expect(args.where.teamId).toBe("team-1");
-    expect(args.where.startsAt.gte.toISOString()).toBe("2026-08-01T05:00:00.000Z");
-    expect(args.where.startsAt.lte.toISOString()).toBe("2026-09-01T04:59:59.999Z");
+    // The August grid starts on 26 July and ends on 5 September.
+    expect(args.where.startsAt.gte.toISOString()).toBe("2026-07-26T05:00:00.000Z");
+    expect(args.where.startsAt.lte.toISOString()).toBe("2026-09-06T04:59:59.999Z");
     expect(args.orderBy).toEqual({ startsAt: "asc" });
   });
 
@@ -66,7 +67,7 @@ describe("listEventsInMonth", () => {
     findManyEvents.mockRejectedValue(new Error("connection refused"));
 
     await expect(
-      listEventsInMonth("team-1", { year: 2026, month: 8 }),
+      listEventsInMonthGrid("team-1", { year: 2026, month: 8 }),
     ).resolves.toEqual([]);
     expect(error).toHaveBeenCalled();
 
@@ -75,11 +76,15 @@ describe("listEventsInMonth", () => {
 });
 
 describe("listUpcomingEvents", () => {
-  it("asks for future events, soonest first, scoped to the team", async () => {
+  it("starts at midnight Central today, not at this instant", async () => {
+    // NOW is 1 Aug 18:00Z = 1:00 PM Central. A game at 11am Central today must
+    // still count as upcoming — cutting at `now` would hide the game a coach
+    // is standing at.
     await listUpcomingEvents("team-1", NOW);
 
     const [[args]] = findManyEvents.mock.calls;
-    expect(args.where).toEqual({ teamId: "team-1", startsAt: { gte: NOW } });
+    expect(args.where.teamId).toBe("team-1");
+    expect(args.where.startsAt.gte.toISOString()).toBe("2026-08-01T05:00:00.000Z");
     expect(args.orderBy).toEqual({ startsAt: "asc" });
   });
 
@@ -94,12 +99,23 @@ describe("listUpcomingEvents", () => {
 });
 
 describe("listPastEvents", () => {
-  it("asks for past events, most recent first", async () => {
+  it("ends at midnight Central today, most recent first", async () => {
     await listPastEvents("team-1", NOW);
 
     const [[args]] = findManyEvents.mock.calls;
-    expect(args.where).toEqual({ teamId: "team-1", startsAt: { lt: NOW } });
+    expect(args.where.teamId).toBe("team-1");
+    expect(args.where.startsAt.lt.toISOString()).toBe("2026-08-01T05:00:00.000Z");
     expect(args.orderBy).toEqual({ startsAt: "desc" });
+  });
+
+  it("shares its boundary with listUpcomingEvents, so today's events land in exactly one list", async () => {
+    await listUpcomingEvents("team-1", NOW);
+    await listPastEvents("team-1", NOW);
+
+    const [[upcoming], [past]] = findManyEvents.mock.calls;
+    expect(past.where.startsAt.lt.toISOString()).toBe(
+      upcoming.where.startsAt.gte.toISOString(),
+    );
   });
 });
 

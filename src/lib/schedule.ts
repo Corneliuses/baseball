@@ -1,8 +1,9 @@
 import { EventType } from "@/generated/prisma/enums";
 import {
   GAME_GRACE_MS,
-  monthRange,
+  monthGridRange,
   selectNextGame,
+  startOfDayInZone,
   type CalendarMonth,
 } from "./calendar";
 import { db } from "./db";
@@ -58,13 +59,14 @@ const EVENT_SELECT = {
 // Reads
 // ---------------------------------------------------------------------------
 
-/// Every event falling inside that month **as it is lived in APP_TIMEZONE** —
-/// `monthRange` does the zone conversion so the query bounds are real instants.
-export async function listEventsInMonth(
+/// Every event the month grid renders — the padded week range, not just the
+/// month, so a cell for 30 July in the August grid is not silently empty.
+/// `monthGridRange` does the zone conversion so the bounds are real instants.
+export async function listEventsInMonthGrid(
   teamId: string,
   month: CalendarMonth,
 ): Promise<ScheduleEvent[]> {
-  const { start, end } = monthRange(month);
+  const { start, end } = monthGridRange(month);
 
   try {
     return await db.event.findMany({
@@ -79,14 +81,22 @@ export async function listEventsInMonth(
   }
 }
 
-/// Today forward, soonest first — the list view's default.
+/**
+ * Today forward, soonest first — the list view's default.
+ *
+ * The boundary is the **start of today in APP_TIMEZONE**, not `now`. Cutting
+ * at `now` would drop a game off this list the instant it began, so a coach
+ * standing at the field at 3pm would be told there is nothing scheduled. Pairs
+ * with `listPastEvents`, which uses the same boundary so the two partition the
+ * schedule exactly once.
+ */
 export async function listUpcomingEvents(
   teamId: string,
   now: Date = new Date(),
 ): Promise<ScheduleEvent[]> {
   try {
     return await db.event.findMany({
-      where: { teamId, startsAt: { gte: now } },
+      where: { teamId, startsAt: { gte: startOfDayInZone(now) } },
       select: EVENT_SELECT,
       orderBy: { startsAt: "asc" },
     });
@@ -97,15 +107,17 @@ export async function listUpcomingEvents(
   }
 }
 
-/// Everything already played, **most recent first** — the useful order for
-/// looking backwards, and the reverse of the upcoming list on purpose.
+/// Everything before today, **most recent first** — the useful order for
+/// looking backwards, and the reverse of the upcoming list on purpose. Shares
+/// the start-of-today boundary with `listUpcomingEvents`, so today's earlier
+/// events appear in exactly one of the two lists.
 export async function listPastEvents(
   teamId: string,
   now: Date = new Date(),
 ): Promise<ScheduleEvent[]> {
   try {
     return await db.event.findMany({
-      where: { teamId, startsAt: { lt: now } },
+      where: { teamId, startsAt: { lt: startOfDayInZone(now) } },
       select: EVENT_SELECT,
       orderBy: { startsAt: "desc" },
     });

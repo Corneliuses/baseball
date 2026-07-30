@@ -4,6 +4,7 @@ import {
   endOfMonth,
   endOfWeek,
   format,
+  startOfDay,
   startOfMonth,
   startOfWeek,
 } from "date-fns";
@@ -279,14 +280,34 @@ export function bucketEventsByDay<T extends { startsAt: Date }>(
   return buckets;
 }
 
-/// The UTC instants bounding a month **as it is lived in `APP_TIMEZONE`** —
-/// the range `listEventsInMonth` queries on.
-export function monthRange(month: CalendarMonth): { start: Date; end: Date } {
+/**
+ * The UTC instants bounding **everything `buildMonthGrid` renders** — which is
+ * wider than the month itself, because the grid pads out to whole weeks.
+ *
+ * Deliberately the grid range and not the month range. A grid for August 2026
+ * draws cells for 26-31 July; querying only August would render those dated
+ * cells empty while July's own grid shows events on them. A cell that displays
+ * a date must show that date's events.
+ */
+export function monthGridRange(month: CalendarMonth): { start: Date; end: Date } {
   const anchor = monthAnchor(month);
   return {
-    start: new Date(startOfMonth(anchor).getTime()),
-    end: new Date(endOfMonth(anchor).getTime()),
+    start: new Date(startOfWeek(startOfMonth(anchor)).getTime()),
+    end: new Date(endOfWeek(endOfMonth(anchor)).getTime()),
   };
+}
+
+/**
+ * Midnight at the start of the day an instant falls on, in `APP_TIMEZONE`.
+ *
+ * This is the "today forward" boundary for the schedule's list view. Splitting
+ * upcoming from past at `now` rather than at the start of today would drop a
+ * game off the upcoming list the moment it starts — so a coach opening the app
+ * at the field, mid-game, would be told there is nothing scheduled. Same
+ * reasoning as GAME_GRACE_MS, applied to the list.
+ */
+export function startOfDayInZone(instant: Date): Date {
+  return new Date(startOfDay(inZone(instant)).getTime());
 }
 
 // ---------------------------------------------------------------------------
