@@ -15,6 +15,7 @@ import {
   linkGuardianAction,
   removeRosterEntryAction,
   resendInvitationAction,
+  setGuardianPhoneAction,
   unlinkGuardianAction,
   updateRosterEntryAction,
 } from "../actions";
@@ -29,6 +30,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "invalid-jersey": "Jersey number must be a whole number between 0 and 99.",
   "jersey-taken": "That jersey number is already in use on this team.",
   "invalid-email": "Enter a valid email address.",
+  "invalid-phone": "Phone number must be 32 characters or fewer.",
   "email-failed": "The invitation could not be sent. Try again.",
   "not-a-guardian": "That person is not a guardian of this player.",
   access: "You no longer have access to make this change.",
@@ -187,38 +189,72 @@ export default async function RosterEntryPage({
               {entry.guardians.map((guardian) => (
                 <li
                   key={guardian.id}
-                  className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
+                  className="space-y-3 rounded-md border border-border p-3"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {guardian.name ?? guardian.email}
-                    </p>
-                    <p className="text-sm text-muted-foreground">{guardian.email}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {guardianStatus(guardian)}
-                    </p>
-                  </div>
-                  {canEdit ? (
-                    <div className="flex shrink-0 gap-2">
-                      {!guardian.hasSignedIn ? (
-                        <form action={resendInvitationAction}>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {guardian.name ?? guardian.email}
+                      </p>
+                      <p className="text-sm text-muted-foreground">{guardian.email}</p>
+                      {!canEdit && guardian.phone ? (
+                        <p className="text-sm text-muted-foreground">{guardian.phone}</p>
+                      ) : null}
+                      <p className="text-xs text-muted-foreground">
+                        {guardianStatus(guardian)}
+                      </p>
+                    </div>
+                    {canEdit ? (
+                      <div className="flex shrink-0 gap-2">
+                        {!guardian.hasSignedIn ? (
+                          <form action={resendInvitationAction}>
+                            <input type="hidden" name="teamId" value={teamId} />
+                            <input type="hidden" name="entryId" value={entryId} />
+                            <input type="hidden" name="userId" value={guardian.id} />
+                            <Button type="submit" variant="outline" size="sm">
+                              Resend
+                            </Button>
+                          </form>
+                        ) : null}
+                        <form action={unlinkGuardianAction}>
                           <input type="hidden" name="teamId" value={teamId} />
                           <input type="hidden" name="entryId" value={entryId} />
                           <input type="hidden" name="userId" value={guardian.id} />
                           <Button type="submit" variant="outline" size="sm">
-                            Resend
+                            Unlink
                           </Button>
                         </form>
-                      ) : null}
-                      <form action={unlinkGuardianAction}>
-                        <input type="hidden" name="teamId" value={teamId} />
-                        <input type="hidden" name="entryId" value={entryId} />
-                        <input type="hidden" name="userId" value={guardian.id} />
-                        <Button type="submit" variant="outline" size="sm">
-                          Unlink
-                        </Button>
-                      </form>
-                    </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  {canEdit ? (
+                    <form
+                      action={setGuardianPhoneAction}
+                      className="flex items-end gap-2 border-t border-border pt-3"
+                    >
+                      <input type="hidden" name="teamId" value={teamId} />
+                      <input type="hidden" name="entryId" value={entryId} />
+                      <input type="hidden" name="userId" value={guardian.id} />
+                      <div className="flex-1 space-y-1">
+                        <label
+                          htmlFor={`phone-${guardian.id}`}
+                          className="block text-xs font-medium text-foreground"
+                        >
+                          Phone
+                        </label>
+                        <input
+                          id={`phone-${guardian.id}`}
+                          name="phone"
+                          type="tel"
+                          defaultValue={guardian.phone ?? ""}
+                          placeholder="(555) 123-4567"
+                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+                      <Button type="submit" variant="outline" size="sm">
+                        Save phone
+                      </Button>
+                    </form>
                   ) : null}
                 </li>
               ))}

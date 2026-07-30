@@ -41,6 +41,60 @@ export async function listTeamMembers(teamId: string): Promise<TeamMember[]> {
   }
 }
 
+export type DirectoryEntry = {
+  userId: string;
+  role: Role;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  players: { id: string; name: string }[];
+};
+
+/**
+ * Every member of this team, with the kids they guard **on this team**.
+ *
+ * The nested `where: { player: { rosterEntries: { some: { teamId } } } }` is
+ * the privacy boundary, not a cosmetic filter — `GuardianPlayer` is global by
+ * design (Decision 15), so reading a member's unfiltered `guardianOf` would
+ * show every parent on this team which children they also guard on an
+ * unrelated team in this instance. See design-doc.md #5 Decision 5.
+ */
+export async function listDirectory(teamId: string): Promise<DirectoryEntry[]> {
+  try {
+    const memberships = await db.membership.findMany({
+      where: { teamId },
+      select: {
+        userId: true,
+        role: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+            guardianOf: {
+              where: { player: { rosterEntries: { some: { teamId } } } },
+              select: { player: { select: { id: true, name: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    return memberships.map((m) => ({
+      userId: m.userId,
+      role: m.role,
+      name: m.user.name,
+      email: m.user.email,
+      phone: m.user.phone,
+      players: m.user.guardianOf.map(({ player }) => player),
+    }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to fetch directory:", message);
+    return [];
+  }
+}
+
 export class LastOwnerError extends Error {
   constructor() {
     super("Cannot change the role of the team's only owner");

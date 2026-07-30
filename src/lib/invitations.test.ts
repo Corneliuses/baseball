@@ -11,6 +11,8 @@ const updateInvitation = vi.fn();
 const upsertUser = vi.fn();
 const upsertGuardianPlayer = vi.fn();
 const deleteGuardianPlayer = vi.fn();
+const findUniqueGuardianPlayer = vi.fn();
+const updateUser = vi.fn();
 const transaction = vi.fn();
 
 vi.mock("./db", () => ({
@@ -29,10 +31,12 @@ vi.mock("./db", () => ({
     },
     user: {
       upsert: (...args: unknown[]) => upsertUser(...args),
+      update: (...args: unknown[]) => updateUser(...args),
     },
     guardianPlayer: {
       upsert: (...args: unknown[]) => upsertGuardianPlayer(...args),
       delete: (...args: unknown[]) => deleteGuardianPlayer(...args),
+      findUnique: (...args: unknown[]) => findUniqueGuardianPlayer(...args),
     },
     $transaction: (...args: unknown[]) => transaction(...args),
   },
@@ -45,6 +49,7 @@ import {
   linkGuardian,
   listTeamInvitations,
   loadSignInContext,
+  setGuardianPhone,
   unlinkGuardian,
 } from "./invitations";
 
@@ -413,5 +418,40 @@ describe("unlinkGuardian", () => {
     expect(deleteGuardianPlayer).toHaveBeenCalledWith({
       where: { userId_playerId: { userId: "user-1", playerId: "player-1" } },
     });
+  });
+});
+
+describe("setGuardianPhone", () => {
+  it("confirms the GuardianPlayer link before writing", async () => {
+    findUniqueGuardianPlayer.mockResolvedValue({ userId: "user-1" });
+
+    await setGuardianPhone("player-1", "user-1", "555-1234");
+
+    expect(findUniqueGuardianPlayer).toHaveBeenCalledWith({
+      where: { userId_playerId: { userId: "user-1", playerId: "player-1" } },
+      select: { userId: true },
+    });
+    expect(updateUser).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { phone: "555-1234" },
+    });
+  });
+
+  it("clears the phone when passed null", async () => {
+    findUniqueGuardianPlayer.mockResolvedValue({ userId: "user-1" });
+
+    await setGuardianPhone("player-1", "user-1", null);
+
+    expect(updateUser).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { phone: null },
+    });
+  });
+
+  it("throws and does not write when no guardian link exists", async () => {
+    findUniqueGuardianPlayer.mockResolvedValue(null);
+
+    await expect(setGuardianPhone("player-1", "user-1", "555-1234")).rejects.toThrow();
+    expect(updateUser).not.toHaveBeenCalled();
   });
 });

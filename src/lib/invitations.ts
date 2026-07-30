@@ -302,3 +302,32 @@ export async function unlinkGuardian(
     where: { userId_playerId: { userId, playerId } },
   });
 }
+
+/**
+ * Set (or clear, with `null`) a guardian's phone number.
+ *
+ * Confirms the `GuardianPlayer` link exists before writing — the caller
+ * (`setGuardianPhoneAction`) has already proven the userId is a guardian of
+ * this specific player via the teamId-scoped roster entry, but this module
+ * makes that check load-bearing rather than trusting the caller alone, the
+ * same posture `unlinkGuardian`'s composite key takes.
+ */
+export async function setGuardianPhone(
+  playerId: string,
+  userId: string,
+  phone: string | null,
+): Promise<void> {
+  const link = await db.guardianPlayer.findUnique({
+    where: { userId_playerId: { userId, playerId } },
+    select: { userId: true },
+  });
+
+  if (!link) {
+    throw new Error("No guardian link found for this player and user");
+  }
+
+  await db.user.update({
+    where: { id: userId },
+    data: { phone },
+  });
+}
