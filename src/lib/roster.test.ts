@@ -5,6 +5,26 @@ const findFirstRosterEntry = vi.fn();
 const createRosterEntry = vi.fn();
 const updateRosterEntry = vi.fn();
 const deleteRosterEntry = vi.fn();
+const findManyPlayers = vi.fn();
+const transaction = vi.fn();
+
+// addReturningPlayer runs its cascade inside an interactive transaction, so
+// the mock `tx` handed to the callback needs its own copies of the methods
+// it calls — separate spies from the top-level `db` ones above.
+const txCreateRosterEntry = vi.fn();
+const txFindManyGuardianPlayers = vi.fn();
+const txFindManyMemberships = vi.fn();
+const txCreateManyMemberships = vi.fn();
+const tx = {
+  rosterEntry: { create: (...args: unknown[]) => txCreateRosterEntry(...args) },
+  guardianPlayer: {
+    findMany: (...args: unknown[]) => txFindManyGuardianPlayers(...args),
+  },
+  membership: {
+    findMany: (...args: unknown[]) => txFindManyMemberships(...args),
+    createMany: (...args: unknown[]) => txCreateManyMemberships(...args),
+  },
+};
 
 vi.mock("./db", () => ({
   db: {
@@ -15,19 +35,28 @@ vi.mock("./db", () => ({
       update: (...args: unknown[]) => updateRosterEntry(...args),
       delete: (...args: unknown[]) => deleteRosterEntry(...args),
     },
+    player: {
+      findMany: (...args: unknown[]) => findManyPlayers(...args),
+    },
+    $transaction: (...args: unknown[]) => transaction(...args),
   },
 }));
 
 import {
   addPlayerToRoster,
+  addReturningPlayer,
   getRoster,
   getRosterEntry,
+  listReturningCandidates,
   removeRosterEntry,
   updateRosterEntry as updateRosterEntryFn,
 } from "./roster";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  transaction.mockImplementation((callback: (tx: unknown) => unknown) =>
+    callback(tx),
+  );
 });
 
 describe("getRoster", () => {
@@ -263,5 +292,147 @@ describe("removeRosterEntry", () => {
     expect(deleteRosterEntry).toHaveBeenCalledWith({
       where: { id: "entry-1", teamId: "team-1" },
     });
+  });
+});
+
+describe("listReturningCandidates", () => {
+  it("excludes players already rostered on this team and requires a roster spot elsewhere", async () => {
+    findManyPlayers.mockResolvedValue([]);
+
+    await listReturningCandidates("team-1");
+
+    expect(findManyPlayers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          rosterEntries: { some: { teamId: { not: "team-1" } } },
+          NOT: { rosterEntries: { some: { teamId: "team-1" } } },
+        },
+      }),
+    );
+  });
+
+  it("maps a player's roster entries to the teams they played on, and counts guardians", async () => {
+    findManyPlayers.mockResolvedValue([
+      {
+        id: "player-1",
+        name: "Ada",
+        dateOfBirth: null,
+        rosterEntries: [
+          {
+            team: { id: "team-2", name: "Rec", season: "2025", archivedAt: null },
+          },
+        ],
+        _count: { guardians: 2 },
+      },
+    ]);
+
+    const candidates = await listReturningCandidates("team-1");
+
+    expect(candidates).toEqual([
+      {
+        playerId: "player-1",
+        name: "Ada",
+        dateOfBirth: null,
+        teams: [{ id: "team-2", name: "Rec", season: "2025", archivedAt: null }],
+        guardianCount: 2,
+      },
+    ]);
+  });
+
+  it("returns an empty array when the database throws", async () => {
+    findManyPlayers.mockRejectedValue(new Error("connection refused"));
+
+    await expect(listReturningCandidates("team-1")).resolves.toEqual([]);
+  });
+});
+
+describe("addReturningPlayer", () => {
+  const ENTRY = {
+    id: "entry-1",
+    jerseyNumber: 7,
+    player: { id: "player-1", name: "Ada", dateOfBirth: null },
+  };
+
+  beforeEach(() => {
+    txCreateRosterEntry.mockResolvedValue(ENTRY);
+    txFindManyGuardianPlayers.mockResolvedValue([]);
+    txFindManyMemberships.mockResolvedValue([]);
+  });
+
+  it("creates the roster entry scoped to the given team and player", async () => {
+    await addReturningPlayer({ teamId: "team-1", playerId: "player-1", jerseyNumber: 7 });
+
+    expect(txCreateRosterEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { teamId: "team-1", playerId: "player-1", jerseyNumber: 7 },
+      }),
+    );
+  });
+
+  it("creates a Membership for every guardian with none existing yet, as PARENT", async () => {
+    txFindManyGuardianPlayers.mockResolvedValue([
+      { user: { id: "user-1", email: "dad@example.com", name: "Dad" } },
+      { user: { id: "user-2", email: "mom@example.com", name: "Mom" } },
+    ]);
+    txFindManyMemberships.mockResolvedValue([]);
+
+    const result = await addReturningPlayer({
+      teamId: "team-1",
+      playerId: "player-1",
+      jerseyNumber: null,
+    });
+
+    expect(txCreateManyMemberships).toHaveBeenCalledWith({
+      data: [
+        { userId: "user-1", teamId: "team-1", role: "PARENT" },
+        { userId: "user-2", teamId: "team-1", role: "PARENT" },
+      ],
+      skipDuplicates: true,
+    });
+    expect(result.notify).toEqual([
+      { userId: "user-1", email: "dad@example.com", name: "Dad" },
+      { userId: "user-2", email: "mom@example.com", name: "Mom" },
+    ]);
+  });
+
+  it("never issues a membership.update, and excludes an already-a-member guardian from the write and from notify", async () => {
+    txFindManyGuardianPlayers.mockResolvedValue([
+      { user: { id: "user-1", email: "coach@example.com", name: "Coach" } },
+    ]);
+    txFindManyMemberships.mockResolvedValue([{ userId: "user-1" }]);
+
+    const result = await addReturningPlayer({
+      teamId: "team-1",
+      playerId: "player-1",
+      jerseyNumber: null,
+    });
+
+    expect(txCreateManyMemberships).not.toHaveBeenCalled();
+    expect(result.notify).toEqual([]);
+    expect(tx.membership).not.toHaveProperty("update");
+  });
+
+  it("skips the membership write entirely when the player has no guardians", async () => {
+    txFindManyGuardianPlayers.mockResolvedValue([]);
+
+    const result = await addReturningPlayer({
+      teamId: "team-1",
+      playerId: "player-1",
+      jerseyNumber: null,
+    });
+
+    expect(txCreateManyMemberships).not.toHaveBeenCalled();
+    expect(result.notify).toEqual([]);
+  });
+
+  it("propagates a roster-entry write error rather than swallowing it", async () => {
+    txCreateRosterEntry.mockRejectedValue({
+      code: "P2002",
+      meta: { target: ["teamId", "jerseyNumber"] },
+    });
+
+    await expect(
+      addReturningPlayer({ teamId: "team-1", playerId: "player-1", jerseyNumber: 7 }),
+    ).rejects.toMatchObject({ code: "P2002" });
   });
 });
