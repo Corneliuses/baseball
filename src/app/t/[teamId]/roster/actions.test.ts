@@ -6,6 +6,7 @@ const addPlayerToRoster = vi.fn();
 const updateRosterEntry = vi.fn();
 const linkGuardian = vi.fn();
 const unlinkGuardian = vi.fn();
+const setGuardianPhone = vi.fn();
 const createInvitation = vi.fn();
 const sendEmail = vi.fn();
 
@@ -24,6 +25,7 @@ vi.mock("@/lib/roster", () => ({
 vi.mock("@/lib/invitations", () => ({
   linkGuardian: (...args: unknown[]) => linkGuardian(...args),
   unlinkGuardian: (...args: unknown[]) => unlinkGuardian(...args),
+  setGuardianPhone: (...args: unknown[]) => setGuardianPhone(...args),
   createInvitation: (...args: unknown[]) => createInvitation(...args),
 }));
 
@@ -59,6 +61,7 @@ import {
   addPlayerAction,
   linkGuardianAction,
   resendInvitationAction,
+  setGuardianPhoneAction,
   unlinkGuardianAction,
   updateRosterEntryAction,
 } from "./actions";
@@ -237,6 +240,70 @@ describe("guardian actions do not trust ids from the form", () => {
     expect(url).toContain("error=access");
     expect(getRosterEntry).not.toHaveBeenCalled();
     expect(linkGuardian).not.toHaveBeenCalled();
+  });
+});
+
+describe("setGuardianPhoneAction", () => {
+  beforeEach(() => {
+    setGuardianPhone.mockResolvedValue(undefined);
+  });
+
+  it("sets the phone on the scoped guardian", async () => {
+    await redirectUrlOf(
+      setGuardianPhoneAction(
+        form({
+          teamId: "team-1",
+          entryId: "entry-1",
+          userId: "user-1",
+          phone: "555-1234",
+        }),
+      ),
+    );
+
+    expect(setGuardianPhone).toHaveBeenCalledWith("player-1", "user-1", "555-1234");
+  });
+
+  it("clears the phone when the field is blank", async () => {
+    await redirectUrlOf(
+      setGuardianPhoneAction(
+        form({ teamId: "team-1", entryId: "entry-1", userId: "user-1", phone: "" }),
+      ),
+    );
+
+    expect(setGuardianPhone).toHaveBeenCalledWith("player-1", "user-1", null);
+  });
+
+  it("refuses a userId that is not a guardian of this player", async () => {
+    const url = await redirectUrlOf(
+      setGuardianPhoneAction(
+        form({
+          teamId: "team-1",
+          entryId: "entry-1",
+          userId: "stranger",
+          phone: "555-1234",
+        }),
+      ),
+    );
+
+    expect(url).toContain("error=not-a-guardian");
+    expect(setGuardianPhone).not.toHaveBeenCalled();
+  });
+
+  it("rejects an over-long phone number before checking access", async () => {
+    const url = await redirectUrlOf(
+      setGuardianPhoneAction(
+        form({
+          teamId: "team-1",
+          entryId: "entry-1",
+          userId: "user-1",
+          phone: "1".repeat(33),
+        }),
+      ),
+    );
+
+    expect(url).toContain("error=invalid-phone");
+    expect(requireTeamAccess).not.toHaveBeenCalled();
+    expect(setGuardianPhone).not.toHaveBeenCalled();
   });
 });
 

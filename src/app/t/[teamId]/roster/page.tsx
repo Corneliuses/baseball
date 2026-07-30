@@ -25,6 +25,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "invalid-jersey": "Jersey number must be a whole number between 0 and 99.",
   "jersey-taken": "That jersey number is already in use on this team.",
   "already-rostered": "That player is already on this team's roster.",
+  "email-failed": "The player was added, but a notice email could not be sent.",
   access: "You no longer have access to make this change.",
 };
 
@@ -35,10 +36,10 @@ export default async function RosterPage({
   searchParams,
 }: {
   params: Promise<{ teamId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; added?: string }>;
 }) {
   const { teamId } = await params;
-  const { error } = await searchParams;
+  const { error, added } = await searchParams;
 
   let role;
   try {
@@ -52,15 +53,29 @@ export default async function RosterPage({
 
   const roster = sortRoster(await getRoster(teamId));
   const canEdit = role !== "PARENT";
+  const isOwner = role === "OWNER";
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
 
   return (
     <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-foreground">Roster</h3>
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-xl font-semibold text-foreground">Roster</h3>
+        {isOwner ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/t/${teamId}/roster/returning`}>Add returning player</Link>
+          </Button>
+        ) : null}
+      </div>
 
       {errorMessage ? (
         <p role="alert" className="text-sm text-destructive">
           {errorMessage}
+        </p>
+      ) : null}
+
+      {added && !errorMessage ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Player added.
         </p>
       ) : null}
 

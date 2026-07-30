@@ -29,7 +29,7 @@ vi.mock("./db", () => ({
   },
 }));
 
-import { LastOwnerError, listTeamMembers, setMemberRole } from "./memberships";
+import { LastOwnerError, listDirectory, listTeamMembers, setMemberRole } from "./memberships";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -75,6 +75,82 @@ describe("listTeamMembers", () => {
     findManyMemberships.mockRejectedValue(new Error("connection refused"));
 
     await expect(listTeamMembers("team-1")).resolves.toEqual([]);
+  });
+});
+
+describe("listDirectory", () => {
+  it("scopes the query to the team", async () => {
+    findManyMemberships.mockResolvedValue([]);
+
+    await listDirectory("team-1");
+
+    expect(findManyMemberships).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { teamId: "team-1" } }),
+    );
+  });
+
+  it("scopes each member's guarded players to this team's roster", async () => {
+    findManyMemberships.mockResolvedValue([]);
+
+    await listDirectory("team-1");
+
+    const call = findManyMemberships.mock.calls[0][0];
+    expect(call.select.user.select.guardianOf.where).toEqual({
+      player: { rosterEntries: { some: { teamId: "team-1" } } },
+    });
+  });
+
+  it("maps a membership with kids on this team", async () => {
+    findManyMemberships.mockResolvedValue([
+      {
+        userId: "user-1",
+        role: "PARENT",
+        user: {
+          name: "Sam",
+          email: "sam@example.com",
+          phone: "555-1234",
+          guardianOf: [{ player: { id: "player-1", name: "Ada" } }],
+        },
+      },
+    ]);
+
+    const directory = await listDirectory("team-1");
+
+    expect(directory).toEqual([
+      {
+        userId: "user-1",
+        role: "PARENT",
+        name: "Sam",
+        email: "sam@example.com",
+        phone: "555-1234",
+        players: [{ id: "player-1", name: "Ada" }],
+      },
+    ]);
+  });
+
+  it("shows a coach with no kids as an empty players list", async () => {
+    findManyMemberships.mockResolvedValue([
+      {
+        userId: "user-2",
+        role: "COACH",
+        user: {
+          name: "Coach Mel",
+          email: "mel@example.com",
+          phone: null,
+          guardianOf: [],
+        },
+      },
+    ]);
+
+    const directory = await listDirectory("team-1");
+
+    expect(directory[0].players).toEqual([]);
+  });
+
+  it("returns an empty array when the database throws", async () => {
+    findManyMemberships.mockRejectedValue(new Error("connection refused"));
+
+    await expect(listDirectory("team-1")).resolves.toEqual([]);
   });
 });
 

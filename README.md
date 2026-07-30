@@ -9,24 +9,28 @@ parking lot fifteen minutes before first pitch.
 
 ## Status
 
-**Phase 4 complete — roster, invitations, and team membership.** Phase 1 laid the data
-model, tooling, and domain guards. Phase 2 added sign-in. Phase 3 added team scoping
-(`/t/[teamId]`, `requireTeamAccess`). Phase 4 adds the roster itself: players, jersey
-numbers, guardian links, working invitations, and owner-only member/role management.
+**Phase 5 complete — returning players and the directory.** Phase 1 laid the data model,
+tooling, and domain guards. Phase 2 added sign-in. Phase 3 added team scoping
+(`/t/[teamId]`, `requireTeamAccess`). Phase 4 added the roster itself: players, jersey
+numbers, guardian links, working invitations, and owner-only member/role management. Phase
+5 adds the returning-player picker — the owner-only global `Player` read that pulls a kid
+and their guardians onto a new team's roster in one step — plus the member directory.
 
 What exists today:
 
 - `prisma/schema.prisma` — the full domain model, migrated
 - `src/lib/` — team access rules, next-game readiness, position labels, the sign-in gate
-  and owner check, invitation creation/acceptance, roster and membership data access — all
-  unit-tested
+  and owner check, invitation creation/acceptance, roster and membership data access, the
+  returning-player cascade, and directory ordering — all unit-tested
 - `src/auth.ts` — Auth.js v5 config: Prisma adapter, Resend provider, database sessions
 - `src/proxy.ts` — redirects signed-out visitors away from `/t/:path*`
 - `src/app/signin/` — the sign-in form and its confirmation page
 - `src/app/invite/[token]/` — the (unauthenticated) invitation accept page
 - `src/app/t/[teamId]/` — team home, settings, roster (list + player detail with guardian
-  linking), and owner-only member management
-- `src/emails/` — the React Email invitation template, sent through Resend
+  linking and phone), owner-only member management, an owner-only returning-player picker
+  (`roster/returning`), and the member directory (`directory`)
+- `src/emails/` — React Email templates for invitations and the "you've been added to a
+  team" notice, both sent through Resend
 - `src/app/` — landing page displaying all public teams, responsive layout, theme setup
 - `src/components/ui/` — shadcn/ui component library (Button, Card) with baseball-themed styling
 - `src/components/` — reusable components (PageContainer, TeamCard, TeamSelector, TeamSwitcher)
@@ -34,9 +38,9 @@ What exists today:
 - LazyMotion configured for efficient Motion animations
 - Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline with unit tests throughout
 
-What does not exist yet: the returning-player picker and directory (#5), the schedule
-(#6), RSVP (#7), the view page (#8), the drag-and-drop batting order and positions
-editors (#10, #11), next-game readiness (#12), and broadcast messaging (#13).
+What does not exist yet: the schedule (#6), RSVP (#7), the view page (#8), the
+drag-and-drop batting order and positions editors (#10, #11), next-game readiness (#12),
+and broadcast messaging (#13).
 
 ## How it works
 

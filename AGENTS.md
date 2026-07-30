@@ -29,7 +29,8 @@ src/generated/     # Prisma client output — gitignored, regenerate with pnpm d
 
 `src/app/` now has real routes: `/` (auth-gated landing), `/signin`, `/invite/[token]`
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher), and
-`/t/[teamId]/` (team home, settings, roster, members) plus `/t/new` for owner-gated team
+`/t/[teamId]/` (team home, settings, roster, members, the owner-only returning-player
+picker at `roster/returning`, and the member directory) plus `/t/new` for owner-gated team
 creation.
 
 ## Tech Stack

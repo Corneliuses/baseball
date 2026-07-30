@@ -1,4 +1,6 @@
 import { db } from "./db";
+import { planGuardianCascade, type GuardianLink } from "./returning-players";
+import type { ReturningCandidate } from "./returning-players";
 
 /// Team-scoped roster reads and writes, per AGENTS.md — "Never call Prisma
 /// directly from a component."
@@ -217,5 +219,167 @@ export async function removeRosterEntry(
 ): Promise<void> {
   await db.rosterEntry.delete({
     where: { id: entryId, teamId },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Returning players (#5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every `Player` rostered on some OTHER team and not on this one — the
+ * candidate set for the returning-player picker.
+ *
+ * This is the one legitimate global `Player` read in the app (Decision 13):
+ * every other path reaches people through a team's `RosterEntry` or
+ * `Membership` rows, but the picker's whole purpose is to look across teams.
+ * It is gated by `requireTeamAccess(..., { minRole: "OWNER" })` in the caller,
+ * not here — this module has no notion of the current user.
+ *
+ * The exclusion (`NOT: rosterEntries.some({ teamId })`) is for the operator's
+ * benefit; the real guarantee that a player can't be added twice is
+ * `RosterEntry @@unique([playerId, teamId])`, enforced in addReturningPlayer.
+ */
+export async function listReturningCandidates(
+  teamId: string,
+): Promise<ReturningCandidate[]> {
+  try {
+    const players = await db.player.findMany({
+      where: {
+        rosterEntries: { some: { teamId: { not: teamId } } },
+        NOT: { rosterEntries: { some: { teamId } } },
+      },
+      select: {
+        id: true,
+        name: true,
+        dateOfBirth: true,
+        rosterEntries: {
+          select: {
+            team: {
+              select: { id: true, name: true, season: true, archivedAt: true },
+            },
+          },
+        },
+        _count: { select: { guardians: true } },
+      },
+    });
+
+    return players.map((player) => ({
+      playerId: player.id,
+      name: player.name,
+      dateOfBirth: player.dateOfBirth,
+      teams: player.rosterEntries.map((entry) => entry.team),
+      guardianCount: player._count.guardians,
+    }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to fetch returning candidates:", message);
+    return [];
+  }
+}
+
+/**
+ * Whether one specific player is still a valid returning candidate for this
+ * team — the write-path counterpart to `listReturningCandidates`.
+ *
+ * Database errors are deliberately NOT swallowed, unlike the list above. The
+ * caller turns `false` into "that player is no longer available to add", so a
+ * caught outage would report a perfectly addable player as unavailable *and*
+ * silently decline the write — the same bug `getRosterEntry` documents and
+ * `getTeamById` was fixed for in #3. `false` here means "not a candidate",
+ * nothing else.
+ */
+export async function isReturningCandidate(
+  teamId: string,
+  playerId: string,
+): Promise<boolean> {
+  const player = await db.player.findFirst({
+    where: {
+      id: playerId,
+      rosterEntries: { some: { teamId: { not: teamId } } },
+      NOT: { rosterEntries: { some: { teamId } } },
+    },
+    select: { id: true },
+  });
+
+  return player !== null;
+}
+
+export type AddReturningPlayerInput = {
+  teamId: string;
+  playerId: string;
+  jerseyNumber: number | null;
+};
+
+export type AddReturningPlayerResult = {
+  entry: RosterEntry;
+  /// Guardians whose Membership this call created — the only ones the caller
+  /// may email. See design-doc.md #5 Decision 1: this comes straight from
+  /// planGuardianCascade's toCreate, never from the full guardian list.
+  notify: GuardianLink[];
+};
+
+/**
+ * The Decision 15 cascade, atomically: insert the roster spot, then create a
+ * Membership for every linked guardian who doesn't already have one.
+ *
+ * Uses `membership.createMany({ skipDuplicates: true })` rather than an
+ * `upsert` per guardian — deliberately. An upsert needs an `update` clause to
+ * fill in, even an empty one, and that clause is exactly the code a future
+ * "helpful" edit could start writing into. `createMany` has no update branch
+ * to get wrong, which is what makes "never touch an existing Membership" a
+ * property of the statement rather than a discipline to remember.
+ * `skipDuplicates` also absorbs the (vanishingly rare, single-coach-app) race
+ * where a guardian gains a membership between the read below and this write,
+ * turning it into a no-op instead of a transaction-aborting P2002.
+ */
+export async function addReturningPlayer(
+  input: AddReturningPlayerInput,
+): Promise<AddReturningPlayerResult> {
+  return db.$transaction(async (tx) => {
+    const entry = await tx.rosterEntry.create({
+      data: {
+        teamId: input.teamId,
+        playerId: input.playerId,
+        jerseyNumber: input.jerseyNumber,
+      },
+      select: ROSTER_ENTRY_SELECT,
+    });
+
+    const guardianRows = await tx.guardianPlayer.findMany({
+      where: { playerId: input.playerId },
+      select: { user: { select: { id: true, email: true, name: true } } },
+    });
+    const guardians: GuardianLink[] = guardianRows.map(({ user }) => ({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+    }));
+
+    const existingMemberships = await tx.membership.findMany({
+      where: {
+        teamId: input.teamId,
+        userId: { in: guardians.map((guardian) => guardian.userId) },
+      },
+      select: { userId: true },
+    });
+
+    const { toCreate } = planGuardianCascade(
+      guardians,
+      existingMemberships.map((membership) => membership.userId),
+    );
+
+    if (toCreate.length > 0) {
+      await tx.membership.createMany({
+        data: toCreate.map((guardian) => ({
+          userId: guardian.userId,
+          teamId: input.teamId,
+          role: "PARENT",
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return { entry, notify: toCreate };
   });
 }

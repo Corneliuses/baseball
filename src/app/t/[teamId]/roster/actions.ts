@@ -15,8 +15,10 @@ import { parseJerseyNumber, rosterWriteFailure } from "@/lib/roster-rules";
 import {
   createInvitation,
   linkGuardian,
+  setGuardianPhone,
   unlinkGuardian,
 } from "@/lib/invitations";
+import { normalizePhone } from "@/lib/phone";
 import { sendEmail } from "@/lib/email";
 import { InvitationEmail } from "@/emails/InvitationEmail";
 import { buildInvitationEmail } from "@/emails/invitation-email";
@@ -308,6 +310,45 @@ export async function unlinkGuardianAction(formData: FormData) {
 
   revalidatePath("/t/[teamId]/roster/[entryId]", "page");
   redirect(`/t/${teamId}/roster/${entryId}`);
+}
+
+export async function setGuardianPhoneAction(formData: FormData) {
+  const teamId = extractTeamId(formData);
+  const entryId = extractEntryId(formData);
+  const userId = String(formData.get("userId") ?? "").trim();
+  if (!userId) {
+    throw new Error("Invalid user ID");
+  }
+
+  let phone: string | null;
+  try {
+    phone = normalizePhone(formData.get("phone"));
+  } catch {
+    redirect(`/t/${teamId}/roster/${entryId}?error=invalid-phone`);
+  }
+
+  try {
+    const entry = await requireRosterEntry(teamId, entryId);
+
+    // Only a guardian actually linked to this player can have their phone
+    // set through this page — same forged-userId guard as unlinkGuardianAction.
+    const guardian = entry.guardians.find((g) => g.id === userId);
+    if (!guardian) {
+      redirect(`/t/${teamId}/roster/${entryId}?error=not-a-guardian`);
+    }
+
+    await setGuardianPhone(entry.player.id, guardian.id, phone);
+  } catch (error) {
+    unstable_rethrow(error);
+    if (error instanceof TeamAccessError) {
+      redirect(`/t/${teamId}/roster/${entryId}?error=access`);
+    }
+    throw error;
+  }
+
+  revalidatePath("/t/[teamId]/roster/[entryId]", "page");
+  revalidatePath("/t/[teamId]/directory", "page");
+  redirect(`/t/${teamId}/roster/${entryId}?saved=1`);
 }
 
 export async function resendInvitationAction(formData: FormData) {
