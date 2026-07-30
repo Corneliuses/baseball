@@ -13,8 +13,9 @@
 
 export type RsvpState = "attending" | "declined" | "no-response";
 
-/// The one field of `Rsvp` the derivation needs — structural, so tests and
-/// callers never import the generated Prisma client.
+/// The subset of `Rsvp` the derivation needs — structural, so tests and
+/// callers never import the generated Prisma client. `attending` drives
+/// `deriveRsvpState`; `playerId` is what `buildRsvpStateMap` keys on.
 export type RsvpRow = { playerId: string; attending: boolean };
 
 /**
