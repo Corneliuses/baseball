@@ -30,8 +30,8 @@ src/generated/     # Prisma client output — gitignored, regenerate with pnpm d
 `src/app/` now has real routes: `/` (auth-gated landing), `/signin`, `/invite/[token]`
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher), and
 `/t/[teamId]/` (team home, settings, roster, members, the owner-only returning-player
-picker at `roster/returning`, and the member directory) plus `/t/new` for owner-gated team
-creation.
+picker at `roster/returning`, the member directory, and the schedule at `schedule` /
+`schedule/[eventId]`) plus `/t/new` for owner-gated team creation.
 
 ## Tech Stack
 
@@ -175,6 +175,13 @@ a different service than Decision 3's choice) — and will create the initial mi
   by writing `transform`, and Motion's `layout` prop animates `transform` too — together
   the item lags or snaps back. dnd-kit owns everything during a drag; Motion owns page
   transitions, confirmations, and reveals.
+- **Every `Event.startsAt` is anchored to `APP_TIMEZONE` (default `America/Chicago`), not
+  the server's zone.** Vercel runs `TZ=UTC`, and plain `date-fns` resolves against the
+  *system* zone — so `format`/`startOfMonth` on a late-evening Central event silently
+  files it under the wrong day or month in production while looking correct on a
+  Central-set dev machine. Never read or format `Event.startsAt` directly; go through
+  `src/lib/calendar.ts`'s `TZDate`-based helpers (`wallClockToInstant`,
+  `formatEventDateTime`, `dayKey`, `buildMonthGrid`, etc.).
 - **`.env.example` is gitignore-exempt** via an explicit `!.env.example` negation, since
   the Next.js scaffold ignores `.env*`. Keep that negation if you touch `.gitignore`.
 - **`RosterEntry`'s unique indexes surface as Prisma `P2002`, not a friendly error, unless

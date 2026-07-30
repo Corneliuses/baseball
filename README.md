@@ -9,26 +9,31 @@ parking lot fifteen minutes before first pitch.
 
 ## Status
 
-**Phase 5 complete — returning players and the directory.** Phase 1 laid the data model,
-tooling, and domain guards. Phase 2 added sign-in. Phase 3 added team scoping
-(`/t/[teamId]`, `requireTeamAccess`). Phase 4 added the roster itself: players, jersey
-numbers, guardian links, working invitations, and owner-only member/role management. Phase
-5 adds the returning-player picker — the owner-only global `Player` read that pulls a kid
-and their guardians onto a new team's roster in one step — plus the member directory.
+**Phase 6 complete — the schedule.** Phase 1 laid the data model, tooling, and domain
+guards. Phase 2 added sign-in. Phase 3 added team scoping (`/t/[teamId]`,
+`requireTeamAccess`). Phase 4 added the roster itself: players, jersey numbers, guardian
+links, working invitations, and owner-only member/role management. Phase 5 added the
+returning-player picker — the owner-only global `Player` read that pulls a kid and their
+guardians onto a new team's roster in one step — plus the member directory. Phase 6 adds
+event create/edit/delete, a hand-built month grid and chronological list, and the
+`nextGame` helper the view page (#8) and readiness check (#12) both depend on.
 
 What exists today:
 
 - `prisma/schema.prisma` — the full domain model, migrated
 - `src/lib/` — team access rules, next-game readiness, position labels, the sign-in gate
   and owner check, invitation creation/acceptance, roster and membership data access, the
-  returning-player cascade, and directory ordering — all unit-tested
+  returning-player cascade, directory ordering, and the schedule — Central-time-anchored
+  calendar/date logic plus team-scoped event reads and writes — all unit-tested
 - `src/auth.ts` — Auth.js v5 config: Prisma adapter, Resend provider, database sessions
 - `src/proxy.ts` — redirects signed-out visitors away from `/t/:path*`
 - `src/app/signin/` — the sign-in form and its confirmation page
 - `src/app/invite/[token]/` — the (unauthenticated) invitation accept page
 - `src/app/t/[teamId]/` — team home, settings, roster (list + player detail with guardian
   linking and phone), owner-only member management, an owner-only returning-player picker
-  (`roster/returning`), and the member directory (`directory`)
+  (`roster/returning`), the member directory (`directory`), and the schedule — a month
+  grid and chronological list with coach-only create/edit/delete (`schedule`,
+  `schedule/[eventId]`)
 - `src/emails/` — React Email templates for invitations and the "you've been added to a
   team" notice, both sent through Resend
 - `src/app/` — landing page displaying all public teams, responsive layout, theme setup
@@ -38,9 +43,9 @@ What exists today:
 - LazyMotion configured for efficient Motion animations
 - Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline with unit tests throughout
 
-What does not exist yet: the schedule (#6), RSVP (#7), the view page (#8), the
-drag-and-drop batting order and positions editors (#10, #11), next-game readiness (#12),
-and broadcast messaging (#13).
+What does not exist yet: RSVP (#7), the view page (#8), the drag-and-drop batting order
+and positions editors (#10, #11), next-game readiness (#12), and broadcast messaging
+(#13).
 
 ## How it works
 
