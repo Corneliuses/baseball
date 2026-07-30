@@ -266,8 +266,10 @@ export async function rsvpAction(formData: FormData) {
   }
 
   try {
-    await requireGuardedEvent(teamId, eventId, playerId);
-    await upsertRsvp(eventId, playerId, parsedResponse.data === "attending");
+    // Write against the id `getEvent` resolved, not the raw form field — same
+    // convention as the roster actions deriving playerId from getRosterEntry.
+    const event = await requireGuardedEvent(teamId, eventId, playerId);
+    await upsertRsvp(event.id, playerId, parsedResponse.data === "attending");
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {

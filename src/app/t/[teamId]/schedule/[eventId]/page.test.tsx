@@ -64,6 +64,11 @@ const roster = [
   { id: "entry-2", jerseyNumber: 12, player: { id: "ben", name: "Ben", dateOfBirth: null } },
 ];
 
+const rosterOfThree = [
+  ...roster,
+  { id: "entry-3", jerseyNumber: 3, player: { id: "cy", name: "Cy", dateOfBirth: null } },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
@@ -208,19 +213,33 @@ describe("EventPage attendance", () => {
     expect(await render()).toContain("No players on the roster yet.");
   });
 
-  it("labels all three RSVP states distinctly", async () => {
-    getRoster.mockResolvedValue(roster);
+  it("labels all three RSVP states distinctly in one render", async () => {
+    getRoster.mockResolvedValue(rosterOfThree);
     listEventRsvps.mockResolvedValue([
       { playerId: "ava", attending: true },
       { playerId: "ben", attending: false },
+      // Cy has no row at all — the third state.
     ]);
 
     const html = await render();
 
     expect(html).toContain("Going");
     expect(html).toContain("Not going");
-    // A third player with no row at all would read "No response" — covered
-    // by the empty-rsvps case below, where every roster player has none.
+    expect(html).toContain("No response");
+  });
+
+  it("styles no-response differently from declined, not just labels it", async () => {
+    getRoster.mockResolvedValue(rosterOfThree);
+    listEventRsvps.mockResolvedValue([{ playerId: "ben", attending: false }]);
+
+    const html = await render();
+
+    // The AC is a *visual* distinction, so assert the badge classes differ
+    // rather than trusting the two labels alone. Matched with the full class
+    // attribute: a bare "text-destructive" is also a substring of the delete
+    // button's "text-destructive-foreground" and would pass vacuously.
+    expect(html).toContain('class="text-xs text-destructive"');
+    expect(html).toContain('class="text-xs text-muted-foreground"');
   });
 
   it("defaults every player with no Rsvp row to no-response", async () => {
@@ -244,6 +263,17 @@ describe("EventPage attendance", () => {
     const benFormCount = html.split('value="ben"').length - 1;
     expect(avaFormCount).toBe(2);
     expect(benFormCount).toBe(0);
+  });
+
+  it("lists players in the same order as the roster page, not database order", async () => {
+    // getRoster has no orderBy, so the page must sort. Jerseys 7, 12, 3 come
+    // back in that order and must render as 3, 7, 12 — matching sortRoster.
+    getRoster.mockResolvedValue(rosterOfThree);
+
+    const html = await render();
+
+    expect(html.indexOf("Cy")).toBeLessThan(html.indexOf("Ava"));
+    expect(html.indexOf("Ava")).toBeLessThan(html.indexOf("Ben"));
   });
 
   it("renders the attendance card for a practice, not just games", async () => {

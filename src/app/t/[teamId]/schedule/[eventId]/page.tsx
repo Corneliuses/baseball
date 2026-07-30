@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
 import { getRoster } from "@/lib/roster";
+import { sortRoster } from "@/lib/roster-rules";
 import { buildRsvpStateMap, type RsvpState } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listEventRsvps } from "@/lib/rsvps";
 import { getEvent } from "@/lib/schedule";
@@ -74,11 +75,14 @@ export default async function EventPage({
     notFound();
   }
 
-  const [roster, rsvpRows, guardedPlayerIds] = await Promise.all([
+  const [rosterEntries, rsvpRows, guardedPlayerIds] = await Promise.all([
     getRoster(teamId),
     listEventRsvps(teamId, eventId),
     guardedRosteredPlayerIds(teamId, userId),
   ]);
+  // Same order as the roster page — getRoster has no orderBy, so without this
+  // the same team lists in a different (and unstable) order on each page.
+  const roster = sortRoster(rosterEntries);
   const rsvpStateByPlayerId = buildRsvpStateMap(
     roster.map((entry) => entry.player.id),
     rsvpRows,
@@ -116,6 +120,18 @@ export default async function EventPage({
           ) : null}
         </CardContent>
       </Card>
+
+      {errorMessage ? (
+        <p role="alert" className="text-sm text-destructive">
+          {errorMessage}
+        </p>
+      ) : null}
+
+      {saved && !errorMessage ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Saved.
+        </p>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -183,18 +199,6 @@ export default async function EventPage({
           )}
         </CardContent>
       </Card>
-
-      {errorMessage ? (
-        <p role="alert" className="text-sm text-destructive">
-          {errorMessage}
-        </p>
-      ) : null}
-
-      {saved && !errorMessage ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Saved.
-        </p>
-      ) : null}
 
       {canEdit ? (
         <>
