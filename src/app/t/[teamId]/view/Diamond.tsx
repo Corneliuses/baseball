@@ -1,7 +1,7 @@
+import { RSVP_STYLE } from "@/components/rsvp-style";
 import type { Position } from "@/generated/prisma/enums";
 import type { ChartViewPlayer } from "@/lib/chart-view";
 import { ALL_POSITIONS, POSITION_LABELS } from "@/lib/positions";
-import { RSVP_STYLE } from "./rsvp-style";
 
 /// The labeled diamond, server-rendered as inline SVG — no image asset, no
 /// client JS, crisp on any phone.

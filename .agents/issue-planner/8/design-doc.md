@@ -159,9 +159,11 @@ list and diamond markers are exactly the nodes #10/#11 will make draggable, and 
 present in their slot, visibly missing. No-response keeps the name at full strength with a
 muted "No response" tag — distinguishable from declined at a glance and never conflated
 with "out". A short legend explains all three.
-**Rationale:** Reuses the exact label/tone vocabulary the event page's `RSVP_BADGE`
-established (`schedule/[eventId]/page.tsx:39-43`) — Going / Not going / No response in
-primary / destructive / muted — so parents see one consistent language. Greying only the
+**Rationale:** Reuses the exact label/tone vocabulary the event page established — Going /
+Not going / No response in primary / destructive / muted — so parents see one consistent
+language. Implemented as a shared `src/components/rsvp-style.ts` that both pages import,
+rather than a second copy of the map: the two drifted apart during implementation, which
+is how one of them ended up with an unreadable colour. Greying only the
 declined player satisfies "greyed rather than removed"; keeping no-response at full
 strength satisfies "never rendered as out". Color is never the sole channel (text tags
 carry the state), which also covers color-blind parents in sunlight.

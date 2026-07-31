@@ -1,36 +1,33 @@
 import type { RsvpState } from "@/lib/rsvp";
 
-/// Shared visual vocabulary for the three RSVP states, reused by the diamond
-/// and the batting lineup so a parent sees one consistent language.
+/// The one visual vocabulary for the three RSVP states, shared by the event
+/// page (#7) and the view page (#8) so a parent reads the same language on
+/// both. Keeping it in one module is deliberate: the two pages drifted apart
+/// once already, which is how one of them ended up with an unreadable colour.
 ///
-/// **`text-primary` is deliberately NOT used here**, despite the event page's
-/// badges using it. In this palette `--primary` is a *surface* token, not a
-/// text color: it is `24 9% 98%` (near-white) in light mode and `24 100% 10%`
-/// (near-black) in dark — so `text-primary` renders near-white on a white card
-/// and near-black on a dark one. Every color below is a token that stays
-/// readable against `--card` in both schemes.
+/// State is always carried by a text label as well as a colour, never colour
+/// alone — the page is read outdoors in sunlight, and colour-blind parents
+/// need the same signal.
 ///
 /// `nameClassName` is where "declined players are greyed rather than removed"
 /// lives: it fades the player's own name, never their slot. `no-response`
-/// keeps the name at full strength — it must never read as "out". State is
-/// always carried by a text label too, never by color alone, so it survives
-/// sunlight and color blindness.
+/// keeps the name at full strength — it must never read as "out".
 export const RSVP_STYLE: Record<
   RsvpState,
   {
     label: string;
     tagClassName: string;
     nameClassName: string;
-    /// Applied to the diamond's position marker circle.
+    /// Applied to the view page diamond's position marker circle.
     markerClassName: string;
     markerStrokeWidth: number;
   }
 > = {
   attending: {
     label: "Going",
-    tagClassName: "text-foreground font-medium",
+    tagClassName: "text-primary",
     nameClassName: "text-foreground",
-    markerClassName: "fill-foreground/10 stroke-foreground",
+    markerClassName: "fill-primary/10 stroke-primary",
     markerStrokeWidth: 2.5,
   },
   declined: {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,7 +13,7 @@ import {
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
-import { buildRsvpStateMap, type RsvpState } from "@/lib/rsvp";
+import { buildRsvpStateMap } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listEventRsvps } from "@/lib/rsvps";
 import { getEvent } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -32,14 +33,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
   access: "You no longer have access to make this change.",
-};
-
-/// `no-response` is deliberately styled distinct from `declined` — it means
-/// the family hasn't answered, not that they said no. See rsvp.ts.
-const RSVP_BADGE: Record<RsvpState, { label: string; className: string }> = {
-  attending: { label: "Going", className: "text-primary" },
-  declined: { label: "Not going", className: "text-destructive" },
-  "no-response": { label: "No response", className: "text-muted-foreground" },
 };
 
 const inputClass =
@@ -148,7 +141,9 @@ export default async function EventPage({
             <ul className="space-y-2">
               {roster.map((entry) => {
                 const state = rsvpStateByPlayerId.get(entry.player.id) ?? "no-response";
-                const badge = RSVP_BADGE[state];
+                // `no-response` is styled distinct from `declined` — it means
+                // the family hasn't answered, not that they said no. See rsvp.ts.
+                const badge = RSVP_STYLE[state];
                 const canRsvp = guardedPlayerIds.has(entry.player.id);
 
                 return (
@@ -160,7 +155,7 @@ export default async function EventPage({
                       <p className="text-sm font-medium text-foreground">
                         {entry.player.name}
                       </p>
-                      <p className={`text-xs ${badge.className}`}>{badge.label}</p>
+                      <p className={`text-xs ${badge.tagClassName}`}>{badge.label}</p>
                     </div>
                     {canRsvp ? (
                       <div className="flex shrink-0 gap-2">

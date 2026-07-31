@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,7 +20,6 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 
 import { Diamond } from "./Diamond";
 import { Reveal } from "./Reveal";
-import { RSVP_STYLE } from "./rsvp-style";
 
 export const metadata = {
   title: "Lineup — Youth Baseball Team Manager",

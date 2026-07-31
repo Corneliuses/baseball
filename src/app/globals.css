@@ -5,15 +5,20 @@
   --background: 0 0% 100%;
   --foreground: 217 33% 16%;
 
-  /* Baseball theme (hex → HSL) */
+  /* Baseball theme (hex → HSL). Overridden in the dark block below — these
+     are tuned for light surfaces and wash out on a dark card. */
   --baseball-green: 104 48% 24%;
   --baseball-brown: 43 60% 33%;
   --baseball-blue: 217 100% 29%;
   --baseball-red: 0 90% 56%;
 
-  /* shadcn/ui design tokens */
-  --primary: 24 9% 98%;
-  --primary-foreground: 24 100% 10%;
+  /* shadcn/ui design tokens.
+     `--primary` is the brand SURFACE and `--primary-foreground` is the text
+     that sits on it — `bg-primary text-primary-foreground`. Keep primary dark
+     here and light in the dark block; transposing the pair makes `text-primary`
+     near-invisible and turns the default Button into a white-on-white slab. */
+  --primary: 24 100% 10%;
+  --primary-foreground: 24 9% 98%;
 
   --secondary: 24 5% 90%;
   --secondary-foreground: 24 9% 10%;
@@ -43,8 +48,14 @@
     --background: 217 33% 6%;
     --foreground: 200 10% 98%;
 
-    --primary: 24 100% 10%;
-    --primary-foreground: 24 9% 98%;
+    /* Lightened so they keep contrast against --card (15 23% 12%). */
+    --baseball-green: 104 40% 65%;
+    --baseball-brown: 43 50% 65%;
+    --baseball-blue: 217 80% 72%;
+    --baseball-red: 0 85% 70%;
+
+    --primary: 24 9% 98%;
+    --primary-foreground: 24 100% 10%;
 
     --secondary: 24 9% 20%;
     --secondary-foreground: 24 9% 98%;
@@ -93,10 +104,13 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --color-baseball-green: var(--baseball-green);
-  --color-baseball-brown: var(--baseball-brown);
-  --color-baseball-blue: var(--baseball-blue);
-  --color-baseball-red: var(--baseball-red);
+  /* hsl() wrappers, like every token above. Without them these expand to a
+     bare `104 48% 24%`, which is not a color value — any `text-baseball-green`
+     or `fill-baseball-green` utility silently produces an invalid declaration. */
+  --color-baseball-green: hsl(var(--baseball-green));
+  --color-baseball-brown: hsl(var(--baseball-brown));
+  --color-baseball-blue: hsl(var(--baseball-blue));
+  --color-baseball-red: hsl(var(--baseball-red));
 }
 
 @layer base {
