@@ -53,6 +53,10 @@ export default async function TeamHomePage({
         </Button>
 
         <Button asChild variant="outline">
+          <Link href={`/t/${teamId}/view`}>Lineup</Link>
+        </Button>
+
+        <Button asChild variant="outline">
           <Link href={`/t/${teamId}/roster`}>Roster</Link>
         </Button>
 

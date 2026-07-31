@@ -1,4 +1,5 @@
 import { db } from "./db";
+import type { ChartViewEntry } from "./chart-view";
 import { planGuardianCascade, type GuardianLink } from "./returning-players";
 import type { ReturningCandidate } from "./returning-players";
 
@@ -78,6 +79,38 @@ export async function getRoster(teamId: string): Promise<RosterEntry[]> {
     console.error("Failed to fetch roster:", message);
     return [];
   }
+}
+
+/**
+ * The team's standing chart — every roster entry with its batting order and
+ * position, for #8's view page.
+ *
+ * Database errors are deliberately NOT swallowed, unlike `getRoster`. "No
+ * chart set yet" is a real product state the view page renders, so a caught
+ * outage would silently assert that state instead of failing — the same
+ * argument `nextGame` makes in schedule.ts for its own null return.
+ *
+ * `battingOrder` and `position` are read-only here; #10 and #11 own writing
+ * them.
+ */
+export async function getChart(teamId: string): Promise<ChartViewEntry[]> {
+  const entries = await db.rosterEntry.findMany({
+    where: { teamId },
+    select: {
+      jerseyNumber: true,
+      battingOrder: true,
+      position: true,
+      player: { select: { id: true, name: true } },
+    },
+  });
+
+  return entries.map((entry) => ({
+    playerId: entry.player.id,
+    playerName: entry.player.name,
+    jerseyNumber: entry.jerseyNumber,
+    battingOrder: entry.battingOrder,
+    position: entry.position,
+  }));
 }
 
 /**
