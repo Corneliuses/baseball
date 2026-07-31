@@ -172,4 +172,45 @@ describe("ViewPage chart rendering", () => {
 
     expect(html).toContain("Going");
   });
+
+  it("shortens to a first name on the diamond but keeps the full name in the order", async () => {
+    getChart.mockResolvedValue([
+      {
+        playerId: "ava",
+        playerName: "Ava Castellanos",
+        jerseyNumber: 7,
+        battingOrder: 1,
+        position: "SHORTSTOP" as const,
+      },
+    ]);
+
+    const html = await render();
+    const lineupHtml = html.slice(html.indexOf("Batting order"));
+
+    // The marker carries the short form; the list carries the whole name.
+    expect(html).toContain(">Ava</text>");
+    expect(lineupHtml).toContain("Ava Castellanos");
+  });
+
+  it("exposes every position assignment to screen readers", async () => {
+    const html = await render();
+
+    // The SVG is aria-hidden, so the sr-only list is the only accessible path
+    // to who is playing where.
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain("sr-only");
+    expect(html).toContain("SS:");
+    expect(html).toContain("Ava");
+    // Unassigned positions are announced too, not skipped.
+    expect(html).toContain("Open");
+  });
+
+  it("does not show the RSVP legend when no chart is set", async () => {
+    getChart.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain("No chart set yet");
+    expect(html).not.toContain("RSVP is just for planning");
+  });
 });

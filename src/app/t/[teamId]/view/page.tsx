@@ -161,23 +161,23 @@ export default async function ViewPage({
               </CardContent>
             </Card>
           </div>
+
+          <p className="mt-6 text-xs text-muted-foreground">
+            <span className={RSVP_STYLE.attending.tagClassName}>
+              {RSVP_STYLE.attending.label}
+            </span>{" "}
+            ·{" "}
+            <span className={RSVP_STYLE.declined.tagClassName}>
+              {RSVP_STYLE.declined.label}
+            </span>{" "}
+            ·{" "}
+            <span className={RSVP_STYLE["no-response"].tagClassName}>
+              {RSVP_STYLE["no-response"].label}
+            </span>{" "}
+            — RSVP is just for planning. Everyone stays in their slot either way.
+          </p>
         </Reveal>
       )}
-
-      <p className="text-xs text-muted-foreground">
-        <span className={RSVP_STYLE.attending.tagClassName}>
-          {RSVP_STYLE.attending.label}
-        </span>{" "}
-        ·{" "}
-        <span className={RSVP_STYLE.declined.tagClassName}>
-          {RSVP_STYLE.declined.label}
-        </span>{" "}
-        ·{" "}
-        <span className={RSVP_STYLE["no-response"].tagClassName}>
-          {RSVP_STYLE["no-response"].label}
-        </span>{" "}
-        — RSVP is just for planning. Everyone stays in their slot either way.
-      </p>
     </div>
   );
 }
