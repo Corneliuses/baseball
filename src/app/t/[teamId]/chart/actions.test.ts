@@ -112,7 +112,7 @@ describe("saveBattingOrderAction", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/t/[teamId]/view", "page");
   });
 
-  it("skips empty slots when allPlay is false, preserving slot numbers", async () => {
+  it("collapses empty slots when allPlay is false so the order stays contiguous", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
       allPlay: false,
@@ -127,7 +127,7 @@ describe("saveBattingOrderAction", () => {
 
     expect(saveBattingOrder).toHaveBeenCalledWith("team-1", [
       { entryId: "a", battingOrder: 1 },
-      { entryId: "b", battingOrder: 3 },
+      { entryId: "b", battingOrder: 2 },
     ]);
   });
 

@@ -25,8 +25,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   "unknown-entry":
     "The roster changed while you were editing. Reload and try again.",
   "duplicate-entry": "A player appeared twice. Reload and try again.",
+  // Fires both when allPlay is toggled off (12 slots become 9) and when the
+  // roster shrinks under an allPlay team, so it can't blame settings alone.
   "too-many-slots":
-    "The team's settings changed while you were editing. Reload and try again.",
+    "The roster or team settings changed while you were editing. Reload and try again.",
   "missing-players":
     "Every player needs a batting slot on this team. Reload and try again.",
   "roster-changed":

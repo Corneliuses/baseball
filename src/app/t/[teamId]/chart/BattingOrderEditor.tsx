@@ -168,6 +168,12 @@ function SlotItem({
     disabled: { draggable: entry === undefined, droppable: false },
   });
 
+  // An empty slot is a drop target only. Spreading dnd-kit's draggable
+  // attributes onto it would put `role="button" tabindex="0"
+  // aria-roledescription="sortable"` on a thing that does nothing when
+  // activated — a dead tab stop between every pair of real players.
+  const draggableProps = entry !== undefined ? { ...attributes, ...listeners } : {};
+
   return (
     <li
       ref={setNodeRef}
@@ -175,8 +181,7 @@ function SlotItem({
         transform: CSS.Transform.toString(transform),
         transition,
       }}
-      {...attributes}
-      {...(entry !== undefined ? listeners : {})}
+      {...draggableProps}
       className={`flex touch-manipulation select-none items-center gap-3 rounded-md border p-3 ${
         entry !== undefined
           ? "border-border bg-background cursor-grab"

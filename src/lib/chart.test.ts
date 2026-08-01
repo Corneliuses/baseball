@@ -235,14 +235,25 @@ describe("validateBattingOrder", () => {
     });
   });
 
-  it("accepts gaps when allPlay is false, preserving slot numbers", () => {
+  it("collapses empty slots so the order stays contiguous", () => {
+    // A batting order with a 3 and no 2 is not a readable lineup card, and
+    // buildBattingDraft packs the gap away on the next load anyway — so the
+    // numbers must come from the filled slots, not from array position.
     const result = validateBattingOrder(["a", null, "b"], roster, false);
     expect(result).toEqual({
       ok: true,
       assignments: [
         { entryId: "a", battingOrder: 1 },
-        { entryId: "b", battingOrder: 3 },
+        { entryId: "b", battingOrder: 2 },
       ],
+    });
+  });
+
+  it("collapses leading empty slots too", () => {
+    const result = validateBattingOrder([null, null, "c"], roster, false);
+    expect(result).toEqual({
+      ok: true,
+      assignments: [{ entryId: "c", battingOrder: 1 }],
     });
   });
 
@@ -287,6 +298,62 @@ describe("validateBattingOrder", () => {
       ok: true,
       assignments: [{ entryId: "a", battingOrder: 1 }],
     });
+  });
+});
+
+describe("save then reload round trip", () => {
+  /// Regression: validateBattingOrder used to number by array position while
+  /// buildBattingDraft packed densely, so a saved order with a gap came back
+  /// showing different slot numbers than were written — and the view page
+  /// showed a player batting 3rd in a two-batter order.
+  function reload(
+    roster: readonly string[],
+    assignments: readonly { entryId: string; battingOrder: number }[],
+    allPlay: boolean,
+  ) {
+    return buildBattingDraft(
+      roster.map((entryId) => ({
+        entryId,
+        battingOrder:
+          assignments.find((a) => a.entryId === entryId)?.battingOrder ?? null,
+      })),
+      allPlay,
+    );
+  }
+
+  it("reloads a gapped order to exactly the slots that were persisted", () => {
+    const roster = ["a", "b", "c"];
+    const result = validateBattingOrder(["a", null, "b"], roster, false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const draft = reload(roster, result.assignments, false);
+    // The persisted numbers ARE the slots the editor shows next time.
+    expect(draft.slots).toEqual(["a", "b", null]);
+    expect(draft.unassigned).toEqual(["c"]);
+    expect(result.assignments.map((a) => a.battingOrder)).toEqual([1, 2]);
+  });
+
+  it("is stable for a full allPlay order", () => {
+    const roster = ["a", "b", "c"];
+    const submitted = ["c", "a", "b"];
+    const result = validateBattingOrder(submitted, roster, true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(reload(roster, result.assignments, true).slots).toEqual(submitted);
+  });
+
+  it("survives a second save with no edits (idempotent)", () => {
+    const roster = ["a", "b", "c"];
+    const first = validateBattingOrder(["a", null, "b"], roster, false);
+    if (!first.ok) throw new Error("expected ok");
+
+    const draft = reload(roster, first.assignments, false);
+    const second = validateBattingOrder(draft.slots, roster, false);
+    if (!second.ok) throw new Error("expected ok");
+
+    expect(second.assignments).toEqual(first.assignments);
   });
 });
 

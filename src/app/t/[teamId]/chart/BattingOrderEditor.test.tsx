@@ -138,11 +138,13 @@ describe("BattingOrderEditor", () => {
     const playerSlot = items.find((li) => li.textContent?.includes("Player a"))!;
     const emptySlot = items.find((li) => li.textContent?.includes("Empty slot"))!;
 
-    // dnd-kit's keyboard/screen-reader affordance: draggable items are
-    // focusable buttons; a disabled draggable loses the tab stop.
+    // dnd-kit's keyboard/screen-reader affordance belongs on real players
+    // only — an empty slot is a drop target, not a dead tab stop.
     expect(playerSlot).toHaveAttribute("role", "button");
     expect(playerSlot).toHaveAttribute("tabindex", "0");
-    expect(emptySlot).toHaveAttribute("aria-disabled", "true");
+    expect(emptySlot).not.toHaveAttribute("role");
+    expect(emptySlot).not.toHaveAttribute("tabindex");
+    expect(emptySlot).not.toHaveAttribute("aria-roledescription");
   });
 
   it("does not blow up on pointer events (smoke: sensors attached)", () => {

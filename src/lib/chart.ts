@@ -204,10 +204,17 @@ export type BattingOrderValidation =
 
 /**
  * Validate a submitted slots array against the roster the server loaded
- * itself. `battingOrder` is derived from slot position (index + 1) — the
- * client only ever chooses which entry sits where, never the numbers. Empty
- * slots are allowed when allPlay is false, so a non-allPlay order may have
- * gaps (slots 1 and 3 filled); the view page sorts ascending either way.
+ * itself. The client only ever chooses which entry sits where, never the
+ * numbers — `battingOrder` is derived here.
+ *
+ * **Empty slots collapse.** A batting order is contiguous by nature: with
+ * seven batters the order is 1–7, and "nobody bats 2nd" is not a lineup a
+ * coach can read off a card. So the numbers come from a running counter over
+ * the filled slots, not from array position. Deriving them from position
+ * instead persisted a gap (slots 1 and 3 filled → battingOrder 1 and 3) that
+ * `buildBattingDraft` then packed away on the next load — the view page said
+ * a player batted 3rd while the editor showed them 2nd, for the same saved
+ * chart. Compacting here is what makes the two agree.
  *
  * Checking against the roster and allPlay loaded at save time also catches a
  * roster edit or settings toggle that raced the editing session.
@@ -226,8 +233,7 @@ export function validateBattingOrder(
   const seen = new Set<string>();
   const assignments: BattingOrderAssignment[] = [];
 
-  for (let index = 0; index < orderedIds.length; index += 1) {
-    const entryId = orderedIds[index];
+  for (const entryId of orderedIds) {
     if (entryId === null) {
       continue;
     }
@@ -238,7 +244,7 @@ export function validateBattingOrder(
       return { ok: false, reason: "duplicate-entry" };
     }
     seen.add(entryId);
-    assignments.push({ entryId, battingOrder: index + 1 });
+    assignments.push({ entryId, battingOrder: assignments.length + 1 });
   }
 
   if (allPlay && seen.size < rosterEntryIds.length) {

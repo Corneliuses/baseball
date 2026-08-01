@@ -282,6 +282,16 @@ is a full-order editor — phase 1 of the save nulls everything regardless — s
 packing on load shows the coach exactly what a save would persist. Overflow beyond
 `slotCount` lands in the unassigned pool visibly, before any write happens.
 
+**Corrected during implementation — the save must compact too.** This decision originally
+paired dense packing on *load* with position-derived numbers on *save* (`index + 1`,
+preserving gaps), and the two contradict each other. Saving slots 1 and 3 filled persisted
+`battingOrder` 1 and 3; the view page then showed a player batting **3rd in a two-batter
+order**, while reopening the editor packed the gap away and showed them 2nd — the same
+saved chart, rendered two different ways. `validateBattingOrder` now numbers from a
+running counter over the filled slots, so persisted numbers are always contiguous and are
+exactly the slots the editor shows next time. Covered by the "save then reload round trip"
+tests in `chart.test.ts`.
+
 ## Security & Permissions
 
 - **Page:** `requireTeamAccess(teamId, { intent: "read", minRole: "COACH" })` —
