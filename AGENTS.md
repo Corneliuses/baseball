@@ -155,14 +155,21 @@ tables). Creating further migrations needs a live Postgres URL: a Neon dev branc
 `prisma dev`, which provisions Prisma Postgres, a different service than Decision 3's
 choice.
 
-**Deploying is a separate, manual step.** `pnpm build` is `next build` alone — it does not
-apply migrations, deliberately, so the build never requires `DATABASE_URL` (the same reason
-`src/lib/db.ts` and `src/auth.ts` defer their secrets). Applying the schema to a real
-database is therefore something a human runs on purpose:
+**Migrations apply automatically on deploy.** `pnpm build` is
+`prisma migrate deploy && next build`, so every Vercel deploy brings the database up to
+date before the app ships. Re-running is a no-op once migrations are applied, and a
+failure exits non-zero *before* `next build` runs — a database problem fails the deploy
+loudly instead of shipping an app that crashes on its first query.
 
-```bash
-DATABASE_URL="<production-url>" pnpm db:deploy
-```
+The cost is deliberate: **`pnpm build` now requires `DATABASE_URL`**, unlike
+`src/lib/db.ts` and `src/auth.ts`, which still defer their secrets to request time. A bare
+checkout with no `.env` cannot `pnpm build` — run `pnpm check` (lint → typecheck → test),
+which needs no database, or use `pnpm exec next build` to skip the migration step.
+
+Because Preview and Production share one `DATABASE_URL`, **a preview deploy applies
+migrations to the production database.** With one operator and a schema that already
+covers every planned feature this is acceptable, but if branch-level schema work ever
+starts, guard the migrate step on `VERCEL_ENV=production` first.
 
 Use `db:deploy` (`prisma migrate deploy`), never `db:migrate` (`prisma migrate dev`) against
 production — the dev command can prompt, generate new migrations, and reset the database.

@@ -22,11 +22,15 @@ then a hands-off weekend.
       Only set it if the team is in another zone
 - [ ] No app URL variable needed: `absoluteUrl` falls back to Vercel's auto-provided
       `VERCEL_PROJECT_PRODUCTION_URL` when `AUTH_URL` is unset (`src/lib/absolute-url.ts:23-34`)
-- [ ] **Apply the migration to production.** `pnpm build` does *not* run migrations —
-      deliberately, so the build needs no secrets. Run it by hand, once:
-      `DATABASE_URL="<production-neon-url>" pnpm db:deploy`. Use `db:deploy`
-      (`prisma migrate deploy`), never `db:migrate` (`prisma migrate dev`), which can
-      prompt, create migrations, and reset the database
+- [x] **Migration applies automatically on deploy** — `pnpm build` is now
+      `prisma migrate deploy && next build`, so the next Vercel deploy brings the
+      production database up to date on its own. Verified end-to-end 2026-08-01 against
+      a local Postgres 16: all 14 tables created, re-run is a clean no-op, full build
+      green. A DB failure exits non-zero before `next build`, failing the deploy loudly
+- [ ] **Trigger a deploy and confirm the build log** shows
+      `Applying migration 20260728053521_001` (first deploy) or `No pending migrations
+      to apply` (subsequent). This is the moment the production schema is created —
+      if the build fails here, the database is unreachable, not the app broken
 - [ ] Resend sending domain verified (SPF/DKIM) so invitations don't start life in spam
 
 ## Phase 1: Production pre-flight dry run (T-4 days or earlier)
