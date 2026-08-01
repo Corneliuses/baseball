@@ -89,13 +89,13 @@ Requires **Node 22** and **pnpm 10**.
 pnpm install
 cp .env.example .env     # then fill in DATABASE_URL and AUTH_SECRET
 pnpm db:generate         # required — the Prisma client is gitignored
-pnpm db:migrate          # creates the first migration; needs a live database
+pnpm db:deploy           # applies the existing migrations; needs a live database
 pnpm dev
 ```
 
 Open http://localhost:3000.
 
-You need a Postgres database before `db:migrate` or `dev` will work. Point `DATABASE_URL`
+You need a Postgres database before `db:deploy` or `dev` will work. Point `DATABASE_URL`
 at a [Neon](https://neon.tech) dev branch — not Prisma Postgres (`prisma dev`), which is a
 different service than the one this project is built on (see Decision 3). See
 `.env.example` for every variable and what it's for.
@@ -105,14 +105,16 @@ different service than the one this project is built on (see Decision 3). See
 | Purpose | Command |
 |---|---|
 | Dev server | `pnpm dev` |
-| Production build | `pnpm build` |
+| Production build (applies migrations — needs `DATABASE_URL`) | `pnpm build` |
+| Build without touching the database | `pnpm exec next build` |
 | Lint | `pnpm lint` |
 | Type check | `pnpm typecheck` |
 | Tests | `pnpm test` |
 | Tests (watch) | `pnpm test:watch` |
 | **Everything** | `pnpm check` |
 | Regenerate Prisma client | `pnpm db:generate` |
-| Create + apply a migration | `pnpm db:migrate` |
+| Create a new migration (dev only) | `pnpm db:migrate` |
+| Apply existing migrations (production) | `pnpm db:deploy` |
 | Browse data | `pnpm db:studio` |
 
 Run `pnpm check` before pushing — it chains lint, typecheck, and tests.
