@@ -62,7 +62,8 @@ team creation.
 | Tests (watch) | `pnpm test:watch` |
 | **All checks** | `pnpm check` |
 | Regenerate Prisma client | `pnpm db:generate` |
-| Create + apply a migration | `pnpm db:migrate` |
+| Create + apply a migration (dev only) | `pnpm db:migrate` |
+| Apply existing migrations (production) | `pnpm db:deploy` |
 | Browse data | `pnpm db:studio` |
 
 `pnpm check` runs lint → typecheck → test and is what to run before reporting work done.
@@ -149,10 +150,22 @@ pnpm db:generate     # required — the client is gitignored
 Copy `.env.example` to `.env` and fill it in — it documents every variable and where its
 name comes from. `DATABASE_URL` and `AUTH_SECRET` are the two needed to boot.
 
-**No migrations exist yet.** The schema validates and generates but has never been applied
-to a real database, so `pnpm db:migrate` is documented and unproven. The first run needs a
-live Postgres URL — a Neon dev branch (not `prisma dev`, which provisions Prisma Postgres,
-a different service than Decision 3's choice) — and will create the initial migration.
+**One migration exists** — `prisma/migrations/20260728053521_001`, the initial schema (14
+tables). Creating further migrations needs a live Postgres URL: a Neon dev branch, not
+`prisma dev`, which provisions Prisma Postgres, a different service than Decision 3's
+choice.
+
+**Deploying is a separate, manual step.** `pnpm build` is `next build` alone — it does not
+apply migrations, deliberately, so the build never requires `DATABASE_URL` (the same reason
+`src/lib/db.ts` and `src/auth.ts` defer their secrets). Applying the schema to a real
+database is therefore something a human runs on purpose:
+
+```bash
+DATABASE_URL="<production-url>" pnpm db:deploy
+```
+
+Use `db:deploy` (`prisma migrate deploy`), never `db:migrate` (`prisma migrate dev`) against
+production — the dev command can prompt, generate new migrations, and reset the database.
 
 ## Gotchas & Notes
 

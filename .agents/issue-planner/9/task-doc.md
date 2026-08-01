@@ -9,10 +9,24 @@ then a hands-off weekend.
 
 - [x] #1–#8 all closed (verified 2026-08-01)
 - [ ] Production deployment live on Vercel and reachable at its real URL
-- [ ] Production env vars set in Vercel: `DATABASE_URL` (Neon), `AUTH_SECRET`,
-      `RESEND_API_KEY`, `EMAIL_FROM`, app URL / `APP_TIMEZONE` as applicable
-- [ ] Migration `prisma/migrations/20260728053521_001` applied to the production Neon
-      branch (`prisma migrate deploy` semantics, not a dev migration)
+- [x] Repo is deployable — verified 2026-08-01: `pnpm check` green (lint, typecheck,
+      491 tests across 44 files) and `pnpm build` succeeds with **no env vars set**,
+      confirming the lazy-config design. All 16 routes present
+- [x] Production env vars confirmed in Vercel (screenshot, Production + Preview):
+      `OWNER_EMAIL`, `DATABASE_URL`, `EMAIL_FROM`, `RESEND_API_KEY`
+- [ ] **`AUTH_SECRET` — verify it is set.** Not visible in the confirmed list. Auth.js
+      reads it at `node_modules/next-auth/lib/env.js:22`
+      (`process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET`); without it sign-in
+      fails at runtime, not at build. Generate with `npx auth secret` if missing
+- [ ] `APP_TIMEZONE` — optional; defaults to `America/Chicago` (`src/lib/calendar.ts:73`).
+      Only set it if the team is in another zone
+- [ ] No app URL variable needed: `absoluteUrl` falls back to Vercel's auto-provided
+      `VERCEL_PROJECT_PRODUCTION_URL` when `AUTH_URL` is unset (`src/lib/absolute-url.ts:23-34`)
+- [ ] **Apply the migration to production.** `pnpm build` does *not* run migrations —
+      deliberately, so the build needs no secrets. Run it by hand, once:
+      `DATABASE_URL="<production-neon-url>" pnpm db:deploy`. Use `db:deploy`
+      (`prisma migrate deploy`), never `db:migrate` (`prisma migrate dev`), which can
+      prompt, create migrations, and reset the database
 - [ ] Resend sending domain verified (SPF/DKIM) so invitations don't start life in spam
 
 ## Phase 1: Production pre-flight dry run (T-4 days or earlier)
