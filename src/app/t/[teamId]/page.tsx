@@ -56,6 +56,12 @@ export default async function TeamHomePage({
           <Link href={`/t/${teamId}/view`}>Lineup</Link>
         </Button>
 
+        {role !== "PARENT" && (
+          <Button asChild variant="outline">
+            <Link href={`/t/${teamId}/chart`}>Edit batting order</Link>
+          </Button>
+        )}
+
         <Button asChild variant="outline">
           <Link href={`/t/${teamId}/roster`}>Roster</Link>
         </Button>

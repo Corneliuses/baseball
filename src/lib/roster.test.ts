@@ -4,6 +4,7 @@ const findManyRosterEntries = vi.fn();
 const findFirstRosterEntry = vi.fn();
 const createRosterEntry = vi.fn();
 const updateRosterEntry = vi.fn();
+const updateManyRosterEntries = vi.fn();
 const deleteRosterEntry = vi.fn();
 const findManyPlayers = vi.fn();
 const findFirstPlayer = vi.fn();
@@ -34,6 +35,7 @@ vi.mock("./db", () => ({
       findFirst: (...args: unknown[]) => findFirstRosterEntry(...args),
       create: (...args: unknown[]) => createRosterEntry(...args),
       update: (...args: unknown[]) => updateRosterEntry(...args),
+      updateMany: (...args: unknown[]) => updateManyRosterEntries(...args),
       delete: (...args: unknown[]) => deleteRosterEntry(...args),
     },
     player: {
@@ -47,11 +49,13 @@ vi.mock("./db", () => ({
 import {
   addPlayerToRoster,
   addReturningPlayer,
+  getChart,
   getRoster,
   getRosterEntry,
   isReturningCandidate,
   listReturningCandidates,
   removeRosterEntry,
+  saveBattingOrder,
   updateRosterEntry as updateRosterEntryFn,
 } from "./roster";
 
@@ -473,5 +477,103 @@ describe("addReturningPlayer", () => {
     await expect(
       addReturningPlayer({ teamId: "team-1", playerId: "player-1", jerseyNumber: 7 }),
     ).rejects.toMatchObject({ code: "P2002" });
+  });
+});
+
+describe("getChart", () => {
+  it("scopes to the team and maps entryId from the RosterEntry id", async () => {
+    findManyRosterEntries.mockResolvedValue([
+      {
+        id: "entry-1",
+        jerseyNumber: 7,
+        battingOrder: 2,
+        position: "SHORTSTOP",
+        player: { id: "player-1", name: "Ava" },
+      },
+    ]);
+
+    const chart = await getChart("team-1");
+
+    expect(findManyRosterEntries).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { teamId: "team-1" } }),
+    );
+    expect(chart).toEqual([
+      {
+        entryId: "entry-1",
+        playerId: "player-1",
+        playerName: "Ava",
+        jerseyNumber: 7,
+        battingOrder: 2,
+        position: "SHORTSTOP",
+      },
+    ]);
+  });
+
+  it("propagates database errors rather than swallowing them", async () => {
+    findManyRosterEntries.mockRejectedValue(new Error("connection lost"));
+
+    await expect(getChart("team-1")).rejects.toThrow("connection lost");
+  });
+});
+
+describe("saveBattingOrder", () => {
+  beforeEach(() => {
+    // Array-form $transaction: it receives the already-built statement list,
+    // not a callback — override the interactive-form default from the top.
+    transaction.mockResolvedValue([]);
+  });
+
+  it("runs both phases in one transaction: null-all first, then final values", async () => {
+    updateManyRosterEntries.mockReturnValue("phase-1");
+    updateRosterEntry.mockReturnValueOnce("upd-a").mockReturnValueOnce("upd-b");
+
+    await saveBattingOrder("team-1", [
+      { entryId: "entry-a", battingOrder: 1 },
+      { entryId: "entry-b", battingOrder: 2 },
+    ]);
+
+    // One transaction containing phase 1 followed by every phase-2 update —
+    // the transiently-duplicating per-row sequence the non-deferrable unique
+    // index forbids never happens.
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(transaction).toHaveBeenCalledWith(["phase-1", "upd-a", "upd-b"]);
+
+    expect(updateManyRosterEntries).toHaveBeenCalledWith({
+      where: { teamId: "team-1" },
+      data: { battingOrder: null },
+    });
+  });
+
+  it("scopes every phase-2 update by teamId and derives no values from elsewhere", async () => {
+    await saveBattingOrder("team-1", [
+      { entryId: "entry-a", battingOrder: 1 },
+      { entryId: "entry-b", battingOrder: 3 },
+    ]);
+
+    expect(updateRosterEntry).toHaveBeenNthCalledWith(1, {
+      where: { id: "entry-a", teamId: "team-1" },
+      data: { battingOrder: 1 },
+    });
+    // A forged or stale entryId matches no row under this where clause and
+    // throws P2025, rolling the whole save back.
+    expect(updateRosterEntry).toHaveBeenNthCalledWith(2, {
+      where: { id: "entry-b", teamId: "team-1" },
+      data: { battingOrder: 3 },
+    });
+  });
+
+  it("issues no phase-2 statement for an empty order — phase 1 clears everything", async () => {
+    await saveBattingOrder("team-1", []);
+
+    expect(updateManyRosterEntries).toHaveBeenCalledTimes(1);
+    expect(updateRosterEntry).not.toHaveBeenCalled();
+  });
+
+  it("propagates transaction failures", async () => {
+    transaction.mockRejectedValue(Object.assign(new Error("gone"), { code: "P2025" }));
+
+    await expect(
+      saveBattingOrder("team-1", [{ entryId: "entry-a", battingOrder: 1 }]),
+    ).rejects.toMatchObject({ code: "P2025" });
   });
 });

@@ -4,6 +4,7 @@ import type { RsvpState } from "@/lib/rsvp";
 
 const fullChart: ChartViewEntry[] = [
   {
+    entryId: "re-ava",
     playerId: "ava",
     playerName: "Ava",
     jerseyNumber: 7,
@@ -11,6 +12,7 @@ const fullChart: ChartViewEntry[] = [
     position: "SHORTSTOP",
   },
   {
+    entryId: "re-ben",
     playerId: "ben",
     playerName: "Ben",
     jerseyNumber: 4,
@@ -18,6 +20,7 @@ const fullChart: ChartViewEntry[] = [
     position: "PITCHER",
   },
   {
+    entryId: "re-cy",
     playerId: "cy",
     playerName: "Cy",
     jerseyNumber: null,
@@ -25,7 +28,7 @@ const fullChart: ChartViewEntry[] = [
     position: "FIRST_BASE",
   },
   // Benched: allPlay = false leaves these null.
-  { playerId: "eli", playerName: "Eli", jerseyNumber: 9, battingOrder: null, position: null },
+  { entryId: "re-eli", playerId: "eli", playerName: "Eli", jerseyNumber: 9, battingOrder: null, position: null },
 ];
 
 const noRsvps = new Map<string, RsvpState>();
@@ -96,6 +99,7 @@ describe("buildChartView", () => {
   it("reports hasChart true when only a batting order is set", () => {
     const partial: ChartViewEntry[] = [
       {
+        entryId: "re-ava",
         playerId: "ava",
         playerName: "Ava",
         jerseyNumber: null,
@@ -110,6 +114,7 @@ describe("buildChartView", () => {
   it("reports hasChart true when only a position is set", () => {
     const partial: ChartViewEntry[] = [
       {
+        entryId: "re-ava",
         playerId: "ava",
         playerName: "Ava",
         jerseyNumber: null,
@@ -124,6 +129,7 @@ describe("buildChartView", () => {
   it("reports hasChart false when every entry is fully benched", () => {
     const empty: ChartViewEntry[] = [
       {
+        entryId: "re-ava",
         playerId: "ava",
         playerName: "Ava",
         jerseyNumber: null,

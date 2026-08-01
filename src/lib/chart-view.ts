@@ -14,6 +14,9 @@ import type { RsvpState } from "@/lib/rsvp";
 /// is the thin data layer that feeds it.
 
 export type ChartViewEntry = {
+  /// The RosterEntry id — the roster spot, not the global person. The chart
+  /// editor (#10) keys its writes on this; the view page ignores it.
+  entryId: string;
   playerId: string;
   playerName: string;
   jerseyNumber: number | null;
