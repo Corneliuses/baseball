@@ -10,8 +10,10 @@ then a hands-off weekend.
 - [x] #1–#8 all closed (verified 2026-08-01)
 - [ ] Production deployment live on Vercel and reachable at its real URL
 - [x] Repo is deployable — verified 2026-08-01: `pnpm check` green (lint, typecheck,
-      491 tests across 44 files) and `pnpm build` succeeds with **no env vars set**,
-      confirming the lazy-config design. All 16 routes present
+      491 tests across 44 files) with no env vars set, and `pnpm exec next build`
+      succeeds with none either, confirming the lazy-config design keeps runtime
+      secrets out of the compile. All 16 routes present. Note `pnpm build` itself now
+      requires `DATABASE_URL` — it runs `prisma migrate deploy` first (see below)
 - [x] Production env vars confirmed in Vercel (screenshot, Production + Preview):
       `OWNER_EMAIL`, `DATABASE_URL`, `EMAIL_FROM`, `RESEND_API_KEY`
 - [ ] **`AUTH_SECRET` — verify it is set.** Not visible in the confirmed list. Auth.js
