@@ -31,8 +31,8 @@ src/generated/     # Prisma client output — gitignored, regenerate with pnpm d
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher), and
 `/t/[teamId]/` (team home, settings, roster, members, the owner-only returning-player
 picker at `roster/returning`, the member directory, the schedule at `schedule` /
-`schedule/[eventId]`, and the read-only chart at `view`) plus `/t/new` for owner-gated
-team creation.
+`schedule/[eventId]`, the read-only chart at `view`, and the coach-only drag-and-drop
+batting order editor at `chart`) plus `/t/new` for owner-gated team creation.
 
 ## Tech Stack
 
