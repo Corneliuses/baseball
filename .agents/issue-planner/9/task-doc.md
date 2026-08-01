@@ -16,10 +16,11 @@ then a hands-off weekend.
       requires `DATABASE_URL` — it runs `prisma migrate deploy` first (see below)
 - [x] Production env vars confirmed in Vercel (screenshot, Production + Preview):
       `OWNER_EMAIL`, `DATABASE_URL`, `EMAIL_FROM`, `RESEND_API_KEY`
-- [ ] **`AUTH_SECRET` — verify it is set.** Not visible in the confirmed list. Auth.js
+- [x] **`AUTH_SECRET` set in Vercel** — confirmed by the repo owner 2026-08-01. Auth.js
       reads it at `node_modules/next-auth/lib/env.js:22`
-      (`process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET`); without it sign-in
-      fails at runtime, not at build. Generate with `npx auth secret` if missing
+      (`process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET`); nothing checks it at
+      build time, so a missing value would have produced a green build and a broken
+      sign-in
 - [ ] `APP_TIMEZONE` — optional; defaults to `America/Chicago` (`src/lib/calendar.ts:73`).
       Only set it if the team is in another zone
 - [ ] No app URL variable needed: `absoluteUrl` falls back to Vercel's auto-provided
