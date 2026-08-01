@@ -41,6 +41,9 @@ migration, or email delivery has ever been exercised end to end.
 6. Recorded: % of players with an RSVP before game day
 7. Recorded: count of "what time / where / is he playing" texts on game day
 8. Recorded: parent confusion, especially around the three RSVP states
+   — verified invariant: RSVP state never removes a player from the roster, lineup, or
+   diamond; declined and no-response players stay in place, and any chart change is the
+   coach's manual decision
 9. Findings written as a comment on #9
 10. Explicit decision: proceed to the chart editors, or fix notification design first
 

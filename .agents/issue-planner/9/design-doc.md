@@ -106,7 +106,22 @@ findings and decide in the issue comment with reasoning. The under-5-minute line
 target is explicitly *not* measured here — editors don't exist; measure it at the end
 of #11.
 
-### Decision 4: Production pre-flight is part of this issue
+### Decision 4: RSVP never changes the chart — verify it, don't just assume it
+
+**Decision:** A player who hasn't RSVP'd (or who declined) stays in their batting slot
+and at their position. Removing or benching them is **the coach's decision alone**, made
+by hand, never an automatic consequence of RSVP state. This is already how the system is
+built — `src/lib/rsvp.ts` states "RSVP is reporting, never a gate," and #8's view page
+renders declined and no-response players greyed/marked *in place*, never dropped — but
+the weekend must confirm it holds on the real production page, and confirm parents
+*read* it that way (a no-response kid must never look "out").
+**Rationale:** This invariant is the product's core stance (standing chart, RSVPs as
+exception-signal). If the coach does choose to patch the chart during the weekend, that
+is a manual `db:studio` edit, it is permanent (no undo, per the repo's deliberate
+no-history rule), and it gets recorded in the findings as a coach decision — not as
+app behavior.
+
+### Decision 5: Production pre-flight is part of this issue
 
 **Decision:** Treat "the app is live, migrated, and can deliver email in production" as
 Phase 1 of the task doc rather than an assumption.

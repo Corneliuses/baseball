@@ -51,6 +51,9 @@ walk-through is the rehearsal.
 - [ ] Proofread `/t/[teamId]/view` on a phone against the intended chart: all nine
       positions labeled and filled as expected, batting order correct, benched kids
       shown as expected
+- [ ] Verify the invariant: a player with no RSVP (or a declined one) still appears in
+      their batting slot and at their position — greyed/marked, never removed. RSVP
+      must never change the chart; only the coach does, by hand
 
 ## Phase 3: Announce, then hands off (T-2 days)
 
@@ -70,7 +73,11 @@ walk-through is the rehearsal.
       responses) over total rostered players
 - [ ] Tally every "what time / where / is he playing" text received on game day
 - [ ] Note every confusion report all weekend, especially anything about the three RSVP
-      states (attending / declined / no-response) on the view page
+      states (attending / declined / no-response) on the view page — in particular
+      whether anyone read a no-response or declined kid as removed from the lineup
+- [ ] If the chart gets patched during the weekend, that's a coach decision made by hand
+      in `db:studio` — record what changed and why in the findings (the edit is
+      permanent; there is no undo)
 
 ## Phase 5: Findings and the gate decision
 
