@@ -9,8 +9,8 @@ parking lot fifteen minutes before first pitch.
 
 ## Status
 
-**Phase 8 complete — the view page.** Phase 1 laid the data model, tooling, and domain
-guards. Phase 2 added sign-in. Phase 3 added team scoping (`/t/[teamId]`,
+**Phase 10 complete — the batting order editor.** Phase 1 laid the data model, tooling, and
+domain guards. Phase 2 added sign-in. Phase 3 added team scoping (`/t/[teamId]`,
 `requireTeamAccess`). Phase 4 added the roster itself: players, jersey numbers, guardian
 links, working invitations, and owner-only member/role management. Phase 5 added the
 returning-player picker — the owner-only global `Player` read that pulls a kid and their
@@ -19,12 +19,16 @@ event create/edit/delete, a hand-built month grid and chronological list, and th
 `nextGame` helper the view page (#8) and readiness check (#12) both depend on. Phase 7
 added the tri-state RSVP model — attending, declined, and no-response (no row) are
 distinct — a guarded per-kid toggle on the event detail page, and the pure contract
-(`src/lib/rsvp.ts`) that #8 and #12 both consume. Phase 8 adds the parent-facing payoff:
+(`src/lib/rsvp.ts`) that #8 and #12 both consume. Phase 8 added the parent-facing payoff:
 `/t/[teamId]/view`, a labeled diamond and the ordered batting lineup read in the context of
 `nextGame`, with RSVP state as decoration only — a declined kid stays in their slot,
-greyed, and no-response never reads as "out." The chart itself is still hand-entered via
-`pnpm db:studio`; #10 and #11 build the editors. RSVP is reporting-only throughout: it
-never gates roster or chart placement.
+greyed, and no-response never reads as "out." Phase 10 adds the coach-only drag-and-drop
+batting order editor at `/t/[teamId]/chart`: `@dnd-kit/sortable` with a touch activation
+delay so scrolling on a phone never starts a drag, swap-on-drop semantics, and an explicit
+Save/Cancel that writes through a two-phase transaction (null every `battingOrder`, then
+write the new values) to clear the non-deferrable unique index on `(teamId, battingOrder)`
+mid-swap. The positions chart is still hand-entered via `pnpm db:studio`; #11 builds that
+editor. RSVP is reporting-only throughout: it never gates roster or chart placement.
 
 What exists today:
 
@@ -33,8 +37,9 @@ What exists today:
   and owner check, invitation creation/acceptance, roster and membership data access, the
   returning-player cascade, directory ordering, the schedule — Central-time-anchored
   calendar/date logic plus team-scoped event reads and writes — the RSVP tri-state
-  contract plus its team-scoped, guardian-guarded data wrapper, and the view page's pure
-  chart render model (`chart-view.ts`) — all unit-tested
+  contract plus its team-scoped, guardian-guarded data wrapper, the view page's pure
+  chart render model (`chart-view.ts`), and the batting order editor's pure draft/drop/
+  validation logic (`chart.ts`) — all unit-tested
 - `src/auth.ts` — Auth.js v5 config: Prisma adapter, Resend provider, database sessions
 - `src/proxy.ts` — redirects signed-out visitors away from `/t/:path*`
 - `src/app/signin/` — the sign-in form and its confirmation page
@@ -44,9 +49,11 @@ What exists today:
   (`roster/returning`), the member directory (`directory`), the schedule — a month
   grid and chronological list with coach-only create/edit/delete, plus an Attendance card
   on the event detail page where any guardian can RSVP their own kids (`schedule`,
-  `schedule/[eventId]`) — and the read-only view page (`view`): a server-rendered SVG
-  diamond and ordered batting lineup for the next game, RSVP state shown but never used to
-  filter or reorder anyone
+  `schedule/[eventId]`), the read-only view page (`view`): a server-rendered SVG diamond and
+  ordered batting lineup for the next game, RSVP state shown but never used to filter or
+  reorder anyone — and the coach-only batting order editor (`chart`): drag-and-drop reorder
+  via `@dnd-kit`, swap-on-drop, an unassigned pool when `allPlay` is off, and a two-phase
+  transactional save
 - `src/emails/` — React Email templates for invitations and the "you've been added to a
   team" notice, both sent through Resend
 - `src/app/` — landing page displaying all public teams, responsive layout, theme setup
@@ -56,9 +63,9 @@ What exists today:
 - LazyMotion configured for efficient Motion animations
 - Working `dev` / `build` / `lint` / `typecheck` / `test` pipeline with unit tests throughout
 
-What does not exist yet: the drag-and-drop batting order and positions editors (#10, #11)
-— the chart is still hand-entered via `pnpm db:studio` — next-game readiness (#12), and
-broadcast messaging (#13).
+What does not exist yet: the drag-and-drop positions editor (#11) — positions are still
+hand-entered via `pnpm db:studio` — next-game readiness (#12), and broadcast messaging
+(#13).
 
 ## How it works
 

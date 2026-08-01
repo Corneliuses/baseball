@@ -20,8 +20,9 @@ import type { ReturningCandidate } from "./returning-players";
 ///     that throws.
 ///
 /// `Player` carries only `name` and `dateOfBirth` — see the schema comment at
-/// prisma/schema.prisma:82-84. `battingOrder` and `position` on `RosterEntry`
-/// are never written here; they belong to #10 and #11.
+/// prisma/schema.prisma:82-84. Of the chart columns on `RosterEntry`,
+/// `battingOrder` is written here by `saveBattingOrder` (#10); `position` is
+/// still never written here and belongs to #11.
 
 export type RosterEntry = {
   id: string;
@@ -97,6 +98,7 @@ export async function getChart(teamId: string): Promise<ChartViewEntry[]> {
   const entries = await db.rosterEntry.findMany({
     where: { teamId },
     select: {
+      id: true,
       jerseyNumber: true,
       battingOrder: true,
       position: true,
@@ -105,6 +107,7 @@ export async function getChart(teamId: string): Promise<ChartViewEntry[]> {
   });
 
   return entries.map((entry) => ({
+    entryId: entry.id,
     playerId: entry.player.id,
     playerName: entry.player.name,
     jerseyNumber: entry.jerseyNumber,
@@ -181,6 +184,46 @@ export async function getRosterEntry(
       hasSignedIn: user.emailVerified !== null,
     })),
   };
+}
+
+/**
+ * Persist the standing batting order (#10) — the trap in that issue.
+ *
+ * `RosterEntry_teamId_battingOrder_key` was created via `CREATE UNIQUE INDEX`
+ * (migration 20260728053521_001, line 193), which Postgres cannot make
+ * DEFERRABLE — only table-level constraints can be. So any per-row update
+ * sequence that transiently duplicates a value (a naive swap of slots 1 and 2)
+ * throws P2002 mid-transaction. The write is therefore two phases inside one
+ * transaction: null every battingOrder for the team, then write final values.
+ *
+ * Array-form `$transaction`, not interactive — the statements are known up
+ * front and run sequentially in one transaction. Each phase-2 `update` carries
+ * `teamId` in its where clause (the same cross-team-forgery guard
+ * `requireRosterEntry` documents in roster/actions.ts) and throws P2025 if the
+ * entry is gone, rolling the whole save back: a lineup with silent holes the
+ * coach never saw is worse than a failed save. Callers translate via
+ * `chartWriteFailure` in chart.ts.
+ *
+ * `battingOrder` values come from `validateBattingOrder`, never raw from the
+ * client. Unassigned entries need no phase-2 statement — phase 1 already
+ * nulled them.
+ */
+export async function saveBattingOrder(
+  teamId: string,
+  assignments: readonly { entryId: string; battingOrder: number }[],
+): Promise<void> {
+  await db.$transaction([
+    db.rosterEntry.updateMany({
+      where: { teamId },
+      data: { battingOrder: null },
+    }),
+    ...assignments.map(({ entryId, battingOrder }) =>
+      db.rosterEntry.update({
+        where: { id: entryId, teamId },
+        data: { battingOrder },
+      }),
+    ),
+  ]);
 }
 
 export type AddPlayerInput = {
