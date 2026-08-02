@@ -31,8 +31,9 @@ src/generated/     # Prisma client output — gitignored, regenerate with pnpm d
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher), and
 `/t/[teamId]/` (team home, settings, roster, members, the owner-only returning-player
 picker at `roster/returning`, the member directory, the schedule at `schedule` /
-`schedule/[eventId]`, the read-only chart at `view`, and the coach-only drag-and-drop
-batting order editor at `chart`) plus `/t/new` for owner-gated team creation.
+`schedule/[eventId]`, the read-only chart at `view`, and the two coach-only drag-and-drop
+chart editors — the batting order at `chart` and the positions diamond at
+`chart/positions`) plus `/t/new` for owner-gated team creation.
 
 ## Tech Stack
 
@@ -216,3 +217,20 @@ production — the dev command can prompt, generate new migrations, and reset th
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.
+- **Both chart writes replace the whole chart, they do not merge into it.** `saveBattingOrder`
+  and `savePositions` null every value for the team and then write the submitted board, so a
+  second coach saving a board they loaded earlier would erase the first one's work outright —
+  and with no history, unrecoverably. A team can have up to four coaches. Each editor
+  therefore posts the chart *as it loaded it* in a `baseline` field, and the action compares
+  that against its own fresh read before writing, refusing on a mismatch (`chart-changed`).
+  The baseline comes from `storedBattingOrder` / `storedPositions` in `chart.ts`, never from
+  the draft: both draft builders normalize (pooling stale outfield rows, packing sparse
+  orders), so a draft-derived baseline would look stale on every save. If you add a third
+  chart column, it needs the same guard. The read-then-write gap is knowingly left open —
+  see the comment in the positions action.
+- **Save and Cancel answer different questions in both chart editors**, and it is not
+  redundancy. Cancel is "has the coach changed anything" (draft vs. the loaded draft); Save is
+  "would writing change the database" (draft vs. `stored*`). They diverge on first render
+  whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
+  or nine slots holding what used to be ten batters — and gating Save on the Cancel question
+  leaves the coach looking at a change they cannot commit.
