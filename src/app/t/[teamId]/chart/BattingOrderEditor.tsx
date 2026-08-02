@@ -26,11 +26,13 @@ import {
   emptySlotId,
   resolveDrop,
   sameOrder,
+  storedBattingOrder,
   UNASSIGNED_ID,
   type BattingDraft,
 } from "@/lib/chart";
 
 import { saveBattingOrderAction } from "./actions";
+import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "./drag-activation";
 
 /// The editor's slice of a roster entry — chart-view's render model minus the
 /// fields this page doesn't show. RSVP state is deliberately absent: the
@@ -78,21 +80,30 @@ export function BattingOrderEditor({
   );
 
   const sensors = useSensors(
-    // Desktop: a small distance threshold separates clicks from drags.
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    // Touch: the activation delay is a stated product requirement (Decision
-    // 10), not a nicety — it is what lets a coach scroll this page on a phone
-    // without every touch starting a drag. Movement within the tolerance
-    // keeps the delay timer alive; movement beyond it is a scroll.
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 250, tolerance: 8 },
-    }),
+    useSensor(MouseSensor, { activationConstraint: MOUSE_ACTIVATION }),
+    useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
 
-  const dirty = !sameOrder(draft.slots, original.slots);
+  // Two different questions, the same split the positions editor makes. They
+  // diverge on the first render whenever `buildBattingDraft` had to normalize:
+  // turn allPlay off on a team whose twelve players were all batting and the
+  // draft seats nine, benching three into the pool — the board already shows
+  // the change, so nothing is "edited", while the database still bats all
+  // twelve and the parents' view page still lists them. Gating Save on
+  // `edited` leaves the coach looking at a change they cannot commit.
+  //
+  // Empty slots drop out because the write does the same: `validateBattingOrder`
+  // numbers seated entries by slot position, so a gap renumbers rather than
+  // persisting. That also makes a pure renumber (a hand-set 1, 2, 5 the save
+  // would compact to 1, 2, 3) correctly *not* saveable — same players, same
+  // order, nothing a coach or a parent could see.
+  const stored = useMemo(() => storedBattingOrder(entries), [entries]);
+  const seated = draft.slots.filter((entryId) => entryId !== null);
+  const edited = !sameOrder(draft.slots, original.slots);
+  const saveable = !sameOrder(seated, stored);
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     setDraft((current) =>
@@ -128,15 +139,20 @@ export function BattingOrderEditor({
         >
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="order" value={JSON.stringify(draft.slots)} />
+          {/* The order this page loaded. The action compares it against a
+              fresh read and refuses the save if another coach reordered in the
+              meantime — the write replaces the whole order, so without this it
+              would erase their work silently. */}
+          <input type="hidden" name="baseline" value={JSON.stringify(stored)} />
           <Button
             type="button"
             variant="outline"
-            disabled={!dirty}
+            disabled={!edited}
             onClick={() => setDraft(original)}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={!dirty}>
+          <Button type="submit" disabled={!saveable}>
             Save order
           </Button>
         </form>

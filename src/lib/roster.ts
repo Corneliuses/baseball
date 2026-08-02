@@ -1,3 +1,5 @@
+import type { Position } from "@/generated/prisma/enums";
+
 import { db } from "./db";
 import type { ChartViewEntry } from "./chart-view";
 import { planGuardianCascade, type GuardianLink } from "./returning-players";
@@ -20,9 +22,9 @@ import type { ReturningCandidate } from "./returning-players";
 ///     that throws.
 ///
 /// `Player` carries only `name` and `dateOfBirth` — see the schema comment at
-/// prisma/schema.prisma:82-84. Of the chart columns on `RosterEntry`,
-/// `battingOrder` is written here by `saveBattingOrder` (#10); `position` is
-/// still never written here and belongs to #11.
+/// prisma/schema.prisma:82-84. Both chart columns on `RosterEntry` are written
+/// here and nowhere else: `battingOrder` by `saveBattingOrder` (#10),
+/// `position` by `savePositions` (#11).
 
 export type RosterEntry = {
   id: string;
@@ -221,6 +223,40 @@ export async function saveBattingOrder(
       db.rosterEntry.update({
         where: { id: entryId, teamId },
         data: { battingOrder },
+      }),
+    ),
+  ]);
+}
+
+/**
+ * Persist the standing positions chart (#11) — the same trap as
+ * `saveBattingOrder`, on a different column.
+ *
+ * `RosterEntry_teamId_position_key` is likewise a `CREATE UNIQUE INDEX`
+ * (migration 20260728053521_001, line 196) and so cannot be DEFERRABLE. Moving
+ * a player from SS to 2B while someone else moves off 2B transiently duplicates
+ * a value and throws P2002 mid-transaction, so the write is the same two
+ * phases inside one array-form transaction: null every position for the team,
+ * then write the final values.
+ *
+ * Players left off the diamond need no phase-2 statement — phase 1 already
+ * nulled them, which is exactly the state the editor showed: the bench, or the
+ * outfield on an allPlay team (see `droppablePositions` in chart.ts). Values
+ * come from `validatePositions`, never raw from the client.
+ */
+export async function savePositions(
+  teamId: string,
+  assignments: readonly { entryId: string; position: Position }[],
+): Promise<void> {
+  await db.$transaction([
+    db.rosterEntry.updateMany({
+      where: { teamId },
+      data: { position: null },
+    }),
+    ...assignments.map(({ entryId, position }) =>
+      db.rosterEntry.update({
+        where: { id: entryId, teamId },
+        data: { position },
       }),
     ),
   ]);

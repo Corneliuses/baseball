@@ -124,6 +124,83 @@ describe("BattingOrderEditor", () => {
     expect(JSON.parse(orderInput.value)).toEqual(["b", "a"]);
   });
 
+  it("offers Save when the draft benched players the database still bats", () => {
+    // allPlay turned off on a team whose ten players were all batting: nine
+    // slots remain, so buildBattingDraft benches "j" into the pool. The board
+    // already shows that, the database and the parents' view page do not, and
+    // gating Save on "has the coach moved anyone" would leave no way to
+    // commit it.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={Array.from({ length: 10 }, (_, i) =>
+          entry(String.fromCharCode(97 + i), i + 1),
+        )}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save order" })).toBeEnabled();
+    // Nothing to undo — the coach hasn't dragged anything.
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  });
+
+  it("leaves Save disabled for a pure renumber", () => {
+    // A hand-set 1, 2, 5 that a save would compact to 1, 2, 3. Same players,
+    // same order — nothing a coach or a parent could see, so it is not a
+    // change worth offering.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[entry("a", 1), entry("b", 2), entry("c", 5)]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save order" })).toBeDisabled();
+  });
+
+  it("posts the order it loaded as the lost-update baseline", () => {
+    // Without this field the action refuses every save, and the action's own
+    // tests can't catch that — they set the baseline themselves.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[entry("a", 2), entry("b", 1), entry("c", null)]}
+      />,
+    );
+
+    const form = screen.getByRole("button", { name: "Save order" }).closest("form")!;
+    const baseline = form.querySelector<HTMLInputElement>('input[name="baseline"]')!;
+
+    // Stored order, not the draft: seated players in batting order, and the
+    // benched one left out entirely.
+    expect(JSON.parse(baseline.value)).toEqual(["b", "a"]);
+  });
+
+  it("keeps the baseline on the order that loaded, not the one being dragged", () => {
+    // The baseline answers "what did the database say when this page opened",
+    // so it must not drift as the coach edits — otherwise a concurrent save by
+    // another coach would slip through whenever this coach had touched
+    // anything.
+    const entries = [entry("a", 1), entry("b", 2)];
+    const { rerender } = render(
+      <BattingOrderEditor teamId="team-1" allPlay={true} entries={entries} />,
+    );
+
+    const baselineOf = () =>
+      screen
+        .getByRole("button", { name: "Save order" })
+        .closest("form")!
+        .querySelector<HTMLInputElement>('input[name="baseline"]')!.value;
+    const before = baselineOf();
+
+    rerender(<BattingOrderEditor teamId="team-1" allPlay={true} entries={entries} />);
+
+    expect(baselineOf()).toBe(before);
+  });
+
   it("keeps keyboard drag handles on players but not on empty slots", () => {
     render(
       <BattingOrderEditor

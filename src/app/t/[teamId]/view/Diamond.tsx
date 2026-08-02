@@ -1,44 +1,25 @@
+import {
+  DIAMOND_GEOMETRY,
+  DIAMOND_POLYGON,
+  POSITION_COORDS,
+} from "@/components/diamond-geometry";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import type { Position } from "@/generated/prisma/enums";
 import type { ChartViewPlayer } from "@/lib/chart-view";
-import { ALL_POSITIONS, POSITION_LABELS } from "@/lib/positions";
+import {
+  INFIELD_POSITIONS,
+  OUTFIELD_POSITIONS,
+  POSITION_LABELS,
+} from "@/lib/positions";
 
 /// The labeled diamond, server-rendered as inline SVG — no image asset, no
-/// client JS, crisp on any phone.
-///
-/// Marker coordinates mirror where each position actually stands, and the
-/// **catcher sits below home plate at y=452, which is why the viewBox is 520
-/// tall**: each marker draws a name at y+34 and an RSVP tag at y+47, so a
-/// shorter viewBox silently clips the catcher's name and state off the bottom.
-/// Check the lowest marker's y+47 against the viewBox height before moving
-/// anything.
-/// Exported so Diamond.test.tsx can assert the layout invariants directly.
-/// The clipping this guards against is silent — an off-canvas name renders
-/// without error and simply cannot be seen.
-export const DIAMOND_GEOMETRY = {
-  width: 400,
-  height: 520,
-  markerRadius: 20,
-  nameOffset: 34,
-  tagOffset: 47,
-} as const;
+/// client JS, crisp on any phone. Coordinates come from
+/// `@/components/diamond-geometry`, shared with the drag editor (#11).
 
 const MARKER_RADIUS = DIAMOND_GEOMETRY.markerRadius;
 const NAME_OFFSET = DIAMOND_GEOMETRY.nameOffset;
 const TAG_OFFSET = DIAMOND_GEOMETRY.tagOffset;
 const VIEWBOX_HEIGHT = DIAMOND_GEOMETRY.height;
-
-export const POSITION_COORDS: Record<Position, { x: number; y: number }> = {
-  CATCHER: { x: 200, y: 452 },
-  PITCHER: { x: 200, y: 338 },
-  FIRST_BASE: { x: 292, y: 300 },
-  SECOND_BASE: { x: 232, y: 252 },
-  SHORTSTOP: { x: 168, y: 252 },
-  THIRD_BASE: { x: 108, y: 300 },
-  LEFT_FIELD: { x: 75, y: 130 },
-  CENTER_FIELD: { x: 200, y: 75 },
-  RIGHT_FIELD: { x: 325, y: 130 },
-};
 
 /// Only the first name goes on the diamond. Markers sit as little as 60px
 /// apart, so a full name overruns its neighbour; the batting order list
@@ -104,11 +85,44 @@ function PositionMarker({
   );
 }
 
+/**
+ * On an allPlay team the outfield is one zone rather than three named spots,
+ * so everyone not on the infield stands out there and persists as
+ * `position = null` (#11, Decision 1). Drawing LF/CF/RF as "Open" would be
+ * doubly wrong for those teams: the spots aren't open, and the kids filling
+ * them would be missing from the diamond entirely — which is the one thing a
+ * parent opens this page to see.
+ *
+ * A stale named-outfield row (hand-set during #9, or left over from before
+ * allPlay was switched on) still draws its marker, so nothing silently
+ * vanishes before the coach's next save collapses it.
+ */
+function outfieldPositionsToDraw(
+  allPlay: boolean,
+  byPosition: Map<Position, ChartViewPlayer>,
+): readonly Position[] {
+  return allPlay
+    ? OUTFIELD_POSITIONS.filter((position) => byPosition.has(position))
+    : OUTFIELD_POSITIONS;
+}
+
 export function Diamond({
   byPosition,
+  allPlay,
+  outfield = [],
 }: {
   byPosition: Map<Position, ChartViewPlayer>;
+  allPlay: boolean;
+  /// Players with no position. Rendered as the outfield zone on an allPlay
+  /// team, and ignored otherwise — a benched player belongs in neither.
+  outfield?: readonly ChartViewPlayer[];
 }) {
+  const drawn = [
+    ...INFIELD_POSITIONS,
+    ...outfieldPositionsToDraw(allPlay, byPosition),
+  ];
+  const zone = allPlay ? outfield : [];
+
   return (
     <>
       {/* aria-hidden with an sr-only list below: screen readers announce an
@@ -121,12 +135,12 @@ export function Diamond({
         className="mx-auto w-full max-w-sm"
       >
         <polygon
-          points="200,420 290,320 200,230 110,320"
+          points={DIAMOND_POLYGON}
           className="fill-none stroke-border"
           strokeWidth={2}
         />
 
-        {ALL_POSITIONS.map((position) => (
+        {drawn.map((position) => (
           <PositionMarker
             key={position}
             position={position}
@@ -135,8 +149,32 @@ export function Diamond({
         ))}
       </svg>
 
+      {zone.length > 0 ? (
+        <div className="mx-auto mt-2 w-full max-w-sm">
+          <h4 className="mb-1 text-center text-xs font-medium text-muted-foreground">
+            Outfield
+          </h4>
+          <div className="flex flex-wrap justify-center gap-2">
+            {zone.map((player) => {
+              const style = RSVP_STYLE[player.rsvpState];
+              return (
+                <span
+                  key={player.playerId}
+                  className={`rounded border border-border px-2 py-1 text-xs font-medium ${style.nameClassName}`}
+                >
+                  {player.playerName}
+                  <span className={`ml-1 ${style.tagClassName}`}>
+                    {style.label}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <ul className="sr-only">
-        {ALL_POSITIONS.map((position) => {
+        {drawn.map((position) => {
           const player = byPosition.get(position);
           return (
             <li key={position}>
@@ -147,6 +185,17 @@ export function Diamond({
             </li>
           );
         })}
+        {zone.length > 0 ? (
+          <li>
+            Outfield:{" "}
+            {zone
+              .map(
+                (player) =>
+                  `${player.playerName}, ${RSVP_STYLE[player.rsvpState].label}`,
+              )
+              .join("; ")}
+          </li>
+        ) : null}
       </ul>
     </>
   );

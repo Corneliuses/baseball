@@ -17,6 +17,7 @@ import { buildRsvpStateMap } from "@/lib/rsvp";
 import { listEventRsvps } from "@/lib/rsvps";
 import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { getTeamById } from "@/lib/teams";
 
 import { Diamond } from "./Diamond";
 import { Reveal } from "./Reveal";
@@ -73,7 +74,13 @@ export default async function ViewPage({
     );
   }
 
-  const [chartEntries, rsvpRows] = await Promise.all([
+  const [team, chartEntries, rsvpRows] = await Promise.all([
+    // Needed for allPlay alone: it decides whether an unplaced player is in
+    // the outfield or on the bench, and the diamond has to say which. A null
+    // return means the team was deleted between requireTeamAccess and here,
+    // so the render falls back to the column's own default rather than
+    // 404ing a page that already passed its access check.
+    getTeamById(teamId),
     getChart(teamId),
     listEventRsvps(teamId, game.id),
   ]);
@@ -117,7 +124,11 @@ export default async function ViewPage({
                 <CardTitle className="text-lg">Positions</CardTitle>
               </CardHeader>
               <CardContent>
-                <Diamond byPosition={chart.byPosition} />
+                <Diamond
+                  byPosition={chart.byPosition}
+                  allPlay={team?.allPlay ?? true}
+                  outfield={chart.unassigned}
+                />
               </CardContent>
             </Card>
 

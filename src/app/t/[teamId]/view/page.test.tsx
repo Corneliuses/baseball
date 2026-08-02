@@ -5,6 +5,7 @@ const requireTeamAccess = vi.fn();
 const nextGame = vi.fn();
 const getChart = vi.fn();
 const listEventRsvps = vi.fn();
+const getTeamById = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -21,6 +22,10 @@ vi.mock("@/lib/roster", () => ({
 
 vi.mock("@/lib/rsvps", () => ({
   listEventRsvps: (...args: unknown[]) => listEventRsvps(...args),
+}));
+
+vi.mock("@/lib/teams", () => ({
+  getTeamById: (...args: unknown[]) => getTeamById(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -71,6 +76,9 @@ beforeEach(() => {
   nextGame.mockResolvedValue(game);
   getChart.mockResolvedValue(fullChart);
   listEventRsvps.mockResolvedValue([]);
+  // allPlay off by default here so the existing assertions describe the
+  // nine-named-positions diamond; the allPlay cases set it explicitly.
+  getTeamById.mockResolvedValue({ id: "team-1", allPlay: false, archivedAt: null });
 });
 
 describe("ViewPage access", () => {
@@ -190,6 +198,70 @@ describe("ViewPage chart rendering", () => {
     // The marker carries the short form; the list carries the whole name.
     expect(html).toContain(">Ava</text>");
     expect(lineupHtml).toContain("Ava Castellanos");
+  });
+
+  it("shows an allPlay team's unplaced players as the outfield, not as Open spots", async () => {
+    // allPlay defaults to true, so this is the common case. LF/CF/RF are one
+    // zone for these teams (#11 Decision 1) and the kids out there persist as
+    // position = null — drawing three Open markers would both misreport the
+    // spots and leave those kids off the diamond entirely.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      ...fullChart,
+      {
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 3,
+        position: null,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Outfield");
+    expect(html).toContain("Cal");
+    for (const label of ["LF", "CF", "RF"]) {
+      expect(html).not.toContain(`>${label}<`);
+    }
+  });
+
+  it("still draws an allPlay team's stale named-outfield row", async () => {
+    // Hand-set during #9, or left over from before allPlay was switched on.
+    // The coach's next save collapses it; until then nothing vanishes.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      {
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CENTER_FIELD" as const,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain(">CF<");
+    expect(html).not.toContain(">LF<");
+  });
+
+  it("exposes an allPlay outfield to screen readers", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      ...fullChart,
+      {
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 3,
+        position: null,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Outfield:");
   });
 
   it("exposes every position assignment to screen readers", async () => {

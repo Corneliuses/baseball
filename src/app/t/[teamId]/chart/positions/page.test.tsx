@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import type { Position } from "@/generated/prisma/enums";
+
 const requireTeamAccess = vi.fn();
 const getTeamById = vi.fn();
 const getChart = vi.fn();
@@ -21,8 +23,8 @@ vi.mock("@/lib/roster", () => ({
 
 // The editor is a client component with its own tests; here it only needs to
 // prove which props the page hands it.
-vi.mock("./BattingOrderEditor", () => ({
-  BattingOrderEditor: (props: Record<string, unknown>) => {
+vi.mock("./PositionsEditor", () => ({
+  PositionsEditor: (props: Record<string, unknown>) => {
     editorProps(props);
     return <div data-testid="editor" />;
   },
@@ -49,22 +51,22 @@ function chartEntry(
   entryId: string,
   name: string,
   jerseyNumber: number | null,
-  battingOrder: number | null,
+  position: Position | null,
 ) {
   return {
     entryId,
     playerId: `player-${entryId}`,
     playerName: name,
     jerseyNumber,
-    battingOrder,
-    position: null,
+    battingOrder: null,
+    position,
   };
 }
 
 async function render(searchParams: Record<string, string> = {}) {
-  const { default: ChartPage } = await import("./page");
+  const { default: PositionsPage } = await import("./page");
   return renderToStaticMarkup(
-    await ChartPage({
+    await PositionsPage({
       params: Promise.resolve({ teamId: "team-1" }),
       searchParams: Promise.resolve(searchParams),
     }),
@@ -76,12 +78,12 @@ beforeEach(() => {
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
   getTeamById.mockResolvedValue(team);
   getChart.mockResolvedValue([
-    chartEntry("a", "Ava", 7, 2),
-    chartEntry("b", "Ben", 4, 1),
+    chartEntry("a", "Ava", 7, "SHORTSTOP"),
+    chartEntry("b", "Ben", 4, null),
   ]);
 });
 
-describe("ChartPage access", () => {
+describe("PositionsPage access", () => {
   it("requires COACH to read the editor", async () => {
     await render();
 
@@ -106,7 +108,7 @@ describe("ChartPage access", () => {
   });
 });
 
-describe("ChartPage rendering", () => {
+describe("PositionsPage rendering", () => {
   it("hands the editor the team's entries and allPlay flag", async () => {
     await render();
 
@@ -115,13 +117,29 @@ describe("ChartPage rendering", () => {
         teamId: "team-1",
         allPlay: true,
         entries: [
-          // sortRoster order: numbered ascending — 4 before 7. battingOrder
-          // placement is the editor's job, not the page's.
-          { entryId: "b", playerName: "Ben", jerseyNumber: 4, battingOrder: 1 },
-          { entryId: "a", playerName: "Ava", jerseyNumber: 7, battingOrder: 2 },
+          // sortRoster order: numbered ascending — 4 before 7. Placing them on
+          // the diamond is the editor's job, not the page's.
+          { entryId: "b", playerName: "Ben", jerseyNumber: 4, position: null },
+          {
+            entryId: "a",
+            playerName: "Ava",
+            jerseyNumber: 7,
+            position: "SHORTSTOP",
+          },
         ],
       }),
     );
+  });
+
+  it("never loads RSVPs — a player who declined is still placeable", async () => {
+    await render();
+
+    const props = editorProps.mock.calls[0][0] as {
+      entries: Record<string, unknown>[];
+    };
+    for (const entry of props.entries) {
+      expect(entry).not.toHaveProperty("rsvpState");
+    }
   });
 
   it("renders an archived team read-only, without the editor", async () => {
@@ -142,8 +160,22 @@ describe("ChartPage rendering", () => {
     const html = await render();
 
     expect(html).toContain("No players yet");
-    expect(html).toContain(`/t/team-1/roster`);
+    expect(html).toContain("/t/team-1/roster");
     expect(editorProps).not.toHaveBeenCalled();
+  });
+
+  it("links to the batting order editor and the view page", async () => {
+    const html = await render();
+
+    expect(html).toContain("/t/team-1/chart");
+    expect(html).toContain("/t/team-1/view");
+  });
+
+  it("explains the outfield under allPlay and the bench without it", async () => {
+    expect(await render()).toContain("plays the outfield");
+
+    getTeamById.mockResolvedValue({ ...team, allPlay: false });
+    expect(await render()).toContain("sits on the bench");
   });
 
   it("renders the error banner for a known error code", async () => {
@@ -152,13 +184,13 @@ describe("ChartPage rendering", () => {
     expect(html).toContain("The roster changed while you were editing");
   });
 
-  it("tells a coach whose save was refused that the order shown is the other one's", async () => {
+  it("tells a coach whose save was refused that the board shown is the other one's", async () => {
     // The action redirected here and this loader re-ran, so "reload" would be
     // advice to do something that already happened.
     const html = await render({ error: "chart-changed" });
 
-    expect(html).toContain("Another coach changed the batting order");
-    expect(html).toContain("The order below is theirs");
+    expect(html).toContain("Another coach changed the positions");
+    expect(html).toContain("The diamond below is theirs");
     expect(html).not.toContain("Reload to see");
   });
 
@@ -171,6 +203,6 @@ describe("ChartPage rendering", () => {
   it("renders the saved confirmation", async () => {
     const html = await render({ saved: "1" });
 
-    expect(html).toContain("Order saved.");
+    expect(html).toContain("Positions saved.");
   });
 });

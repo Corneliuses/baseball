@@ -4,10 +4,17 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
-import { chartWriteFailure, validateBattingOrder } from "@/lib/chart";
+import {
+  chartWriteFailure,
+  sameOrder,
+  storedBattingOrder,
+  validateBattingOrder,
+} from "@/lib/chart";
 import { getChart, saveBattingOrder } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
+
+import { parseJson } from "./form-json";
 
 function extractTeamId(formData: FormData): string {
   const teamId = String(formData.get("teamId")).trim();
@@ -22,6 +29,11 @@ function extractTeamId(formData: FormData): string {
 /// validation work; the real ceiling is validateBattingOrder's slot count.
 const orderSchema = z.array(z.string().min(1).nullable()).max(50);
 
+/// The order as the page loaded it, for the lost-update guard below. Entry ids
+/// only — `storedBattingOrder` omits benched entries rather than holding a
+/// slot for them.
+const baselineSchema = z.array(z.string().min(1)).max(50);
+
 /**
  * Persist the standing batting order (#10).
  *
@@ -34,20 +46,21 @@ const orderSchema = z.array(z.string().min(1).nullable()).max(50);
 export async function saveBattingOrderAction(formData: FormData) {
   const teamId = extractTeamId(formData);
 
-  let submitted: unknown;
   try {
-    submitted = JSON.parse(String(formData.get("order")));
-  } catch {
-    redirect(`/t/${teamId}/chart?error=invalid-order`);
-  }
-
-  const parsed = orderSchema.safeParse(submitted);
-  if (!parsed.success) {
-    redirect(`/t/${teamId}/chart?error=invalid-order`);
-  }
-
-  try {
+    // Access first, before the payload is touched. Server actions POST to the
+    // page URL and this one is reachable without a session, so parsing ahead
+    // of the check means an anonymous caller decides how much JSON we parse.
+    // Nothing below this line runs for someone who isn't a coach on this team.
     await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
+
+    const parsed = orderSchema.safeParse(parseJson(formData.get("order")));
+    // The baseline is the order as loaded, so it has no empty slots to allow.
+    const parsedBaseline = baselineSchema.safeParse(
+      parseJson(formData.get("baseline")),
+    );
+    if (!parsed.success || !parsedBaseline.success) {
+      redirect(`/t/${teamId}/chart?error=invalid-order`);
+    }
 
     const [team, entries] = await Promise.all([
       getTeamById(teamId),
@@ -64,6 +77,22 @@ export async function saveBattingOrderAction(formData: FormData) {
     );
     if (!result.ok) {
       redirect(`/t/${teamId}/chart?error=${result.reason}`);
+    }
+
+    // Lost-update guard — the same hazard the positions action documents at
+    // length, on the other chart column. `saveBattingOrder` nulls every
+    // battingOrder on the team and rewrites the whole order, so a second coach
+    // saving a board they loaded before the first coach's save erases it
+    // outright, with no history to recover from (AGENTS.md).
+    //
+    // Per-column on purpose: another coach moving players around the diamond
+    // is not a reason to refuse a batting-order save, since the two writes
+    // touch different columns and cannot lose each other's work.
+    //
+    // Narrows the window rather than closing it — see the positions action for
+    // why the read-then-write gap is left as it is.
+    if (!sameOrder(storedBattingOrder(entries), parsedBaseline.data)) {
+      redirect(`/t/${teamId}/chart?error=chart-changed`);
     }
 
     await saveBattingOrder(teamId, result.assignments);
