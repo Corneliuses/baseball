@@ -2,9 +2,12 @@ import {
   DIAMOND_GEOMETRY,
   DIAMOND_POLYGON,
   POSITION_COORDS,
-  diamondHeight,
   outfieldZoneCoords,
 } from "@/components/diamond-geometry";
+import {
+  NO_CATCHER_TEXT,
+  NoCatcherMarker,
+} from "@/components/NoCatcherMarker";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import type { Position } from "@/generated/prisma/enums";
 import type { ChartViewPlayer } from "@/lib/chart-view";
@@ -137,9 +140,9 @@ export function Diamond({
   const zone = allPlay ? outfield : [];
   const zoneCoords = outfieldZoneCoords(zone.length);
 
-  // Keyed on the marker, not on allPlay: a stale CATCHER row still draws one at
-  // y=452 and still needs the taller box, or its name clips off the bottom.
-  const height = diamondHeight(drawn.includes("CATCHER"));
+  // Not `allPlay` on its own: a stale CATCHER row draws a real marker there, and
+  // the spot can't say both "somebody plays here" and "nobody does".
+  const noCatcher = !drawn.includes("CATCHER");
 
   return (
     <>
@@ -147,7 +150,7 @@ export function Diamond({
           SVG's aria-label and nothing inside it, so the assignments would
           otherwise be unreachable without sight. */}
       <svg
-        viewBox={`0 0 ${DIAMOND_GEOMETRY.width} ${height}`}
+        viewBox={`0 0 ${DIAMOND_GEOMETRY.width} ${DIAMOND_GEOMETRY.height}`}
         aria-hidden="true"
         focusable="false"
         className="mx-auto w-full max-w-sm"
@@ -157,6 +160,8 @@ export function Diamond({
           className="fill-none stroke-border"
           strokeWidth={2}
         />
+
+        {noCatcher ? <NoCatcherMarker /> : null}
 
         {drawn.map((position) => {
           const { x, y } = POSITION_COORDS[position];
@@ -183,6 +188,7 @@ export function Diamond({
       </svg>
 
       <ul className="sr-only">
+        {noCatcher ? <li>{NO_CATCHER_TEXT}</li> : null}
         {drawn.map((position) => {
           const player = byPosition.get(position);
           return (

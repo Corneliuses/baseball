@@ -3,7 +3,6 @@ import { describe, it, expect } from "vitest";
 import {
   DIAMOND_GEOMETRY,
   POSITION_COORDS,
-  diamondHeight,
   outfieldZoneCoords,
   positionPercent,
 } from "./diamond-geometry";
@@ -12,38 +11,22 @@ import {
 /// reach it, or an outfielder's circle sits on top of the middle infielders.
 const INFIELD_BACK = 230;
 
-describe("diamondHeight", () => {
-  it("keeps the full box when a catcher is drawn", () => {
-    // The catcher's RSVP tag lands at 452 + 47 = 499, and clipping it would be
-    // silent — an off-canvas name renders without error.
-    expect(diamondHeight(true)).toBe(DIAMOND_GEOMETRY.height);
+describe("DIAMOND_GEOMETRY", () => {
+  it("is tall enough for the catcher's name and RSVP tag", () => {
+    // The clipping this guards against is silent — an off-canvas name renders
+    // without error and simply cannot be seen.
     expect(POSITION_COORDS.CATCHER.y + DIAMOND_GEOMETRY.tagOffset).toBeLessThan(
-      diamondHeight(true),
+      DIAMOND_GEOMETRY.height,
     );
-  });
-
-  it("drops the catcher's band when there is none", () => {
-    const height = diamondHeight(false);
-    expect(height).toBeLessThan(DIAMOND_GEOMETRY.height);
-    // Still room for the pitcher's tag and the whole plate at y=420.
-    expect(POSITION_COORDS.PITCHER.y + DIAMOND_GEOMETRY.tagOffset).toBeLessThan(
-      height,
-    );
-    expect(height).toBeGreaterThan(420);
   });
 });
 
 describe("positionPercent", () => {
-  it("scales against the box it will actually be placed in", () => {
-    const tall = positionPercent("PITCHER", true);
-    const short = positionPercent("PITCHER", false);
-
-    expect(tall.x).toBe(short.x);
-    // Same marker, shorter box — so it sits proportionally lower.
-    expect(short.y).toBeGreaterThan(tall.y);
-    expect(tall.y).toBeCloseTo(
-      (POSITION_COORDS.PITCHER.y / DIAMOND_GEOMETRY.height) * 100,
-    );
+  it("scales the coordinates against the box", () => {
+    expect(positionPercent("CATCHER")).toEqual({
+      x: (POSITION_COORDS.CATCHER.x / DIAMOND_GEOMETRY.width) * 100,
+      y: (POSITION_COORDS.CATCHER.y / DIAMOND_GEOMETRY.height) * 100,
+    });
   });
 });
 

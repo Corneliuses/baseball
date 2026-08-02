@@ -256,6 +256,24 @@ describe("ViewPage chart rendering", () => {
     expect(html).toContain(">P<");
   });
 
+  it("marks the empty catcher spot with a filled circle rather than a gap", async () => {
+    // A blank spot behind the plate reads as something missing from the chart;
+    // the disc says the level simply doesn't have the position.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+
+    const html = await render();
+
+    expect(html).toContain("fill-muted-foreground/30");
+    expect(html).toContain("the coach pitches");
+  });
+
+  it("draws no such circle when a catcher is a real spot", async () => {
+    // allPlay off by default in this file — nine named positions, C among them.
+    const html = await render();
+
+    expect(html).not.toContain("fill-muted-foreground/30");
+  });
+
   it("still draws an allPlay team's stale catcher row", async () => {
     // Same reasoning as the stale named-outfield row below: the coach's next
     // save collapses it, and until then nobody vanishes off the diamond.
@@ -273,16 +291,8 @@ describe("ViewPage chart rendering", () => {
     const html = await render();
 
     expect(html).toContain(">C<");
-    // ...and in the taller box, or that marker's name clips off the bottom.
-    expect(html).toContain('viewBox="0 0 400 520"');
-  });
-
-  it("drops the catcher's band from the box when no catcher is drawn", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
-
-    const html = await render();
-
-    expect(html).toContain('viewBox="0 0 400 440"');
+    // A real marker there, so no disc claiming nobody plays it.
+    expect(html).not.toContain("fill-muted-foreground/30");
   });
 
   it("still draws an allPlay team's stale named-outfield row", async () => {

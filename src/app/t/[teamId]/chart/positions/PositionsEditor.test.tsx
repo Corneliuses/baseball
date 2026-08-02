@@ -66,6 +66,30 @@ describe("PositionsEditor", () => {
     expect(screen.queryByRole("region", { name: "Bench" })).not.toBeInTheDocument();
   });
 
+  it("marks the catcher's empty spot with a filled circle under allPlay", () => {
+    // Not a drop target and not an "Open" marker — a solid disc, so the coach
+    // reads "no catcher at this level" rather than "a target failed to render".
+    render(
+      <PositionsEditor teamId="team-1" allPlay={true} entries={[entry("a")]} />,
+    );
+
+    const field = screen.getByRole("region", { name: "Diamond" });
+    expect(field.querySelector("circle")).toHaveClass(
+      "fill-muted-foreground/30",
+    );
+    expect(field).toHaveTextContent("the coach pitches");
+  });
+
+  it("draws no such circle when the catcher is a real spot", () => {
+    render(
+      <PositionsEditor teamId="team-1" allPlay={false} entries={[entry("a")]} />,
+    );
+
+    const field = screen.getByRole("region", { name: "Diamond" });
+    expect(field.querySelector("circle")).toBeNull();
+    expect(field).toHaveTextContent("C");
+  });
+
   it("puts the zone above the diamond", () => {
     // The zone is where every player starts and where the coach's thumb comes
     // back between drags; below a 400x520 board it is off the bottom of a

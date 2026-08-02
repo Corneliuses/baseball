@@ -6,37 +6,23 @@ import type { Position } from "@/generated/prisma/enums";
 /// be its own kind of bug.
 ///
 /// Coordinates mirror where each position actually stands, and the **catcher
-/// sits below home plate at y=452, which is why the full viewBox is 520 tall**:
-/// the view page draws a name at y+34 and an RSVP tag at y+47 under each
-/// marker, so a shorter viewBox silently clips the catcher's name and state off
-/// the bottom. Check the lowest marker's y+47 against the viewBox height before
+/// sits below home plate at y=452, which is why the viewBox is 520 tall**: the
+/// view page draws a name at y+34 and an RSVP tag at y+47 under each marker, so
+/// a shorter viewBox silently clips the catcher's name and state off the
+/// bottom. Check the lowest marker's y+47 against the viewBox height before
 /// moving anything. The clipping this guards against is silent — an off-canvas
 /// name renders without error and simply cannot be seen.
 ///
-/// `catcherlessHeight` is that same box with the catcher's band cut off, for an
-/// allPlay team, which has no catcher (`ALL_PLAY_INFIELD_POSITIONS`). The
-/// lowest thing left is the pitcher's RSVP tag at 338+47=385, then the plate at
-/// y=420 — so 440 keeps the whole diamond and drops only dead space. Ask
-/// `diamondHeight` for it rather than picking a number: the answer turns on
-/// whether a catcher marker is actually drawn, and an allPlay team with a stale
-/// CATCHER row still draws one.
+/// One height for every board, including an allPlay team's — which has no
+/// catcher (`ALL_PLAY_INFIELD_POSITIONS`) but still draws that spot, as the
+/// solid disc in `NoCatcherMarker`.
 export const DIAMOND_GEOMETRY = {
   width: 400,
   height: 520,
-  catcherlessHeight: 440,
   markerRadius: 20,
   nameOffset: 34,
   tagOffset: 47,
 } as const;
-
-/// The viewBox height to draw at. Keyed on whether a catcher marker appears —
-/// not on allPlay — because it is the marker at y=452 that needs the room, and
-/// a stale CATCHER row draws one on an allPlay board too.
-export function diamondHeight(withCatcher: boolean): number {
-  return withCatcher
-    ? DIAMOND_GEOMETRY.height
-    : DIAMOND_GEOMETRY.catcherlessHeight;
-}
 
 export const POSITION_COORDS: Record<Position, { x: number; y: number }> = {
   CATCHER: { x: 200, y: 452 },
@@ -58,17 +44,11 @@ export const DIAMOND_POLYGON = "200,420 290,320 200,230 110,320";
 /// with `getBoundingClientRect` and drags HTML chips by writing `transform`.
 /// Keeping targets and chips in the same coordinate system avoids fighting
 /// SVG's.
-///
-/// `withCatcher` must match what the caller passed to `diamondHeight` for the
-/// box it is positioning inside, or every marker lands at the wrong depth.
-export function positionPercent(
-  position: Position,
-  withCatcher: boolean,
-): { x: number; y: number } {
+export function positionPercent(position: Position): { x: number; y: number } {
   const { x, y } = POSITION_COORDS[position];
   return {
     x: (x / DIAMOND_GEOMETRY.width) * 100,
-    y: (y / diamondHeight(withCatcher)) * 100,
+    y: (y / DIAMOND_GEOMETRY.height) * 100,
   };
 }
 

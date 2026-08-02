@@ -22,9 +22,12 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   DIAMOND_GEOMETRY,
   DIAMOND_POLYGON,
-  diamondHeight,
   positionPercent,
 } from "@/components/diamond-geometry";
+import {
+  NO_CATCHER_TEXT,
+  NoCatcherMarker,
+} from "@/components/NoCatcherMarker";
 import { Button } from "@/components/ui/button";
 import type { Position } from "@/generated/prisma/enums";
 import {
@@ -233,22 +236,21 @@ function Field({
   draft: PositionsDraft;
   byId: Map<string, PositionsEditorEntry>;
 }) {
-  // An allPlay board has no catcher, so the band below home plate that holds
-  // one is dead space. `positionPercent` has to be told the same thing, or
-  // every target lands at the wrong depth inside the box.
-  const withCatcher = draft.positions.includes("CATCHER");
-  const height = diamondHeight(withCatcher);
+  // An allPlay board has no catcher. The spot is still drawn — as the disc
+  // that says nobody plays it — so the coach isn't left wondering whether the
+  // target failed to render.
+  const noCatcher = !draft.positions.includes("CATCHER");
 
   return (
     <section aria-label="Diamond">
       <div
         className="relative mx-auto w-full max-w-sm"
         style={{
-          aspectRatio: `${DIAMOND_GEOMETRY.width} / ${height}`,
+          aspectRatio: `${DIAMOND_GEOMETRY.width} / ${DIAMOND_GEOMETRY.height}`,
         }}
       >
         <svg
-          viewBox={`0 0 ${DIAMOND_GEOMETRY.width} ${height}`}
+          viewBox={`0 0 ${DIAMOND_GEOMETRY.width} ${DIAMOND_GEOMETRY.height}`}
           aria-hidden="true"
           focusable="false"
           className="absolute inset-0 h-full w-full"
@@ -258,13 +260,15 @@ function Field({
             className="fill-none stroke-border"
             strokeWidth={2}
           />
+          {noCatcher ? <NoCatcherMarker /> : null}
         </svg>
+
+        {noCatcher ? <p className="sr-only">{NO_CATCHER_TEXT}</p> : null}
 
         {draft.positions.map((position) => (
           <PositionTarget
             key={position}
             position={position}
-            withCatcher={withCatcher}
             entry={
               draft.assigned[position] !== undefined
                 ? byId.get(draft.assigned[position])
@@ -279,15 +283,13 @@ function Field({
 
 function PositionTarget({
   position,
-  withCatcher,
   entry,
 }: {
   position: Position;
-  withCatcher: boolean;
   entry: PositionsEditorEntry | undefined;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: position });
-  const { x, y } = positionPercent(position, withCatcher);
+  const { x, y } = positionPercent(position);
 
   return (
     <div
