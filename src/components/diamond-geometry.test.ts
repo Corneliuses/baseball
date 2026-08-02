@@ -81,6 +81,18 @@ describe("outfieldZoneCoords", () => {
     expect(outfieldZoneCoords(8)[0].y).not.toBe(outfieldZoneCoords(8)[7].y);
   });
 
+  it("packs its two rows fuller rather than opening a third", () => {
+    // `perRowTarget` opens the second row, it does not cap either one: 12
+    // outfielders is 6 and 6, not 5 and 5 with two players dropped. That needs
+    // a 17-player allPlay roster to reach, but the alternative — a third row —
+    // would land on the middle infielders at y=252.
+    const coords = outfieldZoneCoords(12);
+
+    expect(coords).toHaveLength(12);
+    expect(new Set(coords.map((coord) => Math.round(coord.y))).size).toBeLessThanOrEqual(6);
+    expect(Math.max(...coords.map((coord) => coord.y))).toBeLessThan(INFIELD_BACK);
+  });
+
   it("keeps every marker inside the box and clear of the infield", () => {
     // A whole youth roster in the outfield is not a real team, but the layout
     // must not fall off the canvas or land on the middle infielders if one

@@ -68,8 +68,10 @@ const OUTFIELD_ZONE = {
   /// Cap on that half-spread. Names are centred under their marker, so this is
   /// what keeps the outermost name inside the 400-wide box.
   maxSpread: 145,
-  /// Rows hold at most this many.
-  perRow: 5,
+  /// How many markers a row aims to hold: exceed it and a second row opens.
+  /// Not a hard cap — past `perRowTarget * maxRows` outfielders the two rows
+  /// simply get fuller, which is the intended degradation (see `maxRows`).
+  perRowTarget: 5,
   /// A third row would reach the middle infielders at y=252, so a very deep
   /// roster packs its two rows tighter rather than growing downward.
   maxRows: 2,
@@ -99,7 +101,7 @@ export function outfieldZoneCoords(
 
   const rows = Math.min(
     OUTFIELD_ZONE.maxRows,
-    Math.ceil(count / OUTFIELD_ZONE.perRow),
+    Math.ceil(count / OUTFIELD_ZONE.perRowTarget),
   );
   const coords: { x: number; y: number }[] = [];
   let placed = 0;
