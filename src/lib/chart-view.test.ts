@@ -46,6 +46,23 @@ describe("buildChartView", () => {
     expect(view.lineup.some((p) => p.playerId === "eli")).toBe(false);
   });
 
+  it("collects players with no position, in roster order", () => {
+    // The outfield on an allPlay team, the bench otherwise — buildChartView
+    // doesn't know which, and deliberately doesn't decide.
+    const view = buildChartView(fullChart, noRsvps);
+
+    expect(view.unassigned.map((p) => p.playerId)).toEqual(["eli"]);
+  });
+
+  it("attaches RSVP state to unassigned players like everyone else", () => {
+    const view = buildChartView(
+      fullChart,
+      new Map<string, RsvpState>([["eli", "declined"]]),
+    );
+
+    expect(view.unassigned[0].rsvpState).toBe("declined");
+  });
+
   it("maps assigned positions to their player", () => {
     const view = buildChartView(fullChart, noRsvps);
 

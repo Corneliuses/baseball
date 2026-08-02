@@ -56,6 +56,7 @@ import {
   listReturningCandidates,
   removeRosterEntry,
   saveBattingOrder,
+  savePositions,
   updateRosterEntry as updateRosterEntryFn,
 } from "./roster";
 
@@ -574,6 +575,77 @@ describe("saveBattingOrder", () => {
 
     await expect(
       saveBattingOrder("team-1", [{ entryId: "entry-a", battingOrder: 1 }]),
+    ).rejects.toMatchObject({ code: "P2025" });
+  });
+});
+
+describe("savePositions", () => {
+  beforeEach(() => {
+    // Array-form $transaction, as in saveBattingOrder above.
+    transaction.mockResolvedValue([]);
+  });
+
+  it("runs both phases in one transaction: null-all first, then final values", async () => {
+    updateManyRosterEntries.mockReturnValue("phase-1");
+    updateRosterEntry.mockReturnValueOnce("upd-a").mockReturnValueOnce("upd-b");
+
+    await savePositions("team-1", [
+      { entryId: "entry-a", position: "PITCHER" },
+      { entryId: "entry-b", position: "SECOND_BASE" },
+    ]);
+
+    // Moving one player onto a position another player is moving off of would
+    // transiently duplicate a value under any per-row sequence; the
+    // non-deferrable unique index forbids that, so phase 1 clears the column
+    // for the whole team before any final value is written.
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(transaction).toHaveBeenCalledWith(["phase-1", "upd-a", "upd-b"]);
+
+    expect(updateManyRosterEntries).toHaveBeenCalledWith({
+      where: { teamId: "team-1" },
+      data: { position: null },
+    });
+  });
+
+  it("scopes every phase-2 update by teamId", async () => {
+    await savePositions("team-1", [
+      { entryId: "entry-a", position: "CATCHER" },
+      { entryId: "entry-b", position: "SHORTSTOP" },
+    ]);
+
+    expect(updateRosterEntry).toHaveBeenNthCalledWith(1, {
+      where: { id: "entry-a", teamId: "team-1" },
+      data: { position: "CATCHER" },
+    });
+    // A forged or stale entryId matches no row under this where clause and
+    // throws P2025, rolling the whole save back.
+    expect(updateRosterEntry).toHaveBeenNthCalledWith(2, {
+      where: { id: "entry-b", teamId: "team-1" },
+      data: { position: "SHORTSTOP" },
+    });
+  });
+
+  it("issues no phase-2 statement for an empty board — phase 1 benches everyone", async () => {
+    await savePositions("team-1", []);
+
+    expect(updateManyRosterEntries).toHaveBeenCalledTimes(1);
+    expect(updateRosterEntry).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing for players left in the zone — phase 1 is their null", async () => {
+    // An allPlay team: five infielders placed, everyone else in the outfield.
+    // The outfielders get no statement at all, which is what makes the saved
+    // chart identical to the board the coach was looking at.
+    await savePositions("team-1", [{ entryId: "entry-a", position: "PITCHER" }]);
+
+    expect(updateRosterEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates transaction failures", async () => {
+    transaction.mockRejectedValue(Object.assign(new Error("gone"), { code: "P2025" }));
+
+    await expect(
+      savePositions("team-1", [{ entryId: "entry-a", position: "PITCHER" }]),
     ).rejects.toMatchObject({ code: "P2025" });
   });
 });

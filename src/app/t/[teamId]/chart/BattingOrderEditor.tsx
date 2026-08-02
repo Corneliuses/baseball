@@ -31,6 +31,7 @@ import {
 } from "@/lib/chart";
 
 import { saveBattingOrderAction } from "./actions";
+import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "./drag-activation";
 
 /// The editor's slice of a roster entry — chart-view's render model minus the
 /// fields this page doesn't show. RSVP state is deliberately absent: the
@@ -78,15 +79,8 @@ export function BattingOrderEditor({
   );
 
   const sensors = useSensors(
-    // Desktop: a small distance threshold separates clicks from drags.
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    // Touch: the activation delay is a stated product requirement (Decision
-    // 10), not a nicety — it is what lets a coach scroll this page on a phone
-    // without every touch starting a drag. Movement within the tolerance
-    // keeps the delay timer alive; movement beyond it is a scroll.
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 250, tolerance: 8 },
-    }),
+    useSensor(MouseSensor, { activationConstraint: MOUSE_ACTIVATION }),
+    useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),

@@ -1,0 +1,364 @@
+"use client";
+
+import { useMemo, useRef, useState } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  pointerWithin,
+  rectIntersection,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragStartEvent,
+  type KeyboardCoordinateGetter,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+
+import {
+  DIAMOND_GEOMETRY,
+  DIAMOND_POLYGON,
+  positionPercent,
+} from "@/components/diamond-geometry";
+import { Button } from "@/components/ui/button";
+import type { Position } from "@/generated/prisma/enums";
+import {
+  buildPositionsDraft,
+  nextDroppableId,
+  POSITION_POOL_ID,
+  positionOf,
+  resolvePositionDrop,
+  samePositions,
+  type PositionsDraft,
+} from "@/lib/chart";
+import { POSITION_LABELS } from "@/lib/positions";
+
+import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "../drag-activation";
+import { savePositionsAction } from "./actions";
+
+/// The editor's slice of a roster entry. RSVP state is deliberately absent —
+/// the page never loads RSVPs, so the assignable pool structurally cannot be
+/// filtered by who has replied (#7, and the issue says so explicitly).
+export type PositionsEditorEntry = {
+  entryId: string;
+  playerName: string;
+  jerseyNumber: number | null;
+  position: Position | null;
+};
+
+type PositionsEditorProps = {
+  teamId: string;
+  allPlay: boolean;
+  entries: PositionsEditorEntry[];
+};
+
+/// Only the first name fits on a marker — the same reason the view page's
+/// diamond shortens names. The zone below shows full names.
+function shortName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
+/**
+ * Drag players onto the diamond (#11). A thin shell over the pure draft logic
+ * in src/lib/chart.ts: every drag outcome is `resolvePositionDrop`, tested
+ * there, because jsdom cannot simulate a real pointer drag.
+ *
+ * No Motion imports here, ever: dnd-kit positions drags by writing
+ * `transform`, and Motion's `layout` prop animates `transform` too — together
+ * a dragged chip lags the finger or snaps back (AGENTS.md).
+ *
+ * No autosave: edits live in local state until the explicit Save posts them,
+ * and Cancel restores the board the page loaded.
+ */
+export function PositionsEditor({
+  teamId,
+  allPlay,
+  entries,
+}: PositionsEditorProps) {
+  const original = useMemo(
+    () => buildPositionsDraft(entries, allPlay),
+    [entries, allPlay],
+  );
+  const [draft, setDraft] = useState<PositionsDraft>(original);
+
+  const byId = useMemo(
+    () => new Map(entries.map((entry) => [entry.entryId, entry])),
+    [entries],
+  );
+
+  // Where the keyboard drag currently "hovers". A ref, not state: the
+  // coordinate getter runs during dnd-kit's own event handling and must not
+  // trigger a render to read its own last answer.
+  const keyboardTarget = useRef<string>(POSITION_POOL_ID);
+
+  const coordinateGetter: KeyboardCoordinateGetter = (
+    event,
+    { currentCoordinates, context },
+  ) => {
+    const step =
+      event.code === "ArrowRight" || event.code === "ArrowDown"
+        ? 1
+        : event.code === "ArrowLeft" || event.code === "ArrowUp"
+          ? -1
+          : 0;
+    if (step === 0) {
+      return undefined;
+    }
+    event.preventDefault();
+
+    const next = nextDroppableId(draft.positions, keyboardTarget.current, step);
+    const targetRect = context.droppableRects.get(next);
+    const activeRect = context.active?.rect.current.translated;
+    if (!targetRect || !activeRect) {
+      return undefined;
+    }
+    keyboardTarget.current = next;
+
+    // Align centres rather than corners, so the collision pass below finds the
+    // target whatever the two elements' relative sizes are.
+    return {
+      x:
+        currentCoordinates.x +
+        (targetRect.left + targetRect.width / 2) -
+        (activeRect.left + activeRect.width / 2),
+      y:
+        currentCoordinates.y +
+        (targetRect.top + targetRect.height / 2) -
+        (activeRect.top + activeRect.height / 2),
+    };
+  };
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: MOUSE_ACTIVATION }),
+    useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION }),
+    useSensor(KeyboardSensor, { coordinateGetter }),
+  );
+
+  const dirty = !samePositions(draft.assigned, original.assigned);
+
+  function handleDragStart({ active }: DragStartEvent) {
+    keyboardTarget.current =
+      positionOf(draft, String(active.id)) ?? POSITION_POOL_ID;
+  }
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    setDraft((current) =>
+      resolvePositionDrop(
+        current,
+        String(active.id),
+        over ? String(over.id) : null,
+      ),
+    );
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      // pointerWithin gives the gesture a coach expects: a drop on empty grass
+      // hits no target and cancels, where closestCenter would snap it to the
+      // nearest base. It returns nothing for keyboard drags (no pointer), so
+      // rectIntersection covers those.
+      collisionDetection={collisionDetection}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="space-y-6">
+        <Field draft={draft} byId={byId} />
+        <Zone draft={draft} byId={byId} allPlay={allPlay} />
+
+        <form
+          action={savePositionsAction}
+          className="flex items-center justify-end gap-2"
+        >
+          <input type="hidden" name="teamId" value={teamId} />
+          <input
+            type="hidden"
+            name="positions"
+            value={JSON.stringify(draft.assigned)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!dirty}
+            onClick={() => setDraft(original)}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!dirty}>
+            Save positions
+          </Button>
+        </form>
+      </div>
+    </DndContext>
+  );
+}
+
+const collisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  return pointerCollisions.length > 0
+    ? pointerCollisions
+    : rectIntersection(args);
+};
+
+/// The diamond: an SVG outline with absolutely positioned HTML drop targets on
+/// top. The targets are HTML because dnd-kit measures with
+/// `getBoundingClientRect` and moves chips with CSS `transform`; mixing in SVG
+/// coordinate space buys nothing and breaks measurement.
+function Field({
+  draft,
+  byId,
+}: {
+  draft: PositionsDraft;
+  byId: Map<string, PositionsEditorEntry>;
+}) {
+  return (
+    <section aria-label="Diamond">
+      <div
+        className="relative mx-auto w-full max-w-sm"
+        style={{
+          aspectRatio: `${DIAMOND_GEOMETRY.width} / ${DIAMOND_GEOMETRY.height}`,
+        }}
+      >
+        <svg
+          viewBox={`0 0 ${DIAMOND_GEOMETRY.width} ${DIAMOND_GEOMETRY.height}`}
+          aria-hidden="true"
+          focusable="false"
+          className="absolute inset-0 h-full w-full"
+        >
+          <polygon
+            points={DIAMOND_POLYGON}
+            className="fill-none stroke-border"
+            strokeWidth={2}
+          />
+        </svg>
+
+        {draft.positions.map((position) => (
+          <PositionTarget
+            key={position}
+            position={position}
+            entry={
+              draft.assigned[position] !== undefined
+                ? byId.get(draft.assigned[position])
+                : undefined
+            }
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PositionTarget({
+  position,
+  entry,
+}: {
+  position: Position;
+  entry: PositionsEditorEntry | undefined;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: position });
+  const { x, y } = positionPercent(position);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ left: `${x}%`, top: `${y}%` }}
+      className={`absolute flex w-20 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-md border p-1 text-center ${
+        isOver ? "border-ring bg-muted/60" : "border-dashed border-border"
+      }`}
+    >
+      <span className="text-[11px] font-bold text-foreground">
+        {POSITION_LABELS[position]}
+      </span>
+      {entry !== undefined ? (
+        <Chip entry={entry} label={shortName(entry.playerName)} />
+      ) : (
+        <span className="text-[11px] italic text-muted-foreground">Open</span>
+      )}
+    </div>
+  );
+}
+
+/// The outfield (allPlay) or the bench (not allPlay). Both persist as
+/// `position = null` — the label is the only difference, and it matters: on an
+/// allPlay team nobody sits.
+function Zone({
+  draft,
+  byId,
+  allPlay,
+}: {
+  draft: PositionsDraft;
+  byId: Map<string, PositionsEditorEntry>;
+  allPlay: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: POSITION_POOL_ID });
+  const title = allPlay ? "Outfield" : "Bench";
+  const empty = allPlay
+    ? "Drag a player here to move them to the outfield."
+    : "Drag a player here to sit them out.";
+
+  return (
+    <section aria-label={title}>
+      <h4 className="mb-2 text-sm font-medium text-muted-foreground">{title}</h4>
+      <div
+        ref={setNodeRef}
+        className={`flex min-h-16 flex-wrap gap-2 rounded-md border border-dashed p-3 ${
+          isOver ? "border-ring bg-muted/40" : "border-border"
+        }`}
+      >
+        {draft.pool.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{empty}</p>
+        ) : (
+          draft.pool.map((entryId) => {
+            const entry = byId.get(entryId);
+            return entry !== undefined ? (
+              <Chip
+                key={entryId}
+                entry={entry}
+                label={entry.playerName}
+                showJersey
+              />
+            ) : null;
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+/// A draggable player. Chips are draggable only, never droppable — the drop
+/// target under a seated player is the position box around them, so a drop
+/// always resolves to a position rather than to whoever happens to be standing
+/// there.
+function Chip({
+  entry,
+  label,
+  showJersey = false,
+}: {
+  entry: PositionsEditorEntry;
+  label: string;
+  showJersey?: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: entry.entryId });
+
+  return (
+    <span
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform) }}
+      {...attributes}
+      {...listeners}
+      className={`inline-flex cursor-grab touch-manipulation select-none items-center gap-1 rounded border border-border bg-background px-2 py-1 text-xs font-medium text-foreground ${
+        isDragging ? "z-10 cursor-grabbing opacity-80 shadow-md" : ""
+      }`}
+    >
+      {label}
+      {showJersey && entry.jerseyNumber !== null ? (
+        <span className="text-muted-foreground">#{entry.jerseyNumber}</span>
+      ) : null}
+    </span>
+  );
+}

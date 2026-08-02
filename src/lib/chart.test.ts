@@ -1,21 +1,48 @@
 import { describe, expect, it } from "vitest";
 
+import type { Position } from "@/generated/prisma/enums";
+
 import {
   buildBattingDraft,
+  buildPositionsDraft,
   chartWriteFailure,
+  droppablePositions,
   emptySlotId,
+  nextDroppableId,
+  placeAtPosition,
   placeInSlot,
+  POSITION_POOL_ID,
+  positionOf,
   resolveDrop,
+  resolvePositionDrop,
   sameOrder,
+  samePositions,
   slotCount,
   unassign,
   UNASSIGNED_ID,
+  unassignPosition,
   validateBattingOrder,
+  validatePositions,
   type BattingDraft,
+  type PositionsDraft,
 } from "./chart";
 
 function entry(entryId: string, battingOrder: number | null = null) {
   return { entryId, battingOrder };
+}
+
+function fielder(entryId: string, position: Position | null = null) {
+  return { entryId, position };
+}
+
+/// A draft built by hand rather than through buildPositionsDraft, so a test
+/// can start from an arbitrary board state.
+function draftOf(
+  allPlay: boolean,
+  assigned: Partial<Record<Position, string>>,
+  pool: string[] = [],
+): PositionsDraft {
+  return { positions: droppablePositions(allPlay), assigned, pool };
 }
 
 describe("slotCount", () => {
@@ -357,6 +384,347 @@ describe("save then reload round trip", () => {
   });
 });
 
+describe("droppablePositions", () => {
+  it("is the six infield spots under allPlay — the outfield is one zone", () => {
+    expect(droppablePositions(true)).toEqual([
+      "PITCHER",
+      "CATCHER",
+      "FIRST_BASE",
+      "SECOND_BASE",
+      "THIRD_BASE",
+      "SHORTSTOP",
+    ]);
+  });
+
+  it("is all nine when allPlay is off", () => {
+    expect(droppablePositions(false)).toHaveLength(9);
+    expect(droppablePositions(false)).toContain("CENTER_FIELD");
+  });
+});
+
+describe("buildPositionsDraft", () => {
+  it("seats assigned players and pools the rest", () => {
+    const draft = buildPositionsDraft(
+      [fielder("a", "PITCHER"), fielder("b"), fielder("c", "SHORTSTOP")],
+      false,
+    );
+    expect(draft.assigned).toEqual({ PITCHER: "a", SHORTSTOP: "c" });
+    expect(draft.pool).toEqual(["b"]);
+  });
+
+  it("pools named outfield players under allPlay instead of seating them", () => {
+    // Hand-set during #9, or left behind when allPlay was switched on. The
+    // coach sees them in the outfield zone before anything is written.
+    const draft = buildPositionsDraft(
+      [fielder("a", "PITCHER"), fielder("b", "LEFT_FIELD"), fielder("c")],
+      true,
+    );
+    expect(draft.assigned).toEqual({ PITCHER: "a" });
+    expect(draft.pool).toEqual(["b", "c"]);
+  });
+
+  it("keeps the caller's order in the pool", () => {
+    const draft = buildPositionsDraft(
+      [fielder("c"), fielder("a"), fielder("b")],
+      true,
+    );
+    expect(draft.pool).toEqual(["c", "a", "b"]);
+  });
+
+  it("pools a second claimant rather than dropping them", () => {
+    const draft = buildPositionsDraft(
+      [fielder("a", "PITCHER"), fielder("b", "PITCHER")],
+      true,
+    );
+    expect(draft.assigned).toEqual({ PITCHER: "a" });
+    expect(draft.pool).toEqual(["b"]);
+  });
+
+  it("handles an empty roster and a fully unset chart", () => {
+    expect(buildPositionsDraft([], true).pool).toEqual([]);
+    expect(buildPositionsDraft([], true).assigned).toEqual({});
+    const unset = buildPositionsDraft([fielder("a"), fielder("b")], false);
+    expect(unset.assigned).toEqual({});
+    expect(unset.pool).toEqual(["a", "b"]);
+  });
+});
+
+describe("positionOf", () => {
+  const base = draftOf(false, { PITCHER: "a" }, ["x"]);
+
+  it("finds a seated player, and reports null otherwise", () => {
+    expect(positionOf(base, "a")).toBe("PITCHER");
+    expect(positionOf(base, "x")).toBe(null);
+    expect(positionOf(base, "nope")).toBe(null);
+  });
+});
+
+describe("placeAtPosition", () => {
+  const base = draftOf(false, { PITCHER: "a", CATCHER: "b" }, ["x", "y"]);
+
+  it("swaps two seated players", () => {
+    const next = placeAtPosition(base, "a", "CATCHER");
+    expect(next.assigned).toEqual({ PITCHER: "b", CATCHER: "a" });
+    expect(next.pool).toEqual(["x", "y"]);
+  });
+
+  it("moves a seated player to an empty spot, emptying their old one", () => {
+    const next = placeAtPosition(base, "a", "SHORTSTOP");
+    expect(next.assigned).toEqual({ CATCHER: "b", SHORTSTOP: "a" });
+  });
+
+  it("swaps a pooled player with a seated one", () => {
+    const next = placeAtPosition(base, "x", "PITCHER");
+    expect(next.assigned).toEqual({ PITCHER: "x", CATCHER: "b" });
+    // The displaced player takes the dragged player's place in the pool.
+    expect(next.pool).toEqual(["a", "y"]);
+  });
+
+  it("seats a pooled player at an empty spot", () => {
+    const next = placeAtPosition(base, "y", "SHORTSTOP");
+    expect(next.assigned).toEqual({
+      PITCHER: "a",
+      CATCHER: "b",
+      SHORTSTOP: "y",
+    });
+    expect(next.pool).toEqual(["x"]);
+  });
+
+  it("ignores a drop on the player's own position", () => {
+    expect(placeAtPosition(base, "a", "PITCHER")).toBe(base);
+  });
+
+  it("ignores unknown entries", () => {
+    expect(placeAtPosition(base, "nope", "SHORTSTOP")).toBe(base);
+  });
+
+  it("refuses a position this board doesn't have", () => {
+    // The structural half of Decision 1: an allPlay draft cannot be talked
+    // into holding an outfield assignment, whatever calls it.
+    const allPlay = draftOf(true, { PITCHER: "a" }, ["x"]);
+    expect(placeAtPosition(allPlay, "x", "LEFT_FIELD")).toBe(allPlay);
+  });
+
+  it("never mutates its input", () => {
+    placeAtPosition(base, "x", "PITCHER");
+    expect(base.assigned).toEqual({ PITCHER: "a", CATCHER: "b" });
+    expect(base.pool).toEqual(["x", "y"]);
+  });
+});
+
+describe("unassignPosition", () => {
+  const base = draftOf(true, { PITCHER: "a", CATCHER: "b" }, ["x"]);
+
+  it("empties the spot and appends the player to the pool", () => {
+    const next = unassignPosition(base, "a");
+    expect(next.assigned).toEqual({ CATCHER: "b" });
+    expect(next.pool).toEqual(["x", "a"]);
+  });
+
+  it("is a no-op for a pooled or unknown player", () => {
+    expect(unassignPosition(base, "x")).toBe(base);
+    expect(unassignPosition(base, "nope")).toBe(base);
+  });
+
+  it("never mutates its input", () => {
+    unassignPosition(base, "a");
+    expect(base.assigned).toEqual({ PITCHER: "a", CATCHER: "b" });
+  });
+});
+
+describe("samePositions", () => {
+  it("compares the diamond and ignores pool order", () => {
+    expect(samePositions({ PITCHER: "a" }, { PITCHER: "a" })).toBe(true);
+    expect(samePositions({ PITCHER: "a" }, { PITCHER: "b" })).toBe(false);
+    expect(samePositions({ PITCHER: "a" }, {})).toBe(false);
+    expect(samePositions({}, {})).toBe(true);
+    expect(
+      samePositions({ PITCHER: "a", CATCHER: "b" }, { CATCHER: "b", PITCHER: "a" }),
+    ).toBe(true);
+  });
+});
+
+describe("resolvePositionDrop", () => {
+  const base = draftOf(false, { PITCHER: "a", CATCHER: "b" }, ["x"]);
+
+  it("drops onto a position target by its enum name", () => {
+    const next = resolvePositionDrop(base, "x", "SHORTSTOP");
+    expect(next.assigned.SHORTSTOP).toBe("x");
+    expect(next.pool).toEqual([]);
+  });
+
+  it("drops onto a seated player's chip by resolving to their position", () => {
+    const next = resolvePositionDrop(base, "a", "b");
+    expect(next.assigned).toEqual({ PITCHER: "b", CATCHER: "a" });
+  });
+
+  it("drops onto the zone", () => {
+    const next = resolvePositionDrop(base, "a", POSITION_POOL_ID);
+    expect(next.assigned).toEqual({ CATCHER: "b" });
+    expect(next.pool).toEqual(["x", "a"]);
+  });
+
+  it("ignores a drop over nothing, itself, or empty grass", () => {
+    expect(resolvePositionDrop(base, "a", null)).toBe(base);
+    expect(resolvePositionDrop(base, "a", "a")).toBe(base);
+    expect(resolvePositionDrop(base, "a", "not-a-target")).toBe(base);
+  });
+
+  it("ignores an outfield target under allPlay", () => {
+    const allPlay = draftOf(true, {}, ["x"]);
+    expect(resolvePositionDrop(allPlay, "x", "RIGHT_FIELD")).toBe(allPlay);
+  });
+});
+
+describe("nextDroppableId", () => {
+  const infield = droppablePositions(true);
+
+  it("cycles forward through the positions and then the zone", () => {
+    expect(nextDroppableId(infield, "PITCHER", 1)).toBe("CATCHER");
+    expect(nextDroppableId(infield, "SHORTSTOP", 1)).toBe(POSITION_POOL_ID);
+    expect(nextDroppableId(infield, POSITION_POOL_ID, 1)).toBe("PITCHER");
+  });
+
+  it("cycles backward too", () => {
+    expect(nextDroppableId(infield, "CATCHER", -1)).toBe("PITCHER");
+    expect(nextDroppableId(infield, "PITCHER", -1)).toBe(POSITION_POOL_ID);
+  });
+
+  it("reaches the outfield only when allPlay is off", () => {
+    expect(nextDroppableId(droppablePositions(false), "SHORTSTOP", 1)).toBe(
+      "LEFT_FIELD",
+    );
+  });
+
+  it("starts at the first target for an id that isn't a droppable", () => {
+    expect(nextDroppableId(infield, "some-entry-id", 1)).toBe("PITCHER");
+  });
+});
+
+describe("validatePositions", () => {
+  const roster = ["a", "b", "c"];
+
+  it("accepts a chart and returns assignments in scorebook order", () => {
+    expect(
+      validatePositions({ SHORTSTOP: "c", PITCHER: "a" }, roster, true),
+    ).toEqual({
+      ok: true,
+      assignments: [
+        { entryId: "a", position: "PITCHER" },
+        { entryId: "c", position: "SHORTSTOP" },
+      ],
+    });
+  });
+
+  it("accepts a partial chart — unplaced players are the outfield or the bench", () => {
+    expect(validatePositions({}, roster, true)).toEqual({
+      ok: true,
+      assignments: [],
+    });
+    expect(validatePositions({ PITCHER: "a" }, roster, false)).toEqual({
+      ok: true,
+      assignments: [{ entryId: "a", position: "PITCHER" }],
+    });
+  });
+
+  it("rejects ids not on this roster", () => {
+    expect(validatePositions({ PITCHER: "intruder" }, roster, true)).toEqual({
+      ok: false,
+      reason: "unknown-entry",
+    });
+  });
+
+  it("rejects the same player at two positions", () => {
+    expect(
+      validatePositions({ PITCHER: "a", CATCHER: "a" }, roster, true),
+    ).toEqual({ ok: false, reason: "duplicate-entry" });
+  });
+
+  it("rejects a named outfield position for an allPlay team", () => {
+    // allPlay toggled on mid-edit: the coach should see the board they're
+    // actually saving, not have three assignments quietly dropped.
+    expect(validatePositions({ LEFT_FIELD: "a" }, roster, true)).toEqual({
+      ok: false,
+      reason: "invalid-position",
+    });
+  });
+
+  it("accepts that same outfield position when allPlay is off", () => {
+    expect(validatePositions({ LEFT_FIELD: "a" }, roster, false)).toEqual({
+      ok: true,
+      assignments: [{ entryId: "a", position: "LEFT_FIELD" }],
+    });
+  });
+
+  it("rejects a key that isn't a position at all", () => {
+    expect(validatePositions({ SHORTSTOPP: "a" }, roster, false)).toEqual({
+      ok: false,
+      reason: "invalid-position",
+    });
+  });
+});
+
+describe("positions save then reload round trip", () => {
+  function reload(
+    roster: readonly string[],
+    assignments: readonly { entryId: string; position: Position }[],
+    allPlay: boolean,
+  ) {
+    return buildPositionsDraft(
+      roster.map((entryId) => ({
+        entryId,
+        position:
+          assignments.find((a) => a.entryId === entryId)?.position ?? null,
+      })),
+      allPlay,
+    );
+  }
+
+  it("reloads an allPlay board to exactly what was persisted", () => {
+    const roster = ["a", "b", "c"];
+    const result = validatePositions({ PITCHER: "a", CATCHER: "b" }, roster, true);
+    if (!result.ok) throw new Error("expected ok");
+
+    const draft = reload(roster, result.assignments, true);
+    expect(draft.assigned).toEqual({ PITCHER: "a", CATCHER: "b" });
+    // 'c' persisted as null and comes back in the outfield zone.
+    expect(draft.pool).toEqual(["c"]);
+  });
+
+  it("survives a second save with no edits (idempotent)", () => {
+    const roster = ["a", "b", "c"];
+    const first = validatePositions({ PITCHER: "a", SHORTSTOP: "c" }, roster, false);
+    if (!first.ok) throw new Error("expected ok");
+
+    const draft = reload(roster, first.assignments, false);
+    const second = validatePositions(draft.assigned as Record<string, string>, roster, false);
+    if (!second.ok) throw new Error("expected ok");
+
+    expect(second.assignments).toEqual(first.assignments);
+  });
+
+  it("collapses an allPlay team's stale outfield row on the next save", () => {
+    const roster = ["a", "b"];
+    const draft = buildPositionsDraft(
+      [fielder("a", "PITCHER"), fielder("b", "LEFT_FIELD")],
+      true,
+    );
+    expect(draft.pool).toEqual(["b"]);
+
+    const result = validatePositions(
+      draft.assigned as Record<string, string>,
+      roster,
+      true,
+    );
+    // 'b' is simply absent from the assignments, so phase 1 of the write
+    // leaves them null — in the outfield, where the editor already showed them.
+    expect(result).toEqual({
+      ok: true,
+      assignments: [{ entryId: "a", position: "PITCHER" }],
+    });
+  });
+});
+
 describe("chartWriteFailure", () => {
   it("maps P2025 to roster-changed", () => {
     expect(chartWriteFailure({ code: "P2025" })).toBe("roster-changed");
@@ -372,6 +740,18 @@ describe("chartWriteFailure", () => {
         meta: { target: "RosterEntry_teamId_battingOrder_key" },
       }),
     ).toBe("order-conflict");
+  });
+
+  it("maps a position P2002 to position-conflict, both target shapes", () => {
+    expect(
+      chartWriteFailure({ code: "P2002", meta: { target: ["teamId", "position"] } }),
+    ).toBe("position-conflict");
+    expect(
+      chartWriteFailure({
+        code: "P2002",
+        meta: { target: "RosterEntry_teamId_position_key" },
+      }),
+    ).toBe("position-conflict");
   });
 
   it("returns null for other P2002 targets so callers rethrow", () => {

@@ -14,34 +14,34 @@ import { sortRoster } from "@/lib/roster-rules";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
-import { BattingOrderEditor } from "./BattingOrderEditor";
+import { PositionsEditor } from "./PositionsEditor";
 
 export const metadata = {
-  title: "Batting order — Youth Baseball Team Manager",
+  title: "Positions — Youth Baseball Team Manager",
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
-  "invalid-order": "That order couldn't be read. Reload and try again.",
+  "invalid-positions":
+    "That diamond couldn't be read. Reload and try again.",
   "unknown-entry":
     "The roster changed while you were editing. Reload and try again.",
   "duplicate-entry": "A player appeared twice. Reload and try again.",
-  // Fires both when allPlay is toggled off (12 slots become 9) and when the
-  // roster shrinks under an allPlay team, so it can't blame settings alone.
-  "too-many-slots":
-    "The roster or team settings changed while you were editing. Reload and try again.",
-  "missing-players":
-    "Every player needs a batting slot on this team. Reload and try again.",
+  // Only reachable when allPlay was switched on mid-edit: the outfield stops
+  // being three named spots and becomes one zone.
+  "invalid-position":
+    "The team's settings changed while you were editing. Reload and try again.",
   "roster-changed":
     "The roster changed while you were editing — nothing was saved. Reload and try again.",
-  "order-conflict": "The order couldn't be saved. Reload and try again.",
+  "position-conflict":
+    "The positions couldn't be saved. Reload and try again.",
   access: "You no longer have access to make this change.",
 };
 
-/// The coach-only batting order editor (#10). Calls requireTeamAccess itself,
+/// The coach-only positions diamond (#11). Calls requireTeamAccess itself,
 /// independent of the layout — every page under /t/[teamId] does, since
 /// layouts don't re-run on client navigation. Parents keep /t/[teamId]/view;
 /// nothing links here for them and minRole turns a pasted URL into a 404.
-export default async function ChartPage({
+export default async function PositionsPage({
   params,
   searchParams,
 }: {
@@ -66,23 +66,21 @@ export default async function ChartPage({
   }
 
   const chart = await getChart(teamId);
-  // Jersey-then-name order (the roster page's order) decides how unassigned
-  // players list in the pool and how never-ordered players fill allPlay
-  // slots; buildBattingDraft keeps this order for everyone without a
-  // battingOrder of their own.
+  // Jersey-then-name order (the roster page's order) decides how unplaced
+  // players list in the zone; buildPositionsDraft keeps the order it's given.
   const entries = sortRoster(
     chart.map((entry) => ({
       entryId: entry.entryId,
       playerName: entry.playerName,
       jerseyNumber: entry.jerseyNumber,
-      battingOrder: entry.battingOrder,
+      position: entry.position,
       player: { name: entry.playerName },
     })),
-  ).map(({ entryId, playerName, jerseyNumber, battingOrder }) => ({
+  ).map(({ entryId, playerName, jerseyNumber, position }) => ({
     entryId,
     playerName,
     jerseyNumber,
-    battingOrder,
+    position,
   }));
 
   const errorMessage = error
@@ -92,10 +90,10 @@ export default async function ChartPage({
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h3 className="text-xl font-semibold text-foreground">Batting order</h3>
+        <h3 className="text-xl font-semibold text-foreground">Positions</h3>
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/t/${teamId}/chart/positions`}>Positions</Link>
+            <Link href={`/t/${teamId}/chart`}>Batting order</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={`/t/${teamId}/view`}>View chart</Link>
@@ -111,7 +109,7 @@ export default async function ChartPage({
 
       {saved && !errorMessage ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Order saved.
+          Positions saved.
         </p>
       ) : null}
 
@@ -120,8 +118,8 @@ export default async function ChartPage({
           <CardHeader>
             <CardTitle>This team is archived</CardTitle>
             <CardDescription>
-              Archived teams are read-only — the batting order can&rsquo;t be
-              changed. See it on the chart view.
+              Archived teams are read-only — positions can&rsquo;t be changed.
+              See them on the chart view.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -135,8 +133,7 @@ export default async function ChartPage({
           <CardHeader>
             <CardTitle>No players yet</CardTitle>
             <CardDescription>
-              Add players to the roster first — the batting order is built
-              from it.
+              Add players to the roster first — the diamond is filled from it.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -149,10 +146,10 @@ export default async function ChartPage({
         <>
           <p className="text-sm text-muted-foreground">
             {team.allPlay
-              ? "Everyone bats — hold and drag to reorder. Dropping onto a player swaps the two."
-              : "Nine slots — hold and drag to reorder. Dropping onto a player swaps the two; drag someone below the line to take them out."}
+              ? "Hold and drag a player onto a spot. Everyone not on the infield plays the outfield."
+              : "Hold and drag a player onto a spot. Dropping onto a player swaps the two; anyone left over sits on the bench."}
           </p>
-          <BattingOrderEditor
+          <PositionsEditor
             // Remount whenever the server data changes (a save landed, an
             // error redirect reloaded fresh rows), so the draft never sits on
             // top of stale entries.

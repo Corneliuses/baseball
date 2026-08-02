@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 
+import {
+  DIAMOND_GEOMETRY,
+  POSITION_COORDS,
+} from "@/components/diamond-geometry";
 import { ALL_POSITIONS } from "@/lib/positions";
-import { DIAMOND_GEOMETRY, POSITION_COORDS } from "./Diamond";
 
 /// Layout invariants for the diamond. These failures are otherwise silent:
 /// an SVG child drawn outside the viewBox is simply clipped, and two markers

@@ -35,6 +35,12 @@ export type ChartView = {
   lineup: ChartViewPlayer[];
   /// Every position that has an assigned player, keyed by position.
   byPosition: Map<Position, ChartViewPlayer>;
+  /// Players with no position, in roster order. What this means depends on
+  /// the team's `allPlay` setting, which is why it isn't named here: on an
+  /// allPlay team it's the outfield (the diamond's LF/CF/RF are one zone and
+  /// hold everyone left over — see `droppablePositions` in chart.ts), and
+  /// otherwise it's the bench. The page decides how to say it.
+  unassigned: ChartViewPlayer[];
   /// True when at least one roster entry has a batting order or a position
   /// set — a partial chart (entered incrementally by hand during the
   /// validation weekend) still counts. Only a fully empty chart is "no chart
@@ -60,9 +66,11 @@ export function buildChartView(
     if (player.position !== null) byPosition.set(player.position, player);
   }
 
+  const unassigned = players.filter((player) => player.position === null);
+
   const hasChart = players.some(
     (player) => player.battingOrder !== null || player.position !== null,
   );
 
-  return { lineup, byPosition, hasChart };
+  return { lineup, byPosition, unassigned, hasChart };
 }
