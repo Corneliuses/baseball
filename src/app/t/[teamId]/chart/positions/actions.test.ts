@@ -39,6 +39,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+import { ALL_POSITIONS } from "@/lib/positions";
 import { TeamAccessError } from "@/lib/team-access";
 import { savePositionsAction } from "./actions";
 
@@ -135,6 +136,58 @@ describe("savePositionsAction", () => {
     expect(savePositions).not.toHaveBeenCalled();
     // Payload shape is checked before any access or data work.
     expect(requireTeamAccess).not.toHaveBeenCalled();
+  });
+
+  it("rejects a board with more keys than there are positions", async () => {
+    // Ten pairs can't be a real board however they're spelled, so this dies at
+    // the schema rather than arriving at validatePositions looking plausible.
+    const tooMany = Object.fromEntries(
+      Array.from({ length: 10 }, (_, i) => [`K${i}`, "entry"]),
+    );
+
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: JSON.stringify(tooMany) }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=invalid-positions");
+    expect(requireTeamAccess).not.toHaveBeenCalled();
+  });
+
+  it("rejects an entry id longer than a cuid could be", async () => {
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({
+          teamId: "team-1",
+          positions: JSON.stringify({ PITCHER: "x".repeat(65) }),
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=invalid-positions");
+    expect(savePositions).not.toHaveBeenCalled();
+  });
+
+  it("accepts a full nine-position board", async () => {
+    // The cap is the enum's length, not one less than it — an off-by-one here
+    // would reject exactly the boards a non-allPlay team saves.
+    const full = Object.fromEntries(
+      ALL_POSITIONS.map((position, i) => [position, `re-${i}`]),
+    );
+    getChart.mockResolvedValue(ALL_POSITIONS.map((_, i) => chartEntry(`re-${i}`)));
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: false });
+
+    await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: JSON.stringify(full) }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith(
+      "team-1",
+      ALL_POSITIONS.map((position, i) => ({ entryId: `re-${i}`, position })),
+    );
   });
 
   it("rejects an entry that is not on this team's roster", async () => {

@@ -5,6 +5,7 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { chartWriteFailure, validatePositions } from "@/lib/chart";
+import { ALL_POSITIONS } from "@/lib/positions";
 import { getChart, savePositions } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
@@ -17,11 +18,23 @@ function extractTeamId(formData: FormData): string {
   return teamId;
 }
 
-/// The submitted board: entry id per filled position. No size bound, unlike
-/// `orderSchema` next door — there are only nine legal keys, and
-/// `validatePositions` rejects on the first one that isn't a droppable position
-/// for this team's allPlay setting, so a garbage payload dies at its first key.
-const positionsSchema = z.record(z.string(), z.string().min(1));
+/**
+ * The submitted board: entry id per filled position. Bounded like
+ * `orderSchema` next door — nine positions is the whole enum, and entry ids
+ * are cuids, so 64 characters is already generous.
+ *
+ * **Neither bound is a DoS guard**, and it would be wrong to add more of them
+ * believing otherwise: `JSON.parse` above has already materialized the entire
+ * payload by the time Zod sees it, and `z.record` walks every pair before a
+ * `.refine` can fire. What actually bounds that work is Next's 1MB
+ * server-action body limit (`serverActions.bodySizeLimit`, unconfigured in
+ * next.config.ts so the default applies). The same goes for `orderSchema`'s
+ * `.max(50)`. These bounds do one narrower thing: stop a payload that could
+ * never be a real board from reaching `validatePositions` shaped like one.
+ */
+const positionsSchema = z
+  .record(z.string(), z.string().min(1).max(64))
+  .refine((board) => Object.keys(board).length <= ALL_POSITIONS.length);
 
 /**
  * Persist the standing positions chart (#11).
