@@ -138,8 +138,23 @@ describe("savePositionsAction", () => {
       expect(url).toBe("/t/team-1/chart/positions?error=invalid-positions");
     }
     expect(savePositions).not.toHaveBeenCalled();
-    // Payload shape is checked before any access or data work.
-    expect(requireTeamAccess).not.toHaveBeenCalled();
+    // Access is checked BEFORE the payload is parsed, so a malformed body
+    // still costs an access check — deliberately. The reverse would let an
+    // anonymous caller decide how much JSON we parse.
+    expect(requireTeamAccess).toHaveBeenCalled();
+    expect(getChart).not.toHaveBeenCalled();
+  });
+
+  it("checks access before parsing anything", async () => {
+    requireTeamAccess.mockRejectedValue(new TeamAccessError("nope", "no-membership"));
+
+    const url = await redirectUrlOf(
+      savePositionsAction(form({ teamId: "team-1", positions: "not json" })),
+    );
+
+    // A non-coach gets "no access", not a critique of their payload — the
+    // parse never ran to have an opinion about it.
+    expect(url).toBe("/t/team-1/chart/positions?error=access");
   });
 
   it("rejects a board with more keys than there are positions", async () => {
@@ -156,7 +171,7 @@ describe("savePositionsAction", () => {
     );
 
     expect(url).toBe("/t/team-1/chart/positions?error=invalid-positions");
-    expect(requireTeamAccess).not.toHaveBeenCalled();
+    expect(getChart).not.toHaveBeenCalled();
   });
 
   it("rejects an entry id longer than a cuid could be", async () => {

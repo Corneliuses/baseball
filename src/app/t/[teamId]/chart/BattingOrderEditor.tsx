@@ -87,8 +87,23 @@ export function BattingOrderEditor({
     }),
   );
 
+  // Two different questions, the same split the positions editor makes. They
+  // diverge on the first render whenever `buildBattingDraft` had to normalize:
+  // turn allPlay off on a team whose twelve players were all batting and the
+  // draft seats nine, benching three into the pool — the board already shows
+  // the change, so nothing is "edited", while the database still bats all
+  // twelve and the parents' view page still lists them. Gating Save on
+  // `edited` leaves the coach looking at a change they cannot commit.
+  //
+  // Empty slots drop out because the write does the same: `validateBattingOrder`
+  // numbers seated entries by slot position, so a gap renumbers rather than
+  // persisting. That also makes a pure renumber (a hand-set 1, 2, 5 the save
+  // would compact to 1, 2, 3) correctly *not* saveable — same players, same
+  // order, nothing a coach or a parent could see.
   const stored = useMemo(() => storedBattingOrder(entries), [entries]);
-  const dirty = !sameOrder(draft.slots, original.slots);
+  const seated = draft.slots.filter((entryId) => entryId !== null);
+  const edited = !sameOrder(draft.slots, original.slots);
+  const saveable = !sameOrder(seated, stored);
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     setDraft((current) =>
@@ -132,12 +147,12 @@ export function BattingOrderEditor({
           <Button
             type="button"
             variant="outline"
-            disabled={!dirty}
+            disabled={!edited}
             onClick={() => setDraft(original)}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={!dirty}>
+          <Button type="submit" disabled={!saveable}>
             Save order
           </Button>
         </form>

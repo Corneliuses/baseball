@@ -124,6 +124,42 @@ describe("BattingOrderEditor", () => {
     expect(JSON.parse(orderInput.value)).toEqual(["b", "a"]);
   });
 
+  it("offers Save when the draft benched players the database still bats", () => {
+    // allPlay turned off on a team whose ten players were all batting: nine
+    // slots remain, so buildBattingDraft benches "j" into the pool. The board
+    // already shows that, the database and the parents' view page do not, and
+    // gating Save on "has the coach moved anyone" would leave no way to
+    // commit it.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={Array.from({ length: 10 }, (_, i) =>
+          entry(String.fromCharCode(97 + i), i + 1),
+        )}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save order" })).toBeEnabled();
+    // Nothing to undo — the coach hasn't dragged anything.
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  });
+
+  it("leaves Save disabled for a pure renumber", () => {
+    // A hand-set 1, 2, 5 that a save would compact to 1, 2, 3. Same players,
+    // same order — nothing a coach or a parent could see, so it is not a
+    // change worth offering.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[entry("a", 1), entry("b", 2), entry("c", 5)]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save order" })).toBeDisabled();
+  });
+
   it("posts the order it loaded as the lost-update baseline", () => {
     // Without this field the action refuses every save, and the action's own
     // tests can't catch that — they set the baseline themselves.

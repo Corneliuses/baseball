@@ -143,8 +143,23 @@ describe("saveBattingOrderAction", () => {
       expect(url).toBe("/t/team-1/chart?error=invalid-order");
     }
     expect(saveBattingOrder).not.toHaveBeenCalled();
-    // Payload shape is checked before any access or data work.
-    expect(requireTeamAccess).not.toHaveBeenCalled();
+    // Access is checked BEFORE the payload is parsed, so a malformed body
+    // still costs an access check — deliberately. The reverse would let an
+    // anonymous caller decide how much JSON we parse.
+    expect(requireTeamAccess).toHaveBeenCalled();
+    expect(getChart).not.toHaveBeenCalled();
+  });
+
+  it("checks access before parsing anything", async () => {
+    requireTeamAccess.mockRejectedValue(new TeamAccessError("nope", "no-membership"));
+
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(form({ teamId: "team-1", order: "not json" })),
+    );
+
+    // A non-coach gets "no access", not a critique of their payload — the
+    // parse never ran to have an opinion about it.
+    expect(url).toBe("/t/team-1/chart?error=access");
   });
 
   it("refuses a save when another coach reordered since the page loaded", async () => {

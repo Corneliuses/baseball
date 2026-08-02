@@ -15,6 +15,8 @@ import { getChart, savePositions } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
+import { parseJson } from "../form-json";
+
 function extractTeamId(formData: FormData): string {
   const teamId = String(formData.get("teamId")).trim();
   if (!teamId || teamId === "null" || teamId === "undefined") {
@@ -52,23 +54,20 @@ const positionsSchema = z
 export async function savePositionsAction(formData: FormData) {
   const teamId = extractTeamId(formData);
 
-  let submitted: unknown;
-  let baseline: unknown;
   try {
-    submitted = JSON.parse(String(formData.get("positions")));
-    baseline = JSON.parse(String(formData.get("baseline")));
-  } catch {
-    redirect(`/t/${teamId}/chart/positions?error=invalid-positions`);
-  }
-
-  const parsed = positionsSchema.safeParse(submitted);
-  const parsedBaseline = positionsSchema.safeParse(baseline);
-  if (!parsed.success || !parsedBaseline.success) {
-    redirect(`/t/${teamId}/chart/positions?error=invalid-positions`);
-  }
-
-  try {
+    // Access first, before the payload is touched. Server actions POST to the
+    // page URL and this one is reachable without a session, so parsing ahead
+    // of the check means an anonymous caller decides how much JSON we parse.
+    // Nothing below this line runs for someone who isn't a coach on this team.
     await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
+
+    const parsed = positionsSchema.safeParse(parseJson(formData.get("positions")));
+    const parsedBaseline = positionsSchema.safeParse(
+      parseJson(formData.get("baseline")),
+    );
+    if (!parsed.success || !parsedBaseline.success) {
+      redirect(`/t/${teamId}/chart/positions?error=invalid-positions`);
+    }
 
     const [team, entries] = await Promise.all([
       getTeamById(teamId),
