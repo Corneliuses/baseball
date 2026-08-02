@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
-import { chartWriteFailure, validateBattingOrder } from "@/lib/chart";
+import {
+  chartWriteFailure,
+  sameOrder,
+  storedBattingOrder,
+  validateBattingOrder,
+} from "@/lib/chart";
 import { getChart, saveBattingOrder } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
@@ -22,6 +27,11 @@ function extractTeamId(formData: FormData): string {
 /// validation work; the real ceiling is validateBattingOrder's slot count.
 const orderSchema = z.array(z.string().min(1).nullable()).max(50);
 
+/// The order as the page loaded it, for the lost-update guard below. Entry ids
+/// only — `storedBattingOrder` omits benched entries rather than holding a
+/// slot for them.
+const baselineSchema = z.array(z.string().min(1)).max(50);
+
 /**
  * Persist the standing batting order (#10).
  *
@@ -35,14 +45,18 @@ export async function saveBattingOrderAction(formData: FormData) {
   const teamId = extractTeamId(formData);
 
   let submitted: unknown;
+  let baseline: unknown;
   try {
     submitted = JSON.parse(String(formData.get("order")));
+    baseline = JSON.parse(String(formData.get("baseline")));
   } catch {
     redirect(`/t/${teamId}/chart?error=invalid-order`);
   }
 
   const parsed = orderSchema.safeParse(submitted);
-  if (!parsed.success) {
+  // The baseline is the order as loaded, so it has no empty slots to allow.
+  const parsedBaseline = baselineSchema.safeParse(baseline);
+  if (!parsed.success || !parsedBaseline.success) {
     redirect(`/t/${teamId}/chart?error=invalid-order`);
   }
 
@@ -64,6 +78,19 @@ export async function saveBattingOrderAction(formData: FormData) {
     );
     if (!result.ok) {
       redirect(`/t/${teamId}/chart?error=${result.reason}`);
+    }
+
+    // Lost-update guard — the same hazard the positions action documents at
+    // length, on the other chart column. `saveBattingOrder` nulls every
+    // battingOrder on the team and rewrites the whole order, so a second coach
+    // saving a board they loaded before the first coach's save erases it
+    // outright, with no history to recover from (AGENTS.md).
+    //
+    // Per-column on purpose: another coach moving players around the diamond
+    // is not a reason to refuse a batting-order save, since the two writes
+    // touch different columns and cannot lose each other's work.
+    if (!sameOrder(storedBattingOrder(entries), parsedBaseline.data)) {
+      redirect(`/t/${teamId}/chart?error=chart-changed`);
     }
 
     await saveBattingOrder(teamId, result.assignments);

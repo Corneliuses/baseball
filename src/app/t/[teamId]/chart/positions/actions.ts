@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
-import { chartWriteFailure, validatePositions } from "@/lib/chart";
+import {
+  chartWriteFailure,
+  samePositions,
+  storedPositions,
+  validatePositions,
+} from "@/lib/chart";
 import { ALL_POSITIONS } from "@/lib/positions";
 import { getChart, savePositions } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -48,14 +53,17 @@ export async function savePositionsAction(formData: FormData) {
   const teamId = extractTeamId(formData);
 
   let submitted: unknown;
+  let baseline: unknown;
   try {
     submitted = JSON.parse(String(formData.get("positions")));
+    baseline = JSON.parse(String(formData.get("baseline")));
   } catch {
     redirect(`/t/${teamId}/chart/positions?error=invalid-positions`);
   }
 
   const parsed = positionsSchema.safeParse(submitted);
-  if (!parsed.success) {
+  const parsedBaseline = positionsSchema.safeParse(baseline);
+  if (!parsed.success || !parsedBaseline.success) {
     redirect(`/t/${teamId}/chart/positions?error=invalid-positions`);
   }
 
@@ -77,6 +85,25 @@ export async function savePositionsAction(formData: FormData) {
     );
     if (!result.ok) {
       redirect(`/t/${teamId}/chart/positions?error=${result.reason}`);
+    }
+
+    // Lost-update guard. `savePositions` nulls every position on the team and
+    // then writes this board, so it replaces the whole chart rather than
+    // merging into it — with up to four coaches holding edit rights, two
+    // editors open on two phones at the same field means whoever saves second
+    // silently erases the first one's work, and chart edits have no history to
+    // recover from (AGENTS.md). `validatePositions` can't see it: a stale
+    // board's entry ids are all still on the roster.
+    //
+    // Checked after validation on purpose. A roster deletion moves the stored
+    // board too, so testing this first would report "another coach changed the
+    // positions" for what is really `unknown-entry`.
+    //
+    // This catches honest staleness between two of our own editors, which is
+    // the whole hazard. It is not a permission check — a coach who wants to
+    // overwrite the board can already do it by reloading first.
+    if (!samePositions(storedPositions(entries), parsedBaseline.data)) {
+      redirect(`/t/${teamId}/chart/positions?error=chart-changed`);
     }
 
     await savePositions(teamId, result.assignments);

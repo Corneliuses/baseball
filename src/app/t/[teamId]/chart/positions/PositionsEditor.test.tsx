@@ -23,10 +23,15 @@ function entry(
   return { entryId, playerName: `Player-${entryId}`, jerseyNumber, position };
 }
 
-function payloadOf(): Record<string, string> {
+function fieldOf(name: string): Record<string, string> {
   const form = screen.getByRole("button", { name: "Save positions" }).closest("form")!;
-  const input = form.querySelector<HTMLInputElement>('input[name="positions"]')!;
-  return JSON.parse(input.value);
+  return JSON.parse(
+    form.querySelector<HTMLInputElement>(`input[name="${name}"]`)!.value,
+  );
+}
+
+function payloadOf(): Record<string, string> {
+  return fieldOf("positions");
 }
 
 beforeEach(() => {
@@ -109,6 +114,36 @@ describe("PositionsEditor", () => {
     expect(screen.getByRole("button", { name: "Save positions" })).toBeEnabled();
     // Nothing to undo, though — Cancel tracks the coach's edits, not the write.
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  });
+
+  it("posts the board it loaded as the lost-update baseline", () => {
+    // Without this field the action refuses every save, and the action's own
+    // tests can't catch that — they set the baseline themselves.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[entry("a", "PITCHER"), entry("b")]}
+      />,
+    );
+
+    expect(fieldOf("baseline")).toEqual({ PITCHER: "a" });
+  });
+
+  it("puts a stale outfield row in the baseline even though the board can't show it", () => {
+    // The whole reason the baseline is storedPositions and not the draft: the
+    // action compares it against a fresh read, so a baseline that had already
+    // dropped this row would look stale on every single save.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "CENTER_FIELD")]}
+      />,
+    );
+
+    expect(payloadOf()).toEqual({});
+    expect(fieldOf("baseline")).toEqual({ CENTER_FIELD: "a" });
   });
 
   it("leaves Save disabled when the board already matches what is stored", () => {

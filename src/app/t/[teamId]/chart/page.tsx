@@ -34,6 +34,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   "roster-changed":
     "The roster changed while you were editing — nothing was saved. Reload and try again.",
   "order-conflict": "The order couldn't be saved. Reload and try again.",
+  // Another coach saved a different order while this page sat open. Saving
+  // would have replaced theirs wholesale, so nothing was written.
+  "chart-changed":
+    "Another coach changed the batting order while you were editing — nothing was saved. Reload to see their order.",
   access: "You no longer have access to make this change.",
 };
 

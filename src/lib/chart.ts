@@ -154,6 +154,31 @@ export function sameOrder(
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
+/**
+ * The batting order as the database currently holds it: entry ids in
+ * ascending `battingOrder`, benched entries omitted. The lost-update baseline
+ * — see `storedPositions` for the positions half and the hazard both guard.
+ *
+ * The *sequence*, deliberately, not the numbers. A sparse hand-set order
+ * (1, 2, 5) and the dense one another coach's save compacts it to (1, 2, 3)
+ * fingerprint the same, because they seat the same players in the same order:
+ * a save landing on top of that renumber destroys nothing, and failing it
+ * would be a conflict a coach cannot see or explain. Any change that moves,
+ * adds, or benches a player changes the sequence and is caught.
+ *
+ * Not `buildBattingDraft(...).slots`, for the reason `storedPositions` isn't
+ * the draft either: that packs sparse orders densely, so the draft is already
+ * the compacted form and could never reveal the difference.
+ */
+export function storedBattingOrder(
+  entries: readonly BattingChartEntry[],
+): string[] {
+  return entries
+    .filter((entry) => entry.battingOrder !== null)
+    .sort((a, b) => a.battingOrder! - b.battingOrder!)
+    .map((entry) => entry.entryId);
+}
+
 // ---------------------------------------------------------------------------
 // dnd-kit id mapping
 // ---------------------------------------------------------------------------

@@ -54,8 +54,12 @@ function chartEntry(entryId: string) {
   };
 }
 
+/// `baseline` defaults to the empty board, which is what `chartEntry` rosters
+/// actually store (position: null), so the lost-update guard passes unless a
+/// test deliberately sets up a mismatch.
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
+  data.set("baseline", "{}");
   for (const [key, value] of Object.entries(fields)) {
     data.set(key, value);
   }
@@ -188,6 +192,104 @@ describe("savePositionsAction", () => {
       "team-1",
       ALL_POSITIONS.map((position, i) => ({ entryId: `re-${i}`, position })),
     );
+  });
+
+  it("refuses a save when another coach moved someone since the page loaded", async () => {
+    // Two coaches, two phones, one field. This one loaded an empty diamond and
+    // is placing "a" at pitcher; the other has since put "b" at catcher. The
+    // write nulls every position and rewrites, so going through would erase
+    // catcher with no error and no history to recover it.
+    getChart.mockResolvedValue([
+      chartEntry("a"),
+      { ...chartEntry("b"), position: "CATCHER" },
+      chartEntry("c"),
+    ]);
+
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: '{"PITCHER":"a"}', baseline: "{}" }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=chart-changed");
+    expect(savePositions).not.toHaveBeenCalled();
+  });
+
+  it("allows the save once the baseline matches what is stored", async () => {
+    // Same board as above — the coach reloaded, so their baseline now includes
+    // the other coach's catcher and the save is no longer blind.
+    getChart.mockResolvedValue([
+      chartEntry("a"),
+      { ...chartEntry("b"), position: "CATCHER" },
+      chartEntry("c"),
+    ]);
+
+    await redirectUrlOf(
+      savePositionsAction(
+        form({
+          teamId: "team-1",
+          positions: '{"PITCHER":"a","CATCHER":"b"}',
+          baseline: '{"CATCHER":"b"}',
+        }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith("team-1", [
+      { entryId: "a", position: "PITCHER" },
+      { entryId: "b", position: "CATCHER" },
+    ]);
+  });
+
+  it("catches a stale baseline even when the submitted board is unchanged", async () => {
+    // The coach changed nothing; another coach cleared pitcher. Saving the
+    // board this page still shows would put "a" back, undoing that silently.
+    getChart.mockResolvedValue([chartEntry("a")]);
+
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({
+          teamId: "team-1",
+          positions: '{"PITCHER":"a"}',
+          baseline: '{"PITCHER":"a"}',
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=chart-changed");
+  });
+
+  it("reports a roster deletion as roster trouble, not as another coach", async () => {
+    // A removed entry moves the stored board too, so checking the baseline
+    // first would blame a coach who never touched anything.
+    getChart.mockResolvedValue([chartEntry("b")]);
+
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: '{"PITCHER":"a"}', baseline: "{}" }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=unknown-entry");
+  });
+
+  it("rejects a missing or unparseable baseline rather than skipping the guard", async () => {
+    for (const fields of [
+      { teamId: "team-1", positions: "{}", baseline: "not json" },
+      { teamId: "team-1", positions: "{}", baseline: '["a"]' },
+    ]) {
+      expect(await redirectUrlOf(savePositionsAction(form(fields)))).toBe(
+        "/t/team-1/chart/positions?error=invalid-positions",
+      );
+    }
+
+    // Absent entirely — String(null) is "null", which parses but isn't a board.
+    const bare = new FormData();
+    bare.set("teamId", "team-1");
+    bare.set("positions", "{}");
+    expect(await redirectUrlOf(savePositionsAction(bare))).toBe(
+      "/t/team-1/chart/positions?error=invalid-positions",
+    );
+    expect(savePositions).not.toHaveBeenCalled();
   });
 
   it("rejects an entry that is not on this team's roster", async () => {

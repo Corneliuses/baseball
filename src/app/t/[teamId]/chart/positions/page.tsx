@@ -34,6 +34,10 @@ const ERROR_MESSAGES: Record<string, string> = {
     "The roster changed while you were editing — nothing was saved. Reload and try again.",
   "position-conflict":
     "The positions couldn't be saved. Reload and try again.",
+  // Another coach saved a different diamond while this page sat open. Saving
+  // would have replaced theirs wholesale, so nothing was written.
+  "chart-changed":
+    "Another coach changed the positions while you were editing — nothing was saved. Reload to see their diamond.",
   access: "You no longer have access to make this change.",
 };
 

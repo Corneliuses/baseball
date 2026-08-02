@@ -17,6 +17,7 @@ import {
   resolvePositionDrop,
   sameOrder,
   samePositions,
+  storedBattingOrder,
   storedPositions,
   slotCount,
   unassign,
@@ -209,6 +210,78 @@ describe("sameOrder", () => {
     expect(sameOrder(["a", null], ["a", null])).toBe(true);
     expect(sameOrder(["a", null], [null, "a"])).toBe(false);
     expect(sameOrder(["a"], ["a", null])).toBe(false);
+  });
+});
+
+describe("storedBattingOrder", () => {
+  it("reads the seated entries in batting order, benched ones omitted", () => {
+    expect(
+      storedBattingOrder([
+        { entryId: "c", battingOrder: 3 },
+        { entryId: "a", battingOrder: 1 },
+        { entryId: "x", battingOrder: null },
+        { entryId: "b", battingOrder: 2 },
+      ]),
+    ).toEqual(["a", "b", "c"]);
+  });
+
+  it("fingerprints the sequence, not the numbers", () => {
+    // A hand-set sparse order and the compacted form of it seat the same
+    // players in the same order, so a save landing on top of that renumber
+    // loses nothing and must not be refused as a conflict.
+    const sparse = [
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "b", battingOrder: 2 },
+      { entryId: "c", battingOrder: 5 },
+    ];
+    const compacted = [
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "b", battingOrder: 2 },
+      { entryId: "c", battingOrder: 3 },
+    ];
+
+    expect(sameOrder(storedBattingOrder(sparse), storedBattingOrder(compacted))).toBe(
+      true,
+    );
+  });
+
+  it("catches a move, a benching, and an addition", () => {
+    const before = storedBattingOrder([
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "b", battingOrder: 2 },
+    ]);
+
+    for (const after of [
+      [
+        { entryId: "b", battingOrder: 1 },
+        { entryId: "a", battingOrder: 2 },
+      ],
+      [{ entryId: "a", battingOrder: 1 }],
+      [
+        { entryId: "a", battingOrder: 1 },
+        { entryId: "b", battingOrder: 2 },
+        { entryId: "c", battingOrder: 3 },
+      ],
+    ]) {
+      expect(sameOrder(before, storedBattingOrder(after))).toBe(false);
+    }
+  });
+
+  it("is not the draft, which has already compacted sparse orders away", () => {
+    // The same trap storedPositions documents: buildBattingDraft packs 1, 2, 5
+    // into slots 0, 1, 2, so the draft could never reveal what is stored.
+    const sparse = [
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "b", battingOrder: 5 },
+    ];
+
+    expect(storedBattingOrder(sparse)).toEqual(["a", "b"]);
+    expect(buildBattingDraft(sparse, false).slots.slice(0, 2)).toEqual(["a", "b"]);
+  });
+
+  it("returns an empty order when nobody is seated", () => {
+    expect(storedBattingOrder([{ entryId: "a", battingOrder: null }])).toEqual([]);
+    expect(storedBattingOrder([])).toEqual([]);
   });
 });
 

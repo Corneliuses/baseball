@@ -188,6 +188,11 @@ export function PositionsEditor({
             name="positions"
             value={JSON.stringify(draft.assigned)}
           />
+          {/* The board this page loaded. The action compares it against a
+              fresh read and refuses the save if another coach moved anyone in
+              the meantime — the write replaces the whole chart, so without
+              this it would erase their work silently. */}
+          <input type="hidden" name="baseline" value={JSON.stringify(stored)} />
           <Button
             type="button"
             variant="outline"

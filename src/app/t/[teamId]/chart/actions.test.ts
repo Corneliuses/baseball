@@ -53,8 +53,12 @@ function chartEntry(entryId: string) {
   };
 }
 
+/// `baseline` defaults to the empty order, which is what `chartEntry` rosters
+/// actually store (battingOrder: null), so the lost-update guard passes unless
+/// a test deliberately sets up a mismatch.
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
+  data.set("baseline", "[]");
   for (const [key, value] of Object.entries(fields)) {
     data.set(key, value);
   }
@@ -141,6 +145,94 @@ describe("saveBattingOrderAction", () => {
     expect(saveBattingOrder).not.toHaveBeenCalled();
     // Payload shape is checked before any access or data work.
     expect(requireTeamAccess).not.toHaveBeenCalled();
+  });
+
+  it("refuses a save when another coach reordered since the page loaded", async () => {
+    // This page loaded an empty order; another coach has since set one. The
+    // write nulls every battingOrder and rewrites, so going through would
+    // erase theirs with no error and no history to recover it.
+    getChart.mockResolvedValue([
+      { ...chartEntry("a"), battingOrder: 1 },
+      { ...chartEntry("b"), battingOrder: 2 },
+      chartEntry("c"),
+    ]);
+
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(
+        form({ teamId: "team-1", order: '["c","a","b"]', baseline: "[]" }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart?error=chart-changed");
+    expect(saveBattingOrder).not.toHaveBeenCalled();
+  });
+
+  it("allows the save once the baseline matches what is stored", async () => {
+    getChart.mockResolvedValue([
+      { ...chartEntry("a"), battingOrder: 1 },
+      { ...chartEntry("b"), battingOrder: 2 },
+      { ...chartEntry("c"), battingOrder: 3 },
+    ]);
+
+    await redirectUrlOf(
+      saveBattingOrderAction(
+        form({
+          teamId: "team-1",
+          order: '["c","a","b"]',
+          baseline: '["a","b","c"]',
+        }),
+      ),
+    );
+
+    expect(saveBattingOrder).toHaveBeenCalledWith("team-1", [
+      { entryId: "c", battingOrder: 1 },
+      { entryId: "a", battingOrder: 2 },
+      { entryId: "b", battingOrder: 3 },
+    ]);
+  });
+
+  it("does not call a pure renumber a conflict", async () => {
+    // Another coach's save compacted a hand-set 1, 2, 5 to 1, 2, 3 without
+    // moving anyone. The sequence is identical, nothing this save writes can
+    // lose their work, and failing here would be a conflict no coach could
+    // see or explain — so storedBattingOrder fingerprints order, not numbers.
+    getChart.mockResolvedValue([
+      { ...chartEntry("a"), battingOrder: 1 },
+      { ...chartEntry("b"), battingOrder: 2 },
+      { ...chartEntry("c"), battingOrder: 3 },
+    ]);
+
+    await redirectUrlOf(
+      saveBattingOrderAction(
+        form({
+          teamId: "team-1",
+          order: '["a","b","c"]',
+          // What this page loaded, when the same three sat in slots 1, 2, 5.
+          baseline: '["a","b","c"]',
+        }),
+      ),
+    );
+
+    expect(saveBattingOrder).toHaveBeenCalled();
+  });
+
+  it("rejects a missing or unparseable baseline rather than skipping the guard", async () => {
+    for (const fields of [
+      { teamId: "team-1", order: '["a","b","c"]', baseline: "not json" },
+      { teamId: "team-1", order: '["a","b","c"]', baseline: '{"a":1}' },
+    ]) {
+      expect(await redirectUrlOf(saveBattingOrderAction(form(fields)))).toBe(
+        "/t/team-1/chart?error=invalid-order",
+      );
+    }
+
+    const bare = new FormData();
+    bare.set("teamId", "team-1");
+    bare.set("order", '["a","b","c"]');
+    expect(await redirectUrlOf(saveBattingOrderAction(bare))).toBe(
+      "/t/team-1/chart?error=invalid-order",
+    );
+    expect(saveBattingOrder).not.toHaveBeenCalled();
   });
 
   it("rejects an entry that is not on this team's roster", async () => {

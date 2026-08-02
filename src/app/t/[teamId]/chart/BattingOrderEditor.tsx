@@ -26,6 +26,7 @@ import {
   emptySlotId,
   resolveDrop,
   sameOrder,
+  storedBattingOrder,
   UNASSIGNED_ID,
   type BattingDraft,
 } from "@/lib/chart";
@@ -86,6 +87,7 @@ export function BattingOrderEditor({
     }),
   );
 
+  const stored = useMemo(() => storedBattingOrder(entries), [entries]);
   const dirty = !sameOrder(draft.slots, original.slots);
 
   function handleDragEnd({ active, over }: DragEndEvent) {
@@ -122,6 +124,11 @@ export function BattingOrderEditor({
         >
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="order" value={JSON.stringify(draft.slots)} />
+          {/* The order this page loaded. The action compares it against a
+              fresh read and refuses the save if another coach reordered in the
+              meantime — the write replaces the whole order, so without this it
+              would erase their work silently. */}
+          <input type="hidden" name="baseline" value={JSON.stringify(stored)} />
           <Button
             type="button"
             variant="outline"
