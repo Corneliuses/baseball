@@ -22,6 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   DIAMOND_GEOMETRY,
   DIAMOND_POLYGON,
+  diamondHeight,
   positionPercent,
 } from "@/components/diamond-geometry";
 import { Button } from "@/components/ui/button";
@@ -175,8 +176,12 @@ export function PositionsEditor({
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">
-        <Field draft={draft} byId={byId} />
+        {/* Zone above the diamond, deliberately. It is where every player
+            starts and where the coach's thumb returns between drags, so on a
+            phone it belongs above the fold rather than below a 400x520 board
+            the coach has to scroll past to reach it. */}
         <Zone draft={draft} byId={byId} allPlay={allPlay} />
+        <Field draft={draft} byId={byId} />
 
         <form
           action={savePositionsAction}
@@ -228,16 +233,22 @@ function Field({
   draft: PositionsDraft;
   byId: Map<string, PositionsEditorEntry>;
 }) {
+  // An allPlay board has no catcher, so the band below home plate that holds
+  // one is dead space. `positionPercent` has to be told the same thing, or
+  // every target lands at the wrong depth inside the box.
+  const withCatcher = draft.positions.includes("CATCHER");
+  const height = diamondHeight(withCatcher);
+
   return (
     <section aria-label="Diamond">
       <div
         className="relative mx-auto w-full max-w-sm"
         style={{
-          aspectRatio: `${DIAMOND_GEOMETRY.width} / ${DIAMOND_GEOMETRY.height}`,
+          aspectRatio: `${DIAMOND_GEOMETRY.width} / ${height}`,
         }}
       >
         <svg
-          viewBox={`0 0 ${DIAMOND_GEOMETRY.width} ${DIAMOND_GEOMETRY.height}`}
+          viewBox={`0 0 ${DIAMOND_GEOMETRY.width} ${height}`}
           aria-hidden="true"
           focusable="false"
           className="absolute inset-0 h-full w-full"
@@ -253,6 +264,7 @@ function Field({
           <PositionTarget
             key={position}
             position={position}
+            withCatcher={withCatcher}
             entry={
               draft.assigned[position] !== undefined
                 ? byId.get(draft.assigned[position])
@@ -267,17 +279,20 @@ function Field({
 
 function PositionTarget({
   position,
+  withCatcher,
   entry,
 }: {
   position: Position;
+  withCatcher: boolean;
   entry: PositionsEditorEntry | undefined;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: position });
-  const { x, y } = positionPercent(position);
+  const { x, y } = positionPercent(position, withCatcher);
 
   return (
     <div
       ref={setNodeRef}
+      data-position={position}
       style={{ left: `${x}%`, top: `${y}%` }}
       className={`absolute flex w-20 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-md border p-1 text-center ${
         isOver ? "border-ring bg-muted/60" : "border-dashed border-border"

@@ -24,11 +24,36 @@ export const INFIELD_POSITIONS: readonly Position[] = [
   "SHORTSTOP",
 ] as const;
 
+/**
+ * The infield an allPlay team actually fields: no catcher.
+ *
+ * allPlay is the coach-pitch end of youth baseball, where the coach pitches and
+ * nobody crouches behind the plate — so C is not a spot a coach can fill, the
+ * same way LF/CF/RF aren't (the outfield is one zone there). Drawing it as
+ * "Open" would show every parent a hole in the lineup that cannot be filled.
+ *
+ * Filtered rather than relisted so it can't drift out of scorebook order, or
+ * out of sync with INFIELD_POSITIONS.
+ */
+export const ALL_PLAY_INFIELD_POSITIONS: readonly Position[] =
+  INFIELD_POSITIONS.filter((position) => position !== "CATCHER");
+
 export const OUTFIELD_POSITIONS: readonly Position[] = [
   "LEFT_FIELD",
   "CENTER_FIELD",
   "RIGHT_FIELD",
 ] as const;
+
+/**
+ * The label inside an outfielder's marker on an allPlay diamond.
+ *
+ * Not a `Position`: the allPlay outfield is one zone holding however many
+ * players the infield leaves over, and every one of them persists as
+ * `position = null`. It lives here anyway because it is drawn in the same
+ * circles as the position abbreviations, and AGENTS.md's rule is that diamond
+ * labels come from this module rather than being written by hand.
+ */
+export const OUTFIELD_ZONE_LABEL = "OF";
 
 /// All nine, in scorebook order.
 export const ALL_POSITIONS: readonly Position[] = [

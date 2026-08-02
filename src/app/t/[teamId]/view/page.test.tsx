@@ -224,6 +224,65 @@ describe("ViewPage chart rendering", () => {
     for (const label of ["LF", "CF", "RF"]) {
       expect(html).not.toContain(`>${label}<`);
     }
+    // On the grass, in a circle, like everyone else — not listed underneath.
+    // A parent looking for their kid scans the diamond, not a caption.
+    expect(html).toContain(">OF<");
+  });
+
+  it("draws one OF marker per outfielder on an allPlay team", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      ...fullChart,
+      ...["cal", "dee", "eli"].map((playerId, index) => ({
+        playerId,
+        playerName: playerId,
+        jerseyNumber: 20 + index,
+        battingOrder: 3 + index,
+        position: null,
+      })),
+    ]);
+
+    const html = await render();
+
+    expect(html.split(">OF<")).toHaveLength(4);
+  });
+
+  it("draws no catcher for an allPlay team — the coach pitches", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+
+    const html = await render();
+
+    expect(html).not.toContain(">C<");
+    expect(html).toContain(">P<");
+  });
+
+  it("still draws an allPlay team's stale catcher row", async () => {
+    // Same reasoning as the stale named-outfield row below: the coach's next
+    // save collapses it, and until then nobody vanishes off the diamond.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      {
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CATCHER" as const,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain(">C<");
+    // ...and in the taller box, or that marker's name clips off the bottom.
+    expect(html).toContain('viewBox="0 0 400 520"');
+  });
+
+  it("drops the catcher's band from the box when no catcher is drawn", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+
+    const html = await render();
+
+    expect(html).toContain('viewBox="0 0 400 440"');
   });
 
   it("still draws an allPlay team's stale named-outfield row", async () => {

@@ -459,10 +459,9 @@ describe("save then reload round trip", () => {
 });
 
 describe("droppablePositions", () => {
-  it("is the six infield spots under allPlay — the outfield is one zone", () => {
+  it("is the five infield spots under allPlay — no catcher, and the outfield is one zone", () => {
     expect(droppablePositions(true)).toEqual([
       "PITCHER",
-      "CATCHER",
       "FIRST_BASE",
       "SECOND_BASE",
       "THIRD_BASE",
@@ -712,13 +711,13 @@ describe("nextDroppableId", () => {
   const infield = droppablePositions(true);
 
   it("cycles forward through the positions and then the zone", () => {
-    expect(nextDroppableId(infield, "PITCHER", 1)).toBe("CATCHER");
+    expect(nextDroppableId(infield, "PITCHER", 1)).toBe("FIRST_BASE");
     expect(nextDroppableId(infield, "SHORTSTOP", 1)).toBe(POSITION_POOL_ID);
     expect(nextDroppableId(infield, POSITION_POOL_ID, 1)).toBe("PITCHER");
   });
 
   it("cycles backward too", () => {
-    expect(nextDroppableId(infield, "CATCHER", -1)).toBe("PITCHER");
+    expect(nextDroppableId(infield, "FIRST_BASE", -1)).toBe("PITCHER");
     expect(nextDroppableId(infield, "PITCHER", -1)).toBe(POSITION_POOL_ID);
   });
 
@@ -768,8 +767,22 @@ describe("validatePositions", () => {
 
   it("rejects the same player at two positions", () => {
     expect(
-      validatePositions({ PITCHER: "a", CATCHER: "a" }, roster, true),
+      validatePositions({ PITCHER: "a", SHORTSTOP: "a" }, roster, true),
     ).toEqual({ ok: false, reason: "duplicate-entry" });
+  });
+
+  it("rejects the catcher for an allPlay team — the coach pitches", () => {
+    expect(validatePositions({ CATCHER: "a" }, roster, true)).toEqual({
+      ok: false,
+      reason: "invalid-position",
+    });
+  });
+
+  it("accepts the catcher when allPlay is off", () => {
+    expect(validatePositions({ CATCHER: "a" }, roster, false)).toEqual({
+      ok: true,
+      assignments: [{ entryId: "a", position: "CATCHER" }],
+    });
   });
 
   it("rejects a named outfield position for an allPlay team", () => {
@@ -814,11 +827,15 @@ describe("positions save then reload round trip", () => {
 
   it("reloads an allPlay board to exactly what was persisted", () => {
     const roster = ["a", "b", "c"];
-    const result = validatePositions({ PITCHER: "a", CATCHER: "b" }, roster, true);
+    const result = validatePositions(
+      { PITCHER: "a", SHORTSTOP: "b" },
+      roster,
+      true,
+    );
     if (!result.ok) throw new Error("expected ok");
 
     const draft = reload(roster, result.assignments, true);
-    expect(draft.assigned).toEqual({ PITCHER: "a", CATCHER: "b" });
+    expect(draft.assigned).toEqual({ PITCHER: "a", SHORTSTOP: "b" });
     // 'c' persisted as null and comes back in the outfield zone.
     expect(draft.pool).toEqual(["c"]);
   });

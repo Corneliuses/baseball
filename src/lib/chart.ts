@@ -1,5 +1,5 @@
 import type { Position } from "@/generated/prisma/enums";
-import { ALL_POSITIONS, INFIELD_POSITIONS } from "@/lib/positions";
+import { ALL_PLAY_INFIELD_POSITIONS, ALL_POSITIONS } from "@/lib/positions";
 
 /// Pure chart editing logic: the batting order (#10) and the positions
 /// diamond (#11).
@@ -321,9 +321,13 @@ export type PositionChartEntry = {
  * player per named position — so LF/CF/RF are not droppable and are never
  * written for an allPlay team. Those players persist as `position = null`,
  * which is unambiguous because an allPlay team has no bench.
+ *
+ * An allPlay team has no catcher either — the coach pitches — so C is not
+ * droppable there for the same reason, and a catcher lands in the outfield
+ * along with everyone else off the infield.
  */
 export function droppablePositions(allPlay: boolean): readonly Position[] {
-  return allPlay ? INFIELD_POSITIONS : ALL_POSITIONS;
+  return allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS;
 }
 
 /// Where `entryId` currently stands, or null if they're in the pool or absent.

@@ -91,9 +91,10 @@ Scoped to fit **6 weeks of evenings and weekends**.
 - **Positions** — drag players onto a labeled diamond, likewise **standing** and likewise
   permanent (no inning rotation, no per-game chart). The nine standard defensive
   positions: **P, C, 1B, 2B, 3B, SS, LF, CF, RF** — `C` is Catcher, `CF` is Center Field.
-  `allPlay = true` → one kid per infield position (P, C, 1B, 2B, 3B, SS), outfield holds
-  all remaining players. `allPlay = false` → one kid per position, remainder sit in a
-  Bench/Dugout zone. Cancel / Save.
+  `allPlay = true` → one kid per infield position **except catcher** (P, 1B, 2B, 3B, SS),
+  outfield holds all remaining players; at this level the coach pitches and nobody plays
+  behind the plate, so C is not a spot that can be filled. `allPlay = false` → one kid per
+  position, remainder sit in a Bench/Dugout zone. Cancel / Save.
 - **Next-game readiness** — the one place attendance meets the chart. For the team's
   **next game only** — not practices, not later games — the app shows who's out and which
   positions that leaves uncovered. It never rearranges the chart on the coach's behalf;

@@ -211,12 +211,12 @@ describe("savePositionsAction", () => {
 
   it("refuses a save when another coach moved someone since the page loaded", async () => {
     // Two coaches, two phones, one field. This one loaded an empty diamond and
-    // is placing "a" at pitcher; the other has since put "b" at catcher. The
+    // is placing "a" at pitcher; the other has since put "b" at shortstop. The
     // write nulls every position and rewrites, so going through would erase
-    // catcher with no error and no history to recover it.
+    // shortstop with no error and no history to recover it.
     getChart.mockResolvedValue([
       chartEntry("a"),
-      { ...chartEntry("b"), position: "CATCHER" },
+      { ...chartEntry("b"), position: "SHORTSTOP" },
       chartEntry("c"),
     ]);
 
@@ -232,10 +232,10 @@ describe("savePositionsAction", () => {
 
   it("allows the save once the baseline matches what is stored", async () => {
     // Same board as above — the coach reloaded, so their baseline now includes
-    // the other coach's catcher and the save is no longer blind.
+    // the other coach's shortstop and the save is no longer blind.
     getChart.mockResolvedValue([
       chartEntry("a"),
-      { ...chartEntry("b"), position: "CATCHER" },
+      { ...chartEntry("b"), position: "SHORTSTOP" },
       chartEntry("c"),
     ]);
 
@@ -243,15 +243,15 @@ describe("savePositionsAction", () => {
       savePositionsAction(
         form({
           teamId: "team-1",
-          positions: '{"PITCHER":"a","CATCHER":"b"}',
-          baseline: '{"CATCHER":"b"}',
+          positions: '{"PITCHER":"a","SHORTSTOP":"b"}',
+          baseline: '{"SHORTSTOP":"b"}',
         }),
       ),
     );
 
     expect(savePositions).toHaveBeenCalledWith("team-1", [
       { entryId: "a", position: "PITCHER" },
-      { entryId: "b", position: "CATCHER" },
+      { entryId: "b", position: "SHORTSTOP" },
     ]);
   });
 
@@ -321,7 +321,7 @@ describe("savePositionsAction", () => {
   it("rejects the same player standing at two positions", async () => {
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a","CATCHER":"a"}' }),
+        form({ teamId: "team-1", positions: '{"PITCHER":"a","SHORTSTOP":"a"}' }),
       ),
     );
 
