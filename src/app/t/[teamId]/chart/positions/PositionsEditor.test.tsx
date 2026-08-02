@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe("PositionsEditor", () => {
-  it("renders six infield targets and an Outfield zone when allPlay is true", () => {
+  it("renders five infield targets and an Outfield zone when allPlay is true", () => {
     render(
       <PositionsEditor
         teamId="team-1"
@@ -49,17 +49,65 @@ describe("PositionsEditor", () => {
     );
 
     const field = screen.getByRole("region", { name: "Diamond" });
-    // P, C, 1B, 2B, 3B, SS — the outfield is one zone, not three spots.
-    for (const label of ["P", "C", "1B", "2B", "3B", "SS"]) {
+    // P, 1B, 2B, 3B, SS — the outfield is one zone, not three spots, and an
+    // allPlay team has no catcher because the coach pitches.
+    for (const label of ["P", "1B", "2B", "3B", "SS"]) {
       expect(field).toHaveTextContent(label);
     }
     expect(field).not.toHaveTextContent("LF");
     expect(field).not.toHaveTextContent("RF");
+    expect(
+      field.querySelector('[data-position="CATCHER"]'),
+    ).not.toBeInTheDocument();
 
     const zone = screen.getByRole("region", { name: "Outfield" });
     expect(zone).toHaveTextContent("Player-b");
     expect(zone).toHaveTextContent("Player-c");
     expect(screen.queryByRole("region", { name: "Bench" })).not.toBeInTheDocument();
+  });
+
+  it("marks the catcher's empty spot with a filled circle under allPlay", () => {
+    // Not a drop target and not an "Open" marker — a solid disc, so the coach
+    // reads "no catcher at this level" rather than "a target failed to render".
+    render(
+      <PositionsEditor teamId="team-1" allPlay={true} entries={[entry("a")]} />,
+    );
+
+    const field = screen.getByRole("region", { name: "Diamond" });
+    expect(field.querySelector("circle")).toHaveClass(
+      "fill-muted-foreground/30",
+    );
+    expect(field).toHaveTextContent("the coach pitches");
+  });
+
+  it("draws no such circle when the catcher is a real spot", () => {
+    render(
+      <PositionsEditor teamId="team-1" allPlay={false} entries={[entry("a")]} />,
+    );
+
+    const field = screen.getByRole("region", { name: "Diamond" });
+    expect(field.querySelector("circle")).toBeNull();
+    expect(field).toHaveTextContent("C");
+  });
+
+  it("puts the zone above the diamond", () => {
+    // The zone is where every player starts and where the coach's thumb comes
+    // back between drags; below a 400x520 board it is off the bottom of a
+    // phone. DOCUMENT_POSITION_FOLLOWING = the diamond comes after the zone.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b")]}
+      />,
+    );
+
+    const zone = screen.getByRole("region", { name: "Outfield" });
+    const field = screen.getByRole("region", { name: "Diamond" });
+
+    expect(zone.compareDocumentPosition(field)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it("renders all nine targets and a Bench zone when allPlay is false", () => {
@@ -168,8 +216,8 @@ describe("PositionsEditor", () => {
       />,
     );
 
-    // Six infield spots, one filled.
-    expect(screen.getAllByText("Open")).toHaveLength(5);
+    // Five infield spots, one filled.
+    expect(screen.getAllByText("Open")).toHaveLength(4);
   });
 
   it("shows only first names on the diamond and full names in the zone", () => {
@@ -199,7 +247,7 @@ describe("PositionsEditor", () => {
       <PositionsEditor
         teamId="team-1"
         allPlay={true}
-        entries={[entry("a", "PITCHER"), entry("b", "CATCHER"), entry("c")]}
+        entries={[entry("a", "PITCHER"), entry("b", "SHORTSTOP"), entry("c")]}
       />,
     );
 
@@ -214,7 +262,7 @@ describe("PositionsEditor", () => {
     ).toBe("team-1");
     // Only the diamond is posted; the zone is everyone else, and the server
     // nulls them in phase 1 of the write.
-    expect(payloadOf()).toEqual({ PITCHER: "a", CATCHER: "b" });
+    expect(payloadOf()).toEqual({ PITCHER: "a", SHORTSTOP: "b" });
   });
 
   it("gives every player a keyboard drag handle", () => {

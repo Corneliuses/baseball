@@ -2,13 +2,19 @@ import {
   DIAMOND_GEOMETRY,
   DIAMOND_POLYGON,
   POSITION_COORDS,
+  outfieldZoneCoords,
 } from "@/components/diamond-geometry";
+import {
+  NO_CATCHER_TEXT,
+  NoCatcherMarker,
+} from "@/components/NoCatcherMarker";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import type { Position } from "@/generated/prisma/enums";
 import type { ChartViewPlayer } from "@/lib/chart-view";
 import {
-  INFIELD_POSITIONS,
-  OUTFIELD_POSITIONS,
+  ALL_PLAY_INFIELD_POSITIONS,
+  ALL_POSITIONS,
+  OUTFIELD_ZONE_LABEL,
   POSITION_LABELS,
 } from "@/lib/positions";
 
@@ -19,7 +25,6 @@ import {
 const MARKER_RADIUS = DIAMOND_GEOMETRY.markerRadius;
 const NAME_OFFSET = DIAMOND_GEOMETRY.nameOffset;
 const TAG_OFFSET = DIAMOND_GEOMETRY.tagOffset;
-const VIEWBOX_HEIGHT = DIAMOND_GEOMETRY.height;
 
 /// Only the first name goes on the diamond. Markers sit as little as 60px
 /// apart, so a full name overruns its neighbour; the batting order list
@@ -29,14 +34,21 @@ function shortName(name: string): string {
   return name.trim().split(/\s+/)[0] || name;
 }
 
-function PositionMarker({
-  position,
+/// One circle on the grass: an abbreviation inside, the player's first name
+/// under it, their RSVP state under that. Takes coordinates and a label rather
+/// than a `Position`, because the allPlay outfield draws the same marker for
+/// players who hold no position at all.
+function Marker({
+  x,
+  y,
+  label,
   player,
 }: {
-  position: Position;
+  x: number;
+  y: number;
+  label: string;
   player: ChartViewPlayer | undefined;
 }) {
-  const { x, y } = POSITION_COORDS[position];
   const style = player ? RSVP_STYLE[player.rsvpState] : null;
 
   return (
@@ -55,7 +67,7 @@ function PositionMarker({
         dy={4}
         className="fill-foreground text-[11px] font-bold"
       >
-        {POSITION_LABELS[position]}
+        {label}
       </text>
 
       <text
@@ -85,43 +97,29 @@ function PositionMarker({
   );
 }
 
-/**
- * On an allPlay team the outfield is one zone rather than three named spots,
- * so everyone not on the infield stands out there and persists as
- * `position = null` (#11, Decision 1). Drawing LF/CF/RF as "Open" would be
- * doubly wrong for those teams: the spots aren't open, and the kids filling
- * them would be missing from the diamond entirely — which is the one thing a
- * parent opens this page to see.
- *
- * A stale named-outfield row (hand-set during #9, or left over from before
- * allPlay was switched on) still draws its marker, so nothing silently
- * vanishes before the coach's next save collapses it.
- */
-function outfieldPositionsToDraw(
-  allPlay: boolean,
-  byPosition: Map<Position, ChartViewPlayer>,
-): readonly Position[] {
-  return allPlay
-    ? OUTFIELD_POSITIONS.filter((position) => byPosition.has(position))
-    : OUTFIELD_POSITIONS;
-}
-
 export function Diamond({
   byPosition,
   allPlay,
   outfield = [],
 }: {
+  /// Seated players, keyed by position. Only ever holds spots this team
+  /// fields — `buildChartView` pools the rest, including an allPlay team's
+  /// stale LF/CF/RF or CATCHER row, so the markers below cannot collide with
+  /// the zone drawn at those same coordinates.
   byPosition: Map<Position, ChartViewPlayer>;
   allPlay: boolean;
-  /// Players with no position. Rendered as the outfield zone on an allPlay
-  /// team, and ignored otherwise — a benched player belongs in neither.
+  /// Everyone the diamond doesn't seat. Drawn as the outfield zone on an
+  /// allPlay team, and ignored otherwise — a benched player belongs on neither.
   outfield?: readonly ChartViewPlayer[];
 }) {
-  const drawn = [
-    ...INFIELD_POSITIONS,
-    ...outfieldPositionsToDraw(allPlay, byPosition),
-  ];
+  // An allPlay team fields neither a catcher nor three named outfielders: the
+  // coach pitches, and the outfield is one zone holding everyone the infield
+  // leaves over (#11, Decision 1). Drawing C or LF/CF/RF as "Open" would be
+  // doubly wrong for them — the spots aren't open, they don't exist — so those
+  // players come from `outfield` instead, and C gets the disc.
+  const drawn = allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS;
   const zone = allPlay ? outfield : [];
+  const zoneCoords = outfieldZoneCoords(zone.length);
 
   return (
     <>
@@ -129,7 +127,7 @@ export function Diamond({
           SVG's aria-label and nothing inside it, so the assignments would
           otherwise be unreachable without sight. */}
       <svg
-        viewBox={`0 0 400 ${VIEWBOX_HEIGHT}`}
+        viewBox={`0 0 ${DIAMOND_GEOMETRY.width} ${DIAMOND_GEOMETRY.height}`}
         aria-hidden="true"
         focusable="false"
         className="mx-auto w-full max-w-sm"
@@ -140,40 +138,34 @@ export function Diamond({
           strokeWidth={2}
         />
 
-        {drawn.map((position) => (
-          <PositionMarker
-            key={position}
-            position={position}
-            player={byPosition.get(position)}
+        {allPlay ? <NoCatcherMarker /> : null}
+
+        {drawn.map((position) => {
+          const { x, y } = POSITION_COORDS[position];
+          return (
+            <Marker
+              key={position}
+              x={x}
+              y={y}
+              label={POSITION_LABELS[position]}
+              player={byPosition.get(position)}
+            />
+          );
+        })}
+
+        {zone.map((player, index) => (
+          <Marker
+            key={player.playerId}
+            x={zoneCoords[index].x}
+            y={zoneCoords[index].y}
+            label={OUTFIELD_ZONE_LABEL}
+            player={player}
           />
         ))}
       </svg>
 
-      {zone.length > 0 ? (
-        <div className="mx-auto mt-2 w-full max-w-sm">
-          <h4 className="mb-1 text-center text-xs font-medium text-muted-foreground">
-            Outfield
-          </h4>
-          <div className="flex flex-wrap justify-center gap-2">
-            {zone.map((player) => {
-              const style = RSVP_STYLE[player.rsvpState];
-              return (
-                <span
-                  key={player.playerId}
-                  className={`rounded border border-border px-2 py-1 text-xs font-medium ${style.nameClassName}`}
-                >
-                  {player.playerName}
-                  <span className={`ml-1 ${style.tagClassName}`}>
-                    {style.label}
-                  </span>
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
       <ul className="sr-only">
+        {allPlay ? <li>{NO_CATCHER_TEXT}</li> : null}
         {drawn.map((position) => {
           const player = byPosition.get(position);
           return (

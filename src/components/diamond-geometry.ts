@@ -12,6 +12,10 @@ import type { Position } from "@/generated/prisma/enums";
 /// bottom. Check the lowest marker's y+47 against the viewBox height before
 /// moving anything. The clipping this guards against is silent — an off-canvas
 /// name renders without error and simply cannot be seen.
+///
+/// One height for every board, including an allPlay team's — which has no
+/// catcher (`ALL_PLAY_INFIELD_POSITIONS`) but still draws that spot, as the
+/// solid disc in `NoCatcherMarker`.
 export const DIAMOND_GEOMETRY = {
   width: 400,
   height: 520,
@@ -46,4 +50,83 @@ export function positionPercent(position: Position): { x: number; y: number } {
     x: (x / DIAMOND_GEOMETRY.width) * 100,
     y: (y / DIAMOND_GEOMETRY.height) * 100,
   };
+}
+
+/// The shape of the allPlay outfield zone, in the same coordinate space as
+/// POSITION_COORDS. Tuned so a row of three reproduces LF/CF/RF exactly.
+const OUTFIELD_ZONE = {
+  /// Centre of the deepest row: CF's y.
+  depth: 75,
+  /// How much lower a row's outermost markers sit than its centre. 55 is what
+  /// makes a row of three reproduce LF/CF/RF.
+  arc: 55,
+  /// Distance between rows, when one row isn't enough.
+  rowGap: 78,
+  /// Half-spread per gap between neighbours, so two outfielders stand shoulder
+  /// to shoulder instead of straddling both foul lines.
+  spreadPerGap: 62.5,
+  /// Cap on that half-spread. Names are centred under their marker, so this is
+  /// what keeps the outermost name inside the 400-wide box.
+  maxSpread: 145,
+  /// How many markers a row aims to hold: exceed it and a second row opens.
+  /// Not a hard cap — past `perRowTarget * maxRows` outfielders the two rows
+  /// simply get fuller, which is the intended degradation (see `maxRows`).
+  perRowTarget: 5,
+  /// A third row would reach the middle infielders at y=252, so a very deep
+  /// roster packs its two rows tighter rather than growing downward.
+  maxRows: 2,
+} as const;
+
+/**
+ * Where an allPlay team's outfielders stand.
+ *
+ * That outfield is one zone rather than three named spots (#11), so the count
+ * is whatever the infield leaves over — five on a twelve-player roster, but it
+ * moves with the team. Markers are laid out in rows across the grass, each row
+ * bowed the way an outfield actually plays: centre deepest, the ends drawn down
+ * toward the foul lines.
+ *
+ * A row of three lands exactly on the LF/CF/RF coordinates above, which is the
+ * point — a team that happens to field three outfielders reads as the standard
+ * diamond rather than as some other chart.
+ *
+ * Returns one coordinate per player, in the order given.
+ */
+export function outfieldZoneCoords(
+  count: number,
+): { x: number; y: number }[] {
+  if (count <= 0) {
+    return [];
+  }
+
+  const rows = Math.min(
+    OUTFIELD_ZONE.maxRows,
+    Math.ceil(count / OUTFIELD_ZONE.perRowTarget),
+  );
+  const coords: { x: number; y: number }[] = [];
+  let placed = 0;
+
+  for (let row = 0; row < rows; row += 1) {
+    // Spread the remainder over the rows that are left, so the deeper row takes
+    // the extra player when the count doesn't divide evenly.
+    const inRow = Math.ceil((count - placed) / (rows - row));
+    const spread = Math.min(
+      OUTFIELD_ZONE.maxSpread,
+      OUTFIELD_ZONE.spreadPerGap * (inRow - 1),
+    );
+    const depth = OUTFIELD_ZONE.depth + row * OUTFIELD_ZONE.rowGap;
+
+    for (let index = 0; index < inRow; index += 1) {
+      // -1 at the left end of the row, +1 at the right, 0 dead centre.
+      const offset = inRow === 1 ? 0 : (index / (inRow - 1)) * 2 - 1;
+      coords.push({
+        x: DIAMOND_GEOMETRY.width / 2 + offset * spread,
+        y: depth + OUTFIELD_ZONE.arc * offset * offset,
+      });
+    }
+
+    placed += inRow;
+  }
+
+  return coords;
 }

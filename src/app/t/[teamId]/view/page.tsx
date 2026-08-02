@@ -89,7 +89,7 @@ export default async function ViewPage({
     chartEntries.map((entry) => entry.playerId),
     rsvpRows,
   );
-  const chart = buildChartView(chartEntries, rsvpStates);
+  const chart = buildChartView(chartEntries, rsvpStates, team?.allPlay ?? true);
 
   const heading = game.opponent ? `Next game vs ${game.opponent}` : "Next game";
 

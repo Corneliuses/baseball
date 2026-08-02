@@ -1,4 +1,5 @@
 import { Position } from "@/generated/prisma/enums";
+import { ALL_PLAY_INFIELD_POSITIONS, ALL_POSITIONS } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
 /// The view page's read-only render model (#8).
@@ -35,12 +36,11 @@ export type ChartView = {
   lineup: ChartViewPlayer[];
   /// Every position that has an assigned player, keyed by position.
   byPosition: Map<Position, ChartViewPlayer>;
-  /// Players with no position, in the roster's jersey-then-name order. What
-  /// this means depends on
-  /// the team's `allPlay` setting, which is why it isn't named here: on an
-  /// allPlay team it's the outfield (the diamond's LF/CF/RF are one zone and
-  /// hold everyone left over — see `droppablePositions` in chart.ts), and
-  /// otherwise it's the bench. The page decides how to say it.
+  /// Everyone the diamond doesn't seat, in the roster's jersey-then-name order.
+  /// What this means depends on the team's `allPlay` setting, which is why it
+  /// isn't named here: on an allPlay team it's the outfield (LF/CF/RF are one
+  /// zone and hold everyone left over — see `droppablePositions` in chart.ts),
+  /// and otherwise it's the bench. The page decides how to say it.
   unassigned: ChartViewPlayer[];
   /// True when at least one roster entry has a batting order or a position
   /// set — a partial chart (entered incrementally by hand during the
@@ -63,9 +63,24 @@ function byJerseyThenName(a: ChartViewPlayer, b: ChartViewPlayer): number {
   return a.jerseyNumber - b.jerseyNumber;
 }
 
+/**
+ * @param allPlay Which spots this team actually fields. The read-side twin of
+ * `buildPositionsDraft`'s parameter of the same name, and it does the same job:
+ * a player stored at a position the team doesn't field — an allPlay team's
+ * stale LF/CF/RF or CATCHER row, hand-set during #9 or left behind when allPlay
+ * was switched on — is pooled rather than seated.
+ *
+ * That is what keeps the two diamonds telling one story. The editor already
+ * shows those players in its outfield zone, and the view page draws its zone at
+ * the very coordinates a named outfield marker would occupy, so seating them
+ * here would stack two markers on one spot and make both names unreadable.
+ * Nobody vanishes either way — they are in the outfield, which is where the
+ * coach's next save will put them.
+ */
 export function buildChartView(
   entries: readonly ChartViewEntry[],
   rsvpStates: ReadonlyMap<string, RsvpState>,
+  allPlay: boolean,
 ): ChartView {
   const players = entries.map((entry) => ({
     ...entry,
@@ -76,9 +91,24 @@ export function buildChartView(
     .filter((player) => player.battingOrder !== null)
     .sort((a, b) => a.battingOrder! - b.battingOrder!);
 
+  const fielded = new Set<Position>(
+    allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS,
+  );
   const byPosition = new Map<Position, ChartViewPlayer>();
+  const unseated: ChartViewPlayer[] = [];
   for (const player of players) {
-    if (player.position !== null) byPosition.set(player.position, player);
+    // First writer wins, matching buildPositionsDraft. The unique index makes a
+    // collision unreachable from a real read, but the loser is pooled rather
+    // than dropped if it ever happens.
+    if (
+      player.position !== null &&
+      fielded.has(player.position) &&
+      !byPosition.has(player.position)
+    ) {
+      byPosition.set(player.position, player);
+    } else {
+      unseated.push(player);
+    }
   }
 
   // Sorted, not left in the order `getChart` handed over: that is a findMany
@@ -86,9 +116,7 @@ export function buildChartView(
   // two requests and the outfield cluster would visibly reshuffle. Jersey then
   // name is `sortRoster`'s order (roster-rules.ts), which is what the coach
   // arranged in the editor's zone.
-  const unassigned = players
-    .filter((player) => player.position === null)
-    .sort(byJerseyThenName);
+  const unassigned = unseated.sort(byJerseyThenName);
 
   const hasChart = players.some(
     (player) => player.battingOrder !== null || player.position !== null,
