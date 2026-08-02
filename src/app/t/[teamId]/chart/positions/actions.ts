@@ -17,10 +17,10 @@ function extractTeamId(formData: FormData): string {
   return teamId;
 }
 
-/// The submitted board: entry id per filled position. Keys are checked against
-/// the real position list by `validatePositions`, which also knows which
-/// positions this team's allPlay setting allows; the cap here just stops a
-/// garbage payload from ballooning that work.
+/// The submitted board: entry id per filled position. No size bound, unlike
+/// `orderSchema` next door — there are only nine legal keys, and
+/// `validatePositions` rejects on the first one that isn't a droppable position
+/// for this team's allPlay setting, so a garbage payload dies at its first key.
 const positionsSchema = z.record(z.string(), z.string().min(1));
 
 /**

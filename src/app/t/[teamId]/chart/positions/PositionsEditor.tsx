@@ -33,6 +33,7 @@ import {
   positionOf,
   resolvePositionDrop,
   samePositions,
+  storedPositions,
   type PositionsDraft,
 } from "@/lib/chart";
 import { POSITION_LABELS } from "@/lib/positions";
@@ -138,7 +139,14 @@ export function PositionsEditor({
     useSensor(KeyboardSensor, { coordinateGetter }),
   );
 
-  const dirty = !samePositions(draft.assigned, original.assigned);
+  // Two different questions, and on an allPlay team with a stale named-outfield
+  // row they have different answers on the very first render: the board matches
+  // the one that loaded (nothing to cancel) while the database still says
+  // CENTER_FIELD (something to save). Gating both on `edited` would disable the
+  // only button that collapses that row.
+  const stored = useMemo(() => storedPositions(entries), [entries]);
+  const edited = !samePositions(draft.assigned, original.assigned);
+  const saveable = !samePositions(draft.assigned, stored);
 
   function handleDragStart({ active }: DragStartEvent) {
     keyboardTarget.current =
@@ -183,12 +191,12 @@ export function PositionsEditor({
           <Button
             type="button"
             variant="outline"
-            disabled={!dirty}
+            disabled={!edited}
             onClick={() => setDraft(original)}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={!dirty}>
+          <Button type="submit" disabled={!saveable}>
             Save positions
           </Button>
         </form>

@@ -35,7 +35,8 @@ export type ChartView = {
   lineup: ChartViewPlayer[];
   /// Every position that has an assigned player, keyed by position.
   byPosition: Map<Position, ChartViewPlayer>;
-  /// Players with no position, in roster order. What this means depends on
+  /// Players with no position, in the roster's jersey-then-name order. What
+  /// this means depends on
   /// the team's `allPlay` setting, which is why it isn't named here: on an
   /// allPlay team it's the outfield (the diamond's LF/CF/RF are one zone and
   /// hold everyone left over — see `droppablePositions` in chart.ts), and
@@ -47,6 +48,20 @@ export type ChartView = {
   /// set yet".
   hasChart: boolean;
 };
+
+/// `sortRoster`'s ordering, restated over this module's render model rather
+/// than imported: that one keys off `player.name` on a Prisma-shaped row, and
+/// reshaping a ChartViewPlayer to borrow it costs more than the four lines.
+/// Unnumbered players sort last; jerseys are unique per team, so the name
+/// comparison only ever settles two unnumbered players.
+function byJerseyThenName(a: ChartViewPlayer, b: ChartViewPlayer): number {
+  if (a.jerseyNumber === null && b.jerseyNumber === null) {
+    return a.playerName.localeCompare(b.playerName);
+  }
+  if (a.jerseyNumber === null) return 1;
+  if (b.jerseyNumber === null) return -1;
+  return a.jerseyNumber - b.jerseyNumber;
+}
 
 export function buildChartView(
   entries: readonly ChartViewEntry[],
@@ -66,7 +81,14 @@ export function buildChartView(
     if (player.position !== null) byPosition.set(player.position, player);
   }
 
-  const unassigned = players.filter((player) => player.position === null);
+  // Sorted, not left in the order `getChart` handed over: that is a findMany
+  // with no orderBy, so Postgres is free to return the rows differently between
+  // two requests and the outfield cluster would visibly reshuffle. Jersey then
+  // name is `sortRoster`'s order (roster-rules.ts), which is what the coach
+  // arranged in the editor's zone.
+  const unassigned = players
+    .filter((player) => player.position === null)
+    .sort(byJerseyThenName);
 
   const hasChart = players.some(
     (player) => player.battingOrder !== null || player.position !== null,

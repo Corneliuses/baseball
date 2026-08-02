@@ -46,12 +46,33 @@ describe("buildChartView", () => {
     expect(view.lineup.some((p) => p.playerId === "eli")).toBe(false);
   });
 
-  it("collects players with no position, in roster order", () => {
+  it("collects players with no position", () => {
     // The outfield on an allPlay team, the bench otherwise — buildChartView
     // doesn't know which, and deliberately doesn't decide.
     const view = buildChartView(fullChart, noRsvps);
 
     expect(view.unassigned.map((p) => p.playerId)).toEqual(["eli"]);
+  });
+
+  it("orders unassigned players by jersey, then name, unnumbered last", () => {
+    // getChart is a findMany with no orderBy, so the input order is whatever
+    // Postgres felt like — sorting here is what stops the outfield cluster
+    // from reshuffling between two loads of the same page.
+    const scrambled: ChartViewEntry[] = [
+      { entryId: "re-4", playerId: "zoe", playerName: "Zoe", jerseyNumber: null, battingOrder: null, position: null },
+      { entryId: "re-1", playerId: "cy", playerName: "Cy", jerseyNumber: 12, battingOrder: null, position: null },
+      { entryId: "re-3", playerId: "ada", playerName: "Ada", jerseyNumber: null, battingOrder: null, position: null },
+      { entryId: "re-2", playerId: "ben", playerName: "Ben", jerseyNumber: 3, battingOrder: null, position: null },
+    ];
+
+    const view = buildChartView(scrambled, noRsvps);
+
+    expect(view.unassigned.map((p) => p.playerId)).toEqual([
+      "ben", // 3
+      "cy", // 12
+      "ada", // unnumbered, alphabetical
+      "zoe",
+    ]);
   });
 
   it("attaches RSVP state to unassigned players like everyone else", () => {

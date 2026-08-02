@@ -17,6 +17,7 @@ import {
   resolvePositionDrop,
   sameOrder,
   samePositions,
+  storedPositions,
   slotCount,
   unassign,
   UNASSIGNED_ID,
@@ -541,6 +542,64 @@ describe("samePositions", () => {
     expect(
       samePositions({ PITCHER: "a", CATCHER: "b" }, { CATCHER: "b", PITCHER: "a" }),
     ).toBe(true);
+  });
+});
+
+describe("storedPositions", () => {
+  it("reads the positions the rows actually hold", () => {
+    expect(
+      storedPositions([
+        { entryId: "a", position: "PITCHER" },
+        { entryId: "b", position: null },
+        { entryId: "c", position: "SHORTSTOP" },
+      ]),
+    ).toEqual({ PITCHER: "a", SHORTSTOP: "c" });
+  });
+
+  it("keeps a position the board can't drop on", () => {
+    // The whole point: buildPositionsDraft pools this row under allPlay, so
+    // only storedPositions can still see that the database says CENTER_FIELD.
+    const entries = [{ entryId: "a", position: "CENTER_FIELD" as const }];
+
+    expect(storedPositions(entries)).toEqual({ CENTER_FIELD: "a" });
+    expect(buildPositionsDraft(entries, true).assigned).toEqual({});
+  });
+
+  it("differs from a freshly built allPlay draft exactly when a stale row exists", () => {
+    // This inequality is what enables Save on load; the equality below is what
+    // keeps it disabled when there is genuinely nothing to write.
+    const stale = [{ entryId: "a", position: "LEFT_FIELD" as const }];
+    expect(
+      samePositions(buildPositionsDraft(stale, true).assigned, storedPositions(stale)),
+    ).toBe(false);
+
+    const clean = [
+      { entryId: "a", position: "PITCHER" as const },
+      { entryId: "b", position: null },
+    ];
+    expect(
+      samePositions(buildPositionsDraft(clean, true).assigned, storedPositions(clean)),
+    ).toBe(true);
+  });
+
+  it("agrees with a non-allPlay draft, which pools nothing", () => {
+    // Every position is droppable there, so the two views can't diverge.
+    const entries = [
+      { entryId: "a", position: "RIGHT_FIELD" as const },
+      { entryId: "b", position: null },
+    ];
+
+    expect(
+      samePositions(
+        buildPositionsDraft(entries, false).assigned,
+        storedPositions(entries),
+      ),
+    ).toBe(true);
+  });
+
+  it("returns an empty board for an unplaced roster", () => {
+    expect(storedPositions([{ entryId: "a", position: null }])).toEqual({});
+    expect(storedPositions([])).toEqual({});
   });
 });
 

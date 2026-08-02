@@ -93,6 +93,37 @@ describe("PositionsEditor", () => {
     expect(payloadOf()).toEqual({});
   });
 
+  it("offers Save for a stale outfield row the coach hasn't touched", () => {
+    // The row still says CENTER_FIELD and the payload above says {}, so saving
+    // WOULD change the database. Gating Save on "has the coach moved anyone"
+    // strands the row: the board already looks right, so there is nothing the
+    // coach can do to make the editor dirty short of an unrelated change.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "CENTER_FIELD")]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save positions" })).toBeEnabled();
+    // Nothing to undo, though — Cancel tracks the coach's edits, not the write.
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  });
+
+  it("leaves Save disabled when the board already matches what is stored", () => {
+    // The mirror of the case above: no stale row, so a save would be a no-op.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b")]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save positions" })).toBeDisabled();
+  });
+
   it("marks unfilled positions Open", () => {
     render(
       <PositionsEditor

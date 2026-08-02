@@ -418,13 +418,40 @@ export function unassignPosition(
   return { positions: draft.positions, assigned, pool: [...draft.pool, entryId] };
 }
 
-/// Dirty check for Save/Cancel enablement. Only the diamond matters — pool
-/// order is presentation, since every pooled player persists as the same null.
+/// Compare two boards. Only the diamond matters — pool order is presentation,
+/// since every pooled player persists as the same null. Spans all nine
+/// positions, not just the droppable ones, so it can also compare a draft
+/// against what the database holds (see `storedPositions`).
 export function samePositions(
   a: Partial<Record<Position, string>>,
   b: Partial<Record<Position, string>>,
 ): boolean {
   return ALL_POSITIONS.every((position) => a[position] === b[position]);
+}
+
+/**
+ * The board as the database currently holds it, including positions that
+ * aren't droppable on this team's board.
+ *
+ * This is the only honest answer to "would saving change anything?", and it is
+ * not `buildPositionsDraft(...).assigned`: that pools an allPlay team's stale
+ * LF/CF/RF row, so a freshly-loaded draft compares equal to itself while the
+ * stored row still says CENTER_FIELD. Gating Save on the draft alone would
+ * disable the one button that collapses that row, stranding it until the coach
+ * happened to make an unrelated change.
+ */
+export function storedPositions(
+  entries: readonly PositionChartEntry[],
+): Partial<Record<Position, string>> {
+  const stored: Partial<Record<Position, string>> = {};
+  for (const entry of entries) {
+    // First writer wins, matching buildPositionsDraft. The unique index makes
+    // a collision unreachable from a real read.
+    if (entry.position !== null && stored[entry.position] === undefined) {
+      stored[entry.position] = entry.entryId;
+    }
+  }
+  return stored;
 }
 
 /// Droppable id of the zone below the diamond (outfield or bench).
