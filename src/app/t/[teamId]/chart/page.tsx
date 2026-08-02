@@ -36,8 +36,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   "order-conflict": "The order couldn't be saved. Reload and try again.",
   // Another coach saved a different order while this page sat open. Saving
   // would have replaced theirs wholesale, so nothing was written.
+  //
+  // Doesn't say "reload": the action redirected here, this loader just re-ran,
+  // and the order rendered below is already theirs. The coach's own edits are
+  // gone with the draft, so the useful instruction is to redo them.
   "chart-changed":
-    "Another coach changed the batting order while you were editing — nothing was saved. Reload to see their order.",
+    "Another coach changed the batting order while you were editing — nothing was saved. The order below is theirs; make your changes again on top of it.",
   access: "You no longer have access to make this change.",
 };
 

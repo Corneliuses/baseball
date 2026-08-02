@@ -101,6 +101,13 @@ export async function savePositionsAction(formData: FormData) {
     // This catches honest staleness between two of our own editors, which is
     // the whole hazard. It is not a permission check — a coach who wants to
     // overwrite the board can already do it by reloading first.
+    //
+    // Nor is it airtight: the read above and the write below are separate
+    // statements, so a save landing between them is still lost. That window is
+    // milliseconds against the minutes an editor sits open, and closing it
+    // needs row locks or serializable isolation — not worth it for a handful
+    // of coaches. Deliberate, and the reason to reach for a version column if
+    // this ever needs to be exact.
     if (!samePositions(storedPositions(entries), parsedBaseline.data)) {
       redirect(`/t/${teamId}/chart/positions?error=chart-changed`);
     }

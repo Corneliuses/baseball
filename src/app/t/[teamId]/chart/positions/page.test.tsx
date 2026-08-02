@@ -184,6 +184,16 @@ describe("PositionsPage rendering", () => {
     expect(html).toContain("The roster changed while you were editing");
   });
 
+  it("tells a coach whose save was refused that the board shown is the other one's", async () => {
+    // The action redirected here and this loader re-ran, so "reload" would be
+    // advice to do something that already happened.
+    const html = await render({ error: "chart-changed" });
+
+    expect(html).toContain("Another coach changed the positions");
+    expect(html).toContain("The diamond below is theirs");
+    expect(html).not.toContain("Reload to see");
+  });
+
   it("falls back to a generic message for unknown error codes", async () => {
     const html = await render({ error: "??" });
 

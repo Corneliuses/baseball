@@ -88,6 +88,9 @@ export async function saveBattingOrderAction(formData: FormData) {
     // Per-column on purpose: another coach moving players around the diamond
     // is not a reason to refuse a batting-order save, since the two writes
     // touch different columns and cannot lose each other's work.
+    //
+    // Narrows the window rather than closing it — see the positions action for
+    // why the read-then-write gap is left as it is.
     if (!sameOrder(storedBattingOrder(entries), parsedBaseline.data)) {
       redirect(`/t/${teamId}/chart?error=chart-changed`);
     }
