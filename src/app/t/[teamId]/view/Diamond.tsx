@@ -97,52 +97,29 @@ function Marker({
   );
 }
 
-/**
- * Which named spots the diamond draws.
- *
- * An allPlay team fields neither a catcher nor three named outfielders: the
- * coach pitches, and the outfield is one zone holding everyone the infield
- * leaves over, persisting as `position = null` (#11, Decision 1). Drawing C or
- * LF/CF/RF as "Open" would be doubly wrong for those teams — the spots aren't
- * open, they don't exist, and the kids playing out there would be missing from
- * the diamond entirely, which is the one thing a parent opens this page to see.
- * `Diamond` draws them from the `outfield` prop instead.
- *
- * A stale row on one of those positions (hand-set during #9, or left over from
- * before allPlay was switched on) still draws its marker, so nothing silently
- * vanishes before the coach's next save collapses it.
- */
-function positionsToDraw(
-  allPlay: boolean,
-  byPosition: Map<Position, ChartViewPlayer>,
-): readonly Position[] {
-  if (!allPlay) {
-    return ALL_POSITIONS;
-  }
-  return ALL_POSITIONS.filter(
-    (position) =>
-      ALL_PLAY_INFIELD_POSITIONS.includes(position) || byPosition.has(position),
-  );
-}
-
 export function Diamond({
   byPosition,
   allPlay,
   outfield = [],
 }: {
+  /// Seated players, keyed by position. Only ever holds spots this team
+  /// fields — `buildChartView` pools the rest, including an allPlay team's
+  /// stale LF/CF/RF or CATCHER row, so the markers below cannot collide with
+  /// the zone drawn at those same coordinates.
   byPosition: Map<Position, ChartViewPlayer>;
   allPlay: boolean;
-  /// Players with no position. Drawn as the outfield zone on an allPlay team,
-  /// and ignored otherwise — a benched player belongs on neither.
+  /// Everyone the diamond doesn't seat. Drawn as the outfield zone on an
+  /// allPlay team, and ignored otherwise — a benched player belongs on neither.
   outfield?: readonly ChartViewPlayer[];
 }) {
-  const drawn = positionsToDraw(allPlay, byPosition);
+  // An allPlay team fields neither a catcher nor three named outfielders: the
+  // coach pitches, and the outfield is one zone holding everyone the infield
+  // leaves over (#11, Decision 1). Drawing C or LF/CF/RF as "Open" would be
+  // doubly wrong for them — the spots aren't open, they don't exist — so those
+  // players come from `outfield` instead, and C gets the disc.
+  const drawn = allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS;
   const zone = allPlay ? outfield : [];
   const zoneCoords = outfieldZoneCoords(zone.length);
-
-  // Not `allPlay` on its own: a stale CATCHER row draws a real marker there, and
-  // the spot can't say both "somebody plays here" and "nobody does".
-  const noCatcher = !drawn.includes("CATCHER");
 
   return (
     <>
@@ -161,7 +138,7 @@ export function Diamond({
           strokeWidth={2}
         />
 
-        {noCatcher ? <NoCatcherMarker /> : null}
+        {allPlay ? <NoCatcherMarker /> : null}
 
         {drawn.map((position) => {
           const { x, y } = POSITION_COORDS[position];
@@ -188,7 +165,7 @@ export function Diamond({
       </svg>
 
       <ul className="sr-only">
-        {noCatcher ? <li>{NO_CATCHER_TEXT}</li> : null}
+        {allPlay ? <li>{NO_CATCHER_TEXT}</li> : null}
         {drawn.map((position) => {
           const player = byPosition.get(position);
           return (

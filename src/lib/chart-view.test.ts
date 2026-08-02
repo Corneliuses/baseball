@@ -35,21 +35,21 @@ const noRsvps = new Map<string, RsvpState>();
 
 describe("buildChartView", () => {
   it("sorts the lineup ascending by batting order", () => {
-    const view = buildChartView(fullChart, noRsvps);
+    const view = buildChartView(fullChart, noRsvps, false);
 
     expect(view.lineup.map((p) => p.playerId)).toEqual(["ben", "ava", "cy"]);
   });
 
   it("excludes benched players from the lineup", () => {
-    const view = buildChartView(fullChart, noRsvps);
+    const view = buildChartView(fullChart, noRsvps, false);
 
     expect(view.lineup.some((p) => p.playerId === "eli")).toBe(false);
   });
 
-  it("collects players with no position", () => {
+  it("collects players the diamond doesn't seat", () => {
     // The outfield on an allPlay team, the bench otherwise — buildChartView
-    // doesn't know which, and deliberately doesn't decide.
-    const view = buildChartView(fullChart, noRsvps);
+    // knows which spots are fielded, but deliberately doesn't name the zone.
+    const view = buildChartView(fullChart, noRsvps, false);
 
     expect(view.unassigned.map((p) => p.playerId)).toEqual(["eli"]);
   });
@@ -65,7 +65,7 @@ describe("buildChartView", () => {
       { entryId: "re-2", playerId: "ben", playerName: "Ben", jerseyNumber: 3, battingOrder: null, position: null },
     ];
 
-    const view = buildChartView(scrambled, noRsvps);
+    const view = buildChartView(scrambled, noRsvps, false);
 
     expect(view.unassigned.map((p) => p.playerId)).toEqual([
       "ben", // 3
@@ -79,13 +79,14 @@ describe("buildChartView", () => {
     const view = buildChartView(
       fullChart,
       new Map<string, RsvpState>([["eli", "declined"]]),
+      false,
     );
 
     expect(view.unassigned[0].rsvpState).toBe("declined");
   });
 
   it("maps assigned positions to their player", () => {
-    const view = buildChartView(fullChart, noRsvps);
+    const view = buildChartView(fullChart, noRsvps, false);
 
     expect(view.byPosition.get("SHORTSTOP")?.playerId).toBe("ava");
     expect(view.byPosition.get("PITCHER")?.playerId).toBe("ben");
@@ -94,7 +95,7 @@ describe("buildChartView", () => {
   });
 
   it("defaults an unrepresented player's rsvpState to no-response", () => {
-    const view = buildChartView(fullChart, noRsvps);
+    const view = buildChartView(fullChart, noRsvps, false);
 
     expect(view.lineup.find((p) => p.playerId === "ben")?.rsvpState).toBe(
       "no-response",
@@ -108,7 +109,7 @@ describe("buildChartView", () => {
       ["cy", "no-response"],
     ]);
 
-    const view = buildChartView(fullChart, rsvps);
+    const view = buildChartView(fullChart, rsvps, false);
 
     // Same order and membership as the no-rsvp case above.
     expect(view.lineup.map((p) => p.playerId)).toEqual(["ben", "ava", "cy"]);
@@ -127,7 +128,7 @@ describe("buildChartView", () => {
       ["cy", "declined"],
     ]);
 
-    const view = buildChartView(fullChart, allDeclined);
+    const view = buildChartView(fullChart, allDeclined, false);
 
     expect(view.lineup.map((p) => p.playerId)).toEqual(["ben", "ava", "cy"]);
     expect(view.lineup.map((p) => p.battingOrder)).toEqual([1, 2, 3]);
@@ -146,7 +147,7 @@ describe("buildChartView", () => {
       },
     ];
 
-    expect(buildChartView(partial, noRsvps).hasChart).toBe(true);
+    expect(buildChartView(partial, noRsvps, false).hasChart).toBe(true);
   });
 
   it("reports hasChart true when only a position is set", () => {
@@ -161,7 +162,7 @@ describe("buildChartView", () => {
       },
     ];
 
-    expect(buildChartView(partial, noRsvps).hasChart).toBe(true);
+    expect(buildChartView(partial, noRsvps, false).hasChart).toBe(true);
   });
 
   it("reports hasChart false when every entry is fully benched", () => {
@@ -176,15 +177,84 @@ describe("buildChartView", () => {
       },
     ];
 
-    expect(buildChartView(empty, noRsvps).hasChart).toBe(false);
+    expect(buildChartView(empty, noRsvps, false).hasChart).toBe(false);
   });
 
   it("reports hasChart false for an empty roster", () => {
-    expect(buildChartView([], noRsvps).hasChart).toBe(false);
+    expect(buildChartView([], noRsvps, false).hasChart).toBe(false);
+  });
+
+  it("pools an allPlay team's stale named-outfield row instead of seating it", () => {
+    // The view page draws its outfield zone at the very coordinates a named
+    // outfield marker occupies, so seating this player would stack two markers
+    // on one spot and make both names unreadable. The editor already shows them
+    // in its zone; this is what keeps the two diamonds telling one story.
+    const stale: ChartViewEntry[] = [
+      {
+        entryId: "re-cal",
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CENTER_FIELD",
+      },
+    ];
+
+    const view = buildChartView(stale, noRsvps, true);
+
+    expect(view.byPosition.has("CENTER_FIELD")).toBe(false);
+    expect(view.unassigned.map((p) => p.playerId)).toEqual(["cal"]);
+    // Nobody vanishes, and the chart still counts as set.
+    expect(view.hasChart).toBe(true);
+  });
+
+  it("pools an allPlay team's stale catcher row — the coach pitches", () => {
+    const stale: ChartViewEntry[] = [
+      {
+        entryId: "re-cal",
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CATCHER",
+      },
+    ];
+
+    const view = buildChartView(stale, noRsvps, true);
+
+    expect(view.byPosition.has("CATCHER")).toBe(false);
+    expect(view.unassigned.map((p) => p.playerId)).toEqual(["cal"]);
+  });
+
+  it("seats those same rows when allPlay is off", () => {
+    const named: ChartViewEntry[] = [
+      {
+        entryId: "re-cal",
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CENTER_FIELD",
+      },
+    ];
+
+    const view = buildChartView(named, noRsvps, false);
+
+    expect(view.byPosition.get("CENTER_FIELD")?.playerId).toBe("cal");
+    expect(view.unassigned).toEqual([]);
+  });
+
+  it("keeps the allPlay infield seated", () => {
+    const view = buildChartView(fullChart, noRsvps, true);
+
+    expect(view.byPosition.get("SHORTSTOP")?.playerId).toBe("ava");
+    expect(view.byPosition.get("PITCHER")?.playerId).toBe("ben");
+    expect(view.byPosition.get("FIRST_BASE")?.playerId).toBe("cy");
+    expect(view.unassigned.map((p) => p.playerId)).toEqual(["eli"]);
   });
 
   it("returns empty results for an empty roster", () => {
-    const view = buildChartView([], noRsvps);
+    const view = buildChartView([], noRsvps, false);
 
     expect(view.lineup).toEqual([]);
     expect(view.byPosition.size).toBe(0);

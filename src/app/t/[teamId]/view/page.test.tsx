@@ -274,9 +274,9 @@ describe("ViewPage chart rendering", () => {
     expect(html).not.toContain("fill-muted-foreground/30");
   });
 
-  it("still draws an allPlay team's stale catcher row", async () => {
-    // Same reasoning as the stale named-outfield row below: the coach's next
-    // save collapses it, and until then nobody vanishes off the diamond.
+  it("shows an allPlay team's stale catcher row in the outfield", async () => {
+    // Same as the stale named-outfield row: the spot isn't one this team
+    // fields, so the kid stands in the outfield until the next save says so.
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
@@ -290,14 +290,17 @@ describe("ViewPage chart rendering", () => {
 
     const html = await render();
 
-    expect(html).toContain(">C<");
-    // A real marker there, so no disc claiming nobody plays it.
-    expect(html).not.toContain("fill-muted-foreground/30");
+    expect(html).toContain("Cal");
+    expect(html).toContain(">OF<");
+    expect(html).not.toContain(">C<");
   });
 
-  it("still draws an allPlay team's stale named-outfield row", async () => {
+  it("shows an allPlay team's stale named-outfield row in the outfield", async () => {
     // Hand-set during #9, or left over from before allPlay was switched on.
-    // The coach's next save collapses it; until then nothing vanishes.
+    // The coach's next save collapses it; until then the kid is in the
+    // outfield, which is both where the editor shows them and where that save
+    // will put them. Drawing them at CF instead would land the marker on the
+    // zone's own first coordinate, with two names on one spot.
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
@@ -311,8 +314,35 @@ describe("ViewPage chart rendering", () => {
 
     const html = await render();
 
-    expect(html).toContain(">CF<");
-    expect(html).not.toContain(">LF<");
+    expect(html).toContain("Cal");
+    expect(html).toContain(">OF<");
+    expect(html).not.toContain(">CF<");
+  });
+
+  it("draws one marker per player when a stale row sits beside a real outfielder", async () => {
+    // The collision case: the zone's first coordinate IS center field.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      {
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CENTER_FIELD" as const,
+      },
+      {
+        playerId: "dee",
+        playerName: "Dee",
+        jerseyNumber: 4,
+        battingOrder: 2,
+        position: null,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html.split(">OF<")).toHaveLength(3);
+    expect(html).not.toContain(">CF<");
   });
 
   it("exposes an allPlay outfield to screen readers", async () => {
