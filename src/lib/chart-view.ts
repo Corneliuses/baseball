@@ -1,5 +1,5 @@
 import { Position } from "@/generated/prisma/enums";
-import { ALL_PLAY_INFIELD_POSITIONS, ALL_POSITIONS } from "@/lib/positions";
+import { fieldedPositions } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
 /// The view page's read-only render model (#8).
@@ -91,9 +91,7 @@ export function buildChartView(
     .filter((player) => player.battingOrder !== null)
     .sort((a, b) => a.battingOrder! - b.battingOrder!);
 
-  const fielded = new Set<Position>(
-    allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS,
-  );
+  const fielded = fieldedPositions(allPlay);
   const byPosition = new Map<Position, ChartViewPlayer>();
   const unseated: ChartViewPlayer[] = [];
   for (const player of players) {

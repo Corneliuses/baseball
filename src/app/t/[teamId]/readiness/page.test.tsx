@@ -180,6 +180,56 @@ describe("ReadinessPage with a decline", () => {
     expect(html).toContain("Bats 2nd");
   });
 
+  it("labels a stale allPlay row as the outfield, not the position it stores", async () => {
+    // The page must not print a spot it simultaneously refuses to check. The
+    // view page and the editor both show this kid in the outfield; saying "CF"
+    // here would make three screens disagree about one player.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      {
+        entryId: "entry-cal",
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CENTER_FIELD" as const,
+      },
+    ]);
+    listEventRsvps.mockResolvedValue([{ playerId: "cal", attending: false }]);
+
+    const html = await render();
+
+    expect(html).toContain("Bats 1st · OF");
+    expect(html).not.toContain("CF");
+  });
+
+  it("labels an allPlay team's unplaced player as the outfield too", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      {
+        entryId: "entry-cal",
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 2,
+        position: null,
+      },
+    ]);
+    listEventRsvps.mockResolvedValue([{ playerId: "cal", attending: false }]);
+
+    const html = await render();
+
+    expect(html).toContain("Bats 2nd · OF");
+  });
+
+  it("keeps real position labels on a team that fields them", async () => {
+    listEventRsvps.mockResolvedValue([{ playerId: "ava", attending: false }]);
+
+    const html = await render();
+
+    expect(html).toContain("Bats 1st · SS");
+  });
+
   it("does not report a spot an allPlay team never fields", async () => {
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
@@ -200,6 +250,29 @@ describe("ReadinessPage with a decline", () => {
     expect(html).toContain("Cal");
     expect(html).toContain("Needs attention");
     expect(html).not.toContain("Positions uncovered");
+  });
+});
+
+describe("ReadinessPage when everyone has answered", () => {
+  it("does not head a card 'No response' while saying nobody is outstanding", async () => {
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: true },
+      { playerId: "ben", attending: true },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Everyone has answered");
+    expect(html).not.toContain("No response");
+  });
+
+  it("still accounts for silence when only some have answered", async () => {
+    listEventRsvps.mockResolvedValue([{ playerId: "ava", attending: true }]);
+
+    const html = await render();
+
+    expect(html).toContain("No response");
+    expect(html).toContain("Ben");
   });
 });
 

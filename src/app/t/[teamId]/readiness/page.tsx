@@ -11,7 +11,11 @@ import {
 } from "@/components/ui/card";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { formatEventDateTime } from "@/lib/calendar";
-import { POSITION_LABELS } from "@/lib/positions";
+import {
+  fieldedPositions,
+  OUTFIELD_ZONE_LABEL,
+  POSITION_LABELS,
+} from "@/lib/positions";
 import { computeReadiness, type Readiness } from "@/lib/readiness";
 import { getChart } from "@/lib/roster";
 import type { ChartViewEntry } from "@/lib/chart-view";
@@ -49,20 +53,41 @@ function ordinal(n: number): string {
   return `${n}th`;
 }
 
-/// Where this player sits in the chart, so a name in the list carries enough
-/// context to act on without cross-referencing the editor.
-function chartRole(entry: ChartViewEntry): string {
+/**
+ * Where this player sits in the chart, so a name in the list carries enough
+ * context to act on without cross-referencing the editor.
+ *
+ * The position label goes through the team's fielded set rather than straight
+ * to `POSITION_LABELS`, for the same reason `computeReadiness` filters
+ * uncovered spots through it: an allPlay team's stale `CENTER_FIELD` or
+ * `CATCHER` row is not a spot that team fields. Printing "CF" beside the name
+ * would have this page assert a position it simultaneously refuses to check —
+ * and contradict the view page and the editor, which both show that player in
+ * the outfield. On an allPlay team everyone outside the infield is in the
+ * outfield, `position = null` included, which is exactly what the next save
+ * will write.
+ */
+function chartRole(entry: ChartViewEntry, allPlay: boolean): string {
   const parts: string[] = [];
   if (entry.battingOrder !== null) parts.push(`Bats ${ordinal(entry.battingOrder)}`);
-  if (entry.position !== null) parts.push(POSITION_LABELS[entry.position]);
+
+  const fielded = fieldedPositions(allPlay);
+  if (entry.position !== null && fielded.has(entry.position)) {
+    parts.push(POSITION_LABELS[entry.position]);
+  } else if (allPlay) {
+    parts.push(OUTFIELD_ZONE_LABEL);
+  }
+
   return parts.join(" · ");
 }
 
 function PlayerList({
   entries,
+  allPlay,
   tagClassName,
 }: {
   entries: ChartViewEntry[];
+  allPlay: boolean;
   tagClassName: string;
 }) {
   return (
@@ -76,7 +101,9 @@ function PlayerList({
             {entry.playerName}
             {entry.jerseyNumber !== null ? ` #${entry.jerseyNumber}` : ""}
           </span>
-          <span className={`text-xs ${tagClassName}`}>{chartRole(entry)}</span>
+          <span className={`text-xs ${tagClassName}`}>
+            {chartRole(entry, allPlay)}
+          </span>
         </li>
       ))}
     </ul>
@@ -142,10 +169,11 @@ export default async function ReadinessPage({
     chartEntries.map((entry) => entry.playerId),
     rsvpRows,
   );
+  const allPlay = team?.allPlay ?? true;
   const readiness: Readiness<ChartViewEntry> = computeReadiness(
     chartEntries,
     rsvpStates,
-    team?.allPlay ?? true,
+    allPlay,
   );
 
   const hasChart = chartEntries.some(
@@ -224,6 +252,7 @@ export default async function ReadinessPage({
               <CardContent>
                 <PlayerList
                   entries={readiness.declined}
+                  allPlay={allPlay}
                   tagClassName={RSVP_STYLE.declined.tagClassName}
                 />
               </CardContent>
@@ -260,12 +289,19 @@ export default async function ReadinessPage({
 
           <Card>
             <CardHeader>
+              {/* The heading has to track the state, not name the section: a
+                  card titled "No response" that reads "everyone answered"
+                  denies itself, and this is the one card that renders either
+                  way — it stays visible when empty so silence is always
+                  accounted for, never merely absent from the page. */}
               <CardTitle className="text-lg">
-                {RSVP_STYLE["no-response"].label}
+                {readiness.awaiting.length === 0
+                  ? "Everyone has answered"
+                  : RSVP_STYLE["no-response"].label}
               </CardTitle>
               <CardDescription>
                 {readiness.awaiting.length === 0
-                  ? "Everyone in the chart has answered."
+                  ? "Every player in the chart has an RSVP for this game."
                   : "Nothing to do — these families just haven't answered yet, and they're still in the lineup."}
               </CardDescription>
             </CardHeader>
@@ -273,6 +309,7 @@ export default async function ReadinessPage({
               <CardContent>
                 <PlayerList
                   entries={readiness.awaiting}
+                  allPlay={allPlay}
                   tagClassName={RSVP_STYLE["no-response"].tagClassName}
                 />
               </CardContent>

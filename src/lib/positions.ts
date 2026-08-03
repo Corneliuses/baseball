@@ -61,6 +61,24 @@ export const ALL_POSITIONS: readonly Position[] = [
   ...OUTFIELD_POSITIONS,
 ] as const;
 
+/**
+ * The spots a team actually fields.
+ *
+ * The rule `buildChartView` and `buildPositionsDraft` both already apply, named
+ * once so a third and fourth caller can't drift from it: an allPlay team fields
+ * the infield minus the catcher, and a row stored at any other position — a
+ * stale `CENTER_FIELD` or `CATCHER`, hand-seeded during #9 or left behind when
+ * allPlay was switched on — is a spot that team has no way to fill.
+ *
+ * Anything deciding whether a position is real for a team, or *labelling* one,
+ * has to ask this question. Reporting such a spot as uncovered invents a hole,
+ * and printing its abbreviation next to a player's name tells the coach they
+ * field a position the same screen refuses to check.
+ */
+export function fieldedPositions(allPlay: boolean): Set<Position> {
+  return new Set(allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS);
+}
+
 export function positionLabel(position: Position): string {
   return POSITION_LABELS[position];
 }

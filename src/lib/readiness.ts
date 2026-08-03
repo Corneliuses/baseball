@@ -1,5 +1,5 @@
 import { Position } from "@/generated/prisma/enums";
-import { ALL_PLAY_INFIELD_POSITIONS, ALL_POSITIONS } from "@/lib/positions";
+import { ALL_POSITIONS, fieldedPositions } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
 /// The next-game readiness check.
@@ -113,15 +113,10 @@ export function computeReadiness<T extends ChartEntry>(
     .filter((entry) => stateOf(entry) === "no-response")
     .sort(byBattingSlotThenName);
 
-  // The spots this team fields, exactly as buildChartView and
-  // buildPositionsDraft decide it. A stale CENTER_FIELD or CATCHER row on an
-  // allPlay team — hand-seeded during #9, or left behind when allPlay was
-  // switched on — is not a seat that team has, so reporting it uncovered would
-  // hand the coach a hole they cannot fill: this issue's own bug, one level
-  // down. The player is still named in `declined`; nobody disappears.
-  const fielded = new Set<Position>(
-    allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS,
-  );
+  // Reporting a spot this team doesn't field would hand the coach a hole they
+  // cannot fill — this issue's own bug, one level down. The player is still
+  // named in `declined`; nobody disappears, only the phantom hole does.
+  const fielded = fieldedPositions(allPlay);
 
   const assigned = new Map<Position, T>();
   for (const entry of chart) {

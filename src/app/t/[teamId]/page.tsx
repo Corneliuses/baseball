@@ -57,15 +57,15 @@ export default async function TeamHomePage({
         </Button>
 
         {role !== "PARENT" && (
-          <Button asChild variant="outline">
-            <Link href={`/t/${teamId}/readiness`}>Next-game readiness</Link>
-          </Button>
-        )}
+          <>
+            <Button asChild variant="outline">
+              <Link href={`/t/${teamId}/readiness`}>Next-game readiness</Link>
+            </Button>
 
-        {role !== "PARENT" && (
-          <Button asChild variant="outline">
-            <Link href={`/t/${teamId}/chart`}>Edit batting order</Link>
-          </Button>
+            <Button asChild variant="outline">
+              <Link href={`/t/${teamId}/chart`}>Edit batting order</Link>
+            </Button>
+          </>
         )}
 
         <Button asChild variant="outline">
