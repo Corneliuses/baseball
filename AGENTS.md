@@ -32,7 +32,8 @@ docs/design/       # The design plan and its SVG mockups — kept in step with t
 `src/app/` now has real routes: `/` (auth-gated landing), `/signin`, `/invite/[token]`
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher),
 `/profile` (the signed-in person's own name and phone — global, not team-scoped, since
-those are `User` columns), and `/t/[teamId]/` (team home, settings, roster, members, the
+those are `User` columns — and the app's only sign-out, a server action wrapping Auth.js
+`signOut`), and `/t/[teamId]/` (team home, settings, roster, members, the
 owner-only returning-player picker at `roster/returning`, the coach-only bulk parent
 invite at `roster/invite`, the coach-only member directory, the coach-only roster entry
 detail at `roster/[entryId]`, the schedule at `schedule` / `schedule/[eventId]`, the

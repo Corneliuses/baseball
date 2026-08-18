@@ -13,16 +13,21 @@ import {
 import { getProfile } from "@/lib/profile";
 import { getCurrentUser } from "@/lib/session";
 
-import { updateProfileAction } from "./actions";
+import { signOutAction, updateProfileAction } from "./actions";
 
 export const metadata = {
   title: "Your profile — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+// Null prototype: the key comes straight from the ?error= query param, and on
+// a plain object ?error=__proto__ or ?error=constructor would resolve an
+// Object.prototype member — truthy, so the fallback never fires — into a
+// non-renderable React child that crashes the page.
+const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null), {
   "invalid-phone": "Phone number must be 32 characters or fewer.",
   "save-failed": "Your changes couldn't be saved. Try again.",
-};
+  "signout-failed": "Signing out didn't work. Try again.",
+});
 
 /// The one place a person sees and fixes what the team has on file for them.
 ///
@@ -137,6 +142,16 @@ export default async function ProfilePage({
             </form>
           </CardContent>
         </Card>
+
+        <form action={signOutAction} className="space-y-2">
+          <Button type="submit" variant="outline" className="w-full">
+            Sign out
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Signs you out on this device only. Sign back in any time with an
+            email link.
+          </p>
+        </form>
       </div>
     </PageContainer>
   );

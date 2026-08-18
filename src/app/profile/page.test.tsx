@@ -14,6 +14,7 @@ vi.mock("@/lib/profile", () => ({
 
 vi.mock("./actions", () => ({
   updateProfileAction: vi.fn(),
+  signOutAction: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -81,6 +82,15 @@ describe("ProfilePage", () => {
     await expect(render()).rejects.toThrow("NEXT_REDIRECT:/signin?callbackUrl=%2Fprofile");
   });
 
+  // ?error= is user-controlled; a prototype-chain key must fall through to
+  // the generic message rather than resolving an Object.prototype member
+  // into the tree, which is not a renderable child and crashes the page.
+  it("treats prototype-chain error keys as unknown errors", async () => {
+    const html = await render({ error: "__proto__" });
+
+    expect(html).toContain("Something went wrong.");
+  });
+
   it("surfaces a rejected phone number", async () => {
     const html = await render({ error: "invalid-phone" });
 
@@ -98,6 +108,21 @@ describe("ProfilePage", () => {
 
     expect(html).not.toContain("Saved.");
     expect(html).toContain("Your changes couldn&#x27;t be saved. Try again.");
+  });
+
+  // The one sign-out affordance in the app — /profile is reachable from the
+  // signed-in landing page's "Your profile" button and every team nav's
+  // Profile tab, so it must actually be here. renderToStaticMarkup emits no
+  // `action` attribute for a function action, so the closest observable claim
+  // is structural: a submit button labelled "Sign out" as the first child of
+  // its own form — a bare string match would still pass with the form gone
+  // and the button decorative.
+  it("offers a sign-out button wired as a form submit", async () => {
+    const html = await render();
+
+    expect(html).toMatch(
+      /<form[^>]*><button[^>]*type="submit"[^>]*>Sign out<\/button>/,
+    );
   });
 
   // A database error on the read must not render as "no number on file" —
