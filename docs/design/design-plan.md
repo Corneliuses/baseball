@@ -9,6 +9,14 @@ diff** — nothing in `src/` changes until phases start landing — but every sp
 written against the real code (`globals.css`, `diamond-geometry.ts`, the two chart editors,
 the view page) so each phase can be picked up and built without re-deriving anything.
 
+> **Status.** All four phases in §11 have since shipped, in the same pull request as this
+> document. Where the two disagreed, this document has been corrected to describe what was
+> actually built — it is the plan *and* the as-built record, not a snapshot of the original
+> intent. Three things named below were deliberately **not** built: the save-success
+> confetti and the RSVP ⚾ micro-pop (§8), and the sign-in field illustration (§7). They
+> need a confetti dependency and new client components respectively, and were left for a
+> follow-up rather than half-done.
+
 ![Palette](assets/palette.svg)
 
 ---
@@ -63,7 +71,8 @@ The full palette with hex/HSL and usage is in the image above. Token changes lan
 | `--foreground` | `224 42% 20%` Midnight Navy | `45 36% 88%` Chalk | Navy replaces near-black everywhere |
 | `--primary` | `131 39% 30%` Field Green | `120 41% 69%` night grass-glow | Buttons/links become *green*, not black |
 | `--secondary` | `25 56% 52%` Infield Clay at 15% | clay-dark surface | Warm secondary surfaces |
-| `--accent` | `44 100% 59%` Banana Yellow | `45 100% 65%` Floodlight | New meaning: the one-per-screen wow |
+| `--accent` | `44 85% 86%` soft banana tint | `45 40% 24%` | Hover/ghost surfaces only — the *quiet* member of the banana family |
+| `--banana` | `44 100% 59%` Banana Yellow | `45 100% 65%` Floodlight | The one-per-screen wow. Separate from `--accent` so the loud value can't leak into every hover |
 | `--destructive` | `350 85% 42%` Stitch Red | lightened stitch | Also the seam-divider color |
 | `--card` | `45 60% 98%` warm white | `220 19% 15%` | Cards stay lighter than the page → depth for free |
 | `--border` | `35 30% 82%` warm sand | `219 14% 24%` | Borders get warm, stop disappearing |
@@ -120,16 +129,21 @@ The centerpiece, and the explicit second half of the brief. Full mockup, day and
 All inside the existing `400 × 520` viewBox, behind the existing markers:
 
 1. **Grass wedge** — fills the fair-territory fan from home plate `(200,420)` out along
-   both foul lines to the top corners; page-cream shows through in foul ground, keeping
-   the poster-illustration feel.
+   both foul lines, clipped a second time to the fence arc (`parkRadius`) so the park
+   ends at the wall instead of running green out to the corners of the box; page-cream
+   shows through in foul ground and beyond the fence, keeping the poster-illustration
+   feel.
 2. **Mow stripes** — concentric rings centered on home (r 90/170/250/330, 40 wide) in a
    slightly lighter green. This is 90% of the "real field" feeling for four circles of
    effort.
-3. **Warning track + fence** — a tan arc band at r≈360–395 and a 5px **Banana Yellow
-   fence line** at r=395. The fence is that screen's one banana.
+3. **Warning track + fence** — a tan arc band centred at r=392 (36 wide) and a 5px
+   **Banana Yellow fence line** at r=408. The fence is that screen's one banana. Both
+   sit far enough out that the deepest outfielder — CENTER_FIELD at y=75, so a marker
+   edge at y=55 — stands on grass rather than straddling the track.
 4. **Infield dirt** — `M200,444 L316,318 Q200,90 84,318 Z` (a diamond with an arced back
-   edge behind second), plus the home-plate circle (r 42 — big enough that the catcher
-   marker at y=452 stands on dirt) and mound (r 18 at `(200,330)`).
+   edge behind second), plus the home-plate circle (r 54 — big enough that the catcher
+   marker at y=452, and the `NoCatcherMarker` disc that replaces it on an allPlay board,
+   sit fully *on* dirt rather than hanging off its edge) and mound (r 18 at `(200,330)`).
 5. **Infield grass** — the inset diamond `(200,398) (272,322) (200,246) (128,322)`.
    SS/2B markers at y=252 land on the dirt behind it, exactly where they stand in life.
 6. **Chalk** — white foul lines home→`(14,213)`/`(386,213)` and the basepath diamond;
@@ -150,12 +164,15 @@ All inside the existing `400 × 520` viewBox, behind the existing markers:
   game falls out of dark mode for free.
 - **Markers restyle, semantics frozen.** Cream-filled circles; `RSVP_STYLE` keeps its
   three entries and label-plus-color rule — attending gets a thick Field Green ring,
-  declined fades, no-response stays dashed. New: a small cream **pill behind the
-  name/RSVP tag** (a `rx`-rounded `<rect>` under the existing `<text>`), because navy
-  text needs backing to stay readable on grass. The `NoCatcherMarker` disc survives
-  unchanged on the home-circle dirt.
+  declined fades, no-response stays dashed. New: a **`text-halo` utility**
+  (`paint-order: stroke` with a background-colored stroke) behind the name and RSVP
+  tag, because navy text needs backing to stay readable on grass. A halo rather than a
+  `<rect>` pill: the pill has to be measured against the text it sits behind, and SVG
+  gives no layout pass to measure with, so a fixed-width rect either clips a long name
+  or floats around a short one. The `NoCatcherMarker` disc survives unchanged on the
+  home-circle dirt.
 - **allPlay outfield** markers already arc across exactly this grass
-  (`outfieldZoneCoords`); they inherit the pills and need nothing else.
+  (`outfieldZoneCoords`); they inherit the halo and need nothing else.
 
 ## 7. Screen-by-screen pass
 
@@ -164,8 +181,11 @@ wordmark, one banana button ("Email me a magic link"), and a tiny flat field ill
 (a cropped reuse of `FieldArt`). Empty-state copy: "The gate's open."
 
 **Team home + `TeamCard`** — cards become **pennant cards**: small felt-green pennant
-glyph, slab team name, warm card stock. Archived teams go sepia ("retired jersey") with a
-`RETIRED` tag instead of just being text-muted.
+glyph, slab team name, warm card stock. Archived teams go sepia and desaturated — a
+retired jersey — instead of just being text-muted. The badge keeps the word **Archived**:
+that is the app's existing vocabulary for this state, shared with the "Archived Teams"
+section heading it sits under, the settings Archive/Unarchive controls, and the team
+header. A second word for one state is a worse card, however good the flourish.
 
 **Schedule** — games become **ticket stubs** (sketch A): perforated edge, slab opponent
 name, Geist Mono date, RSVP tallies on the stub end. Practices print on plain cream stock
