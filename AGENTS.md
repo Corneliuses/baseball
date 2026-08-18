@@ -214,6 +214,17 @@ production — the dev command can prompt, generate new migrations, and reset th
   **Which shape a real write actually returns is unverified** — this repo has not yet run a
   write against live Postgres that trips one of these constraints. Confirm it before relying
   on this in production, and adjust the matching in `roster-rules.ts` if it differs.
+- **Two things write the session cookie, and Auth.js is only one of them.** Accepting an
+  invitation at `/invite/[token]` signs the parent in directly — Auth.js v5 has no
+  "sign this user in" API under the database strategy, so `src/lib/sessions.ts` inserts the
+  `Session` row the way `@auth/core` does (a `randomUUID()` token, `expires` at now + max
+  age) and the action sets the cookie itself. Name and attributes come from
+  `src/lib/session-cookie.ts`, which restates Auth.js's defaults once for all three
+  consumers — Auth.js, that action, and `proxy.ts`. If `src/auth.ts` ever grows a `cookies`
+  block or a `session.generateSessionToken`, that module has to move with it or a parent
+  accepting an invitation gets a cookie the app cannot read. Accepting is a **POST**, never
+  a GET: it consumes the invitation, and corporate mail scanners follow every link in a
+  message before the recipient sees it.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.
