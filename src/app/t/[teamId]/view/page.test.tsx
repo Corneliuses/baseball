@@ -137,7 +137,6 @@ describe("ViewPage with no upcoming game", () => {
 });
 
 describe("ViewPage empty states", () => {
-
   it("shows a no-chart-set-yet empty state when every roster entry is benched", async () => {
     getChart.mockResolvedValue([
       {
