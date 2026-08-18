@@ -53,29 +53,15 @@ export default async function ViewPage({
 
   // Deliberately NOT wrapped in try/catch — nextGame's contract is that a
   // database outage propagates rather than rendering the same "no upcoming
-  // game" empty state a healthy team would show on a bye week.
+  // game" header a healthy team would show on a bye week.
   const game = await nextGame(teamId);
 
-  if (!game) {
-    return (
-      <div className="mx-auto w-full max-w-md space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>No upcoming game</CardTitle>
-            <CardDescription>
-              The lineup shows up here once a game is on the schedule. Enjoy
-              the day off.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild variant="outline">
-              <Link href={`/t/${teamId}/schedule`}>Go to schedule</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // The chart is standing, not per-game (AGENTS.md rule 2), so it renders
+  // with or without a game on the schedule — a parent between seasons still
+  // sees where their kid plays. Only the RSVP decoration is per-game: with no
+  // game there is nothing to respond to, so `showRsvp` strips the tags and
+  // the legend rather than stamping "No response" on the whole team.
+  const showRsvp = game !== null;
 
   const [team, chartEntries, rsvpRows] = await Promise.all([
     // Needed for allPlay alone: it decides whether an unplaced player is in
@@ -85,7 +71,7 @@ export default async function ViewPage({
     // 404ing a page that already passed its access check.
     getTeamById(teamId),
     getChart(teamId),
-    listEventRsvps(teamId, game.id),
+    game ? listEventRsvps(teamId, game.id) : Promise.resolve([]),
   ]);
 
   const rsvpStates = buildRsvpStateMap(
@@ -94,21 +80,42 @@ export default async function ViewPage({
   );
   const chart = buildChartView(chartEntries, rsvpStates, team?.allPlay ?? true);
 
-  const heading = game.opponent ? `Next game vs ${game.opponent}` : "Next game";
+  const heading = game?.opponent
+    ? `Next game vs ${game.opponent}`
+    : "Next game";
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{heading}</CardTitle>
-          <CardDescription>{formatEventDateTime(game.startsAt)}</CardDescription>
-        </CardHeader>
-        {game.location ? (
+      {game ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{heading}</CardTitle>
+            <CardDescription>
+              {formatEventDateTime(game.startsAt)}
+            </CardDescription>
+          </CardHeader>
+          {game.location ? (
+            <CardContent>
+              <p className="text-sm text-foreground">{game.location}</p>
+            </CardContent>
+          ) : null}
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>No upcoming game</CardTitle>
+            <CardDescription>
+              Nothing is on the schedule right now — this is the standing
+              chart, ready for the next one.
+            </CardDescription>
+          </CardHeader>
           <CardContent>
-            <p className="text-sm text-foreground">{game.location}</p>
+            <Button asChild variant="outline">
+              <Link href={`/t/${teamId}/schedule`}>Go to schedule</Link>
+            </Button>
           </CardContent>
-        ) : null}
-      </Card>
+        </Card>
+      )}
 
       {!chart.hasChart ? (
         <Card>
@@ -131,6 +138,7 @@ export default async function ViewPage({
                   byPosition={chart.byPosition}
                   allPlay={team?.allPlay ?? true}
                   outfield={chart.unassigned}
+                  showRsvp={showRsvp}
                 />
               </CardContent>
             </Card>
@@ -172,9 +180,11 @@ export default async function ViewPage({
                               ) : null}
                             </span>
                           </div>
-                          <span className={`text-xs ${style.tagClassName}`}>
-                            {style.label}
-                          </span>
+                          {showRsvp ? (
+                            <span className={`text-xs ${style.tagClassName}`}>
+                              {style.label}
+                            </span>
+                          ) : null}
                         </li>
                       );
                     })}
@@ -184,22 +194,27 @@ export default async function ViewPage({
             </Card>
           </div>
 
-          <StitchDivider className="mt-6" />
+          {showRsvp ? (
+            <>
+              <StitchDivider className="mt-6" />
 
-          <p className="mt-3 text-xs text-muted-foreground">
-            <span className={RSVP_STYLE.attending.tagClassName}>
-              {RSVP_STYLE.attending.label}
-            </span>{" "}
-            ·{" "}
-            <span className={RSVP_STYLE.declined.tagClassName}>
-              {RSVP_STYLE.declined.label}
-            </span>{" "}
-            ·{" "}
-            <span className={RSVP_STYLE["no-response"].tagClassName}>
-              {RSVP_STYLE["no-response"].label}
-            </span>{" "}
-            — RSVP is just for planning. Everyone stays in their slot either way.
-          </p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                <span className={RSVP_STYLE.attending.tagClassName}>
+                  {RSVP_STYLE.attending.label}
+                </span>{" "}
+                ·{" "}
+                <span className={RSVP_STYLE.declined.tagClassName}>
+                  {RSVP_STYLE.declined.label}
+                </span>{" "}
+                ·{" "}
+                <span className={RSVP_STYLE["no-response"].tagClassName}>
+                  {RSVP_STYLE["no-response"].label}
+                </span>{" "}
+                — RSVP is just for planning. Everyone stays in their slot
+                either way.
+              </p>
+            </>
+          ) : null}
         </Reveal>
       )}
     </div>

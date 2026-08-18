@@ -208,6 +208,13 @@ All inside the existing viewBox — `DIAMOND_GEOMETRY.width = 400`,
 wordmark, one banana button ("Email me a magic link"), and a tiny flat field illustration
 (a cropped reuse of `FieldArt`). Empty-state copy: "The gate's open."
 
+**Team chrome (post-ship addition)** — every `/t/[teamId]` view now carries a persistent
+`TeamNav` in the team layout: pill tabs on the header band, the active section filled
+Field Green, the rest on card stock with a warm border. Deliberately no banana in the
+nav — it appears on every screen, and a yellow tab would spend the one-banana budget
+everywhere at once. The old wall of outline buttons on the team home was retired in its
+favor.
+
 **Team home + `TeamCard`** — cards become **pennant cards**: small felt-green pennant
 glyph, slab team name, warm card stock. Archived teams go sepia and desaturated — a
 retired jersey — instead of just being text-muted. The badge keeps the word **Archived**:
@@ -226,7 +233,9 @@ a ⚾ micro-animation (Motion, `prefers-reduced-motion`-gated).
 
 **Lineup view (`/view`)** — the payoff page. The full-field diamond above; batting order
 as **dugout roster rows** (sketch B): jersey-dot slot number, name, RSVP pill. The
-existing `Reveal` staggers rows in like a lineup being announced.
+existing `Reveal` staggers rows in like a lineup being announced. The standing chart
+renders even with no game on the schedule (it's standing, not per-game); only the RSVP
+tags and legend are per-game and come off when there's nothing to respond to.
 
 **Chart editors** — restraint zone; dnd-kit owns every dragged element (the AGENTS.md
 rule), so flair goes only into *static* styling: field art behind the position targets,

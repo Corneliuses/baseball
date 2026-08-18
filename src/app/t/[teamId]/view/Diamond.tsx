@@ -43,11 +43,13 @@ function Marker({
   y,
   label,
   player,
+  showRsvp,
 }: {
   x: number;
   y: number;
   label: string;
   player: ChartViewPlayer | undefined;
+  showRsvp: boolean;
 }) {
   const style = player ? RSVP_STYLE[player.rsvpState] : null;
 
@@ -90,7 +92,7 @@ function Marker({
         {player ? shortName(player.playerName) : "Open"}
       </text>
 
-      {style ? (
+      {style && showRsvp ? (
         <text
           y={TAG_OFFSET}
           textAnchor="middle"
@@ -108,6 +110,7 @@ export function Diamond({
   byPosition,
   allPlay,
   outfield = [],
+  showRsvp = true,
 }: {
   /// Seated players, keyed by position. Only ever holds spots this team
   /// fields — `buildChartView` pools the rest, including an allPlay team's
@@ -118,6 +121,10 @@ export function Diamond({
   /// Everyone the diamond doesn't seat. Drawn as the outfield zone on an
   /// allPlay team, and ignored otherwise — a benched player belongs on neither.
   outfield?: readonly ChartViewPlayer[];
+  /// False when there is no upcoming game to respond to: the chart still
+  /// draws, but the per-player RSVP tags come off — "No response" against no
+  /// game would read as a team-wide silence rather than a bye week.
+  showRsvp?: boolean;
 }) {
   // An allPlay team fields neither a catcher nor three named outfielders: the
   // coach pitches, and the outfield is one zone holding everyone the infield
@@ -154,6 +161,7 @@ export function Diamond({
               y={y}
               label={POSITION_LABELS[position]}
               player={byPosition.get(position)}
+              showRsvp={showRsvp}
             />
           );
         })}
@@ -165,6 +173,7 @@ export function Diamond({
             y={zoneCoords[index].y}
             label={OUTFIELD_ZONE_LABEL}
             player={player}
+            showRsvp={showRsvp}
           />
         ))}
       </svg>
@@ -177,7 +186,9 @@ export function Diamond({
             <li key={position}>
               {POSITION_LABELS[position]}:{" "}
               {player
-                ? `${player.playerName}, ${RSVP_STYLE[player.rsvpState].label}`
+                ? showRsvp
+                  ? `${player.playerName}, ${RSVP_STYLE[player.rsvpState].label}`
+                  : player.playerName
                 : "Open"}
             </li>
           );
@@ -186,9 +197,10 @@ export function Diamond({
           <li>
             Outfield:{" "}
             {zone
-              .map(
-                (player) =>
-                  `${player.playerName}, ${RSVP_STYLE[player.rsvpState].label}`,
+              .map((player) =>
+                showRsvp
+                  ? `${player.playerName}, ${RSVP_STYLE[player.rsvpState].label}`
+                  : player.playerName,
               )
               .join("; ")}
           </li>

@@ -1,13 +1,12 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { Role } from "@/generated/prisma/enums";
 import { sortDirectory } from "@/lib/directory-rules";
 import { listCoachContacts } from "@/lib/memberships";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -24,7 +23,7 @@ export default async function TeamHomePage({
 }) {
   const { teamId } = await params;
 
-  let role;
+  let role: Role;
   try {
     ({ role } = await requireTeamAccess(teamId, { intent: "read" }));
   } catch (error) {
@@ -64,53 +63,10 @@ export default async function TeamHomePage({
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button asChild variant="outline">
-          <Link href={`/t/${teamId}/schedule`}>Schedule</Link>
-        </Button>
-
-        {/* The payoff page gets this screen's one banana (design-plan.md §2). */}
-        <Button
-          asChild
-          className="bg-banana text-banana-foreground hover:bg-banana/90"
-        >
-          <Link href={`/t/${teamId}/view`}>Lineup</Link>
-        </Button>
-
-        {role !== "PARENT" && (
-          <>
-            <Button asChild variant="outline">
-              <Link href={`/t/${teamId}/readiness`}>Next-game readiness</Link>
-            </Button>
-
-            <Button asChild variant="outline">
-              <Link href={`/t/${teamId}/chart`}>Edit batting order</Link>
-            </Button>
-
-            {/* Coach-and-above: the directory is every family's contact
-                details, so a parent gets no link and no route to it. */}
-            <Button asChild variant="outline">
-              <Link href={`/t/${teamId}/directory`}>Directory</Link>
-            </Button>
-          </>
-        )}
-
-        <Button asChild variant="outline">
-          <Link href={`/t/${teamId}/roster`}>Roster</Link>
-        </Button>
-
-        {role === "OWNER" && (
-          <Button asChild variant="outline">
-            <Link href={`/t/${teamId}/settings`}>Team settings</Link>
-          </Button>
-        )}
-
-        {/* Everyone: your own name and phone, including the number the
-            coaching staff will call. Not team-scoped — see /profile. */}
-        <Button asChild variant="outline">
-          <Link href="/profile">Your profile</Link>
-        </Button>
-      </div>
+      {/* Navigation used to live here as a wall of outline buttons; it is now
+          the persistent TeamNav in the /t/[teamId] layout, on every team view.
+          Role-gated links (directory, settings) are gated there — and, as
+          always, enforced by each page itself. */}
 
       {coachContacts.length > 0 && (
         <div className="space-y-2">

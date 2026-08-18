@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { Role } from "@/generated/prisma/enums";
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -52,7 +53,7 @@ export default async function EventPage({
   const { teamId, eventId } = await params;
   const { error, saved, confirm } = await searchParams;
 
-  let role;
+  let role: Role;
   let userId;
   try {
     ({ role, userId } = await requireTeamAccess(teamId, { intent: "read" }));

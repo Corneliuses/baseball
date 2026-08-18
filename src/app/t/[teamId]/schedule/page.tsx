@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { Role } from "@/generated/prisma/enums";
 import {
   adjacentMonth,
   bucketEventsByDay,
@@ -76,7 +77,7 @@ export default async function SchedulePage({
   const { teamId } = await params;
   const { view: rawView, month: rawMonth, past, error, added } = await searchParams;
 
-  let role;
+  let role: Role;
   try {
     ({ role } = await requireTeamAccess(teamId, { intent: "read" }));
   } catch (caught) {

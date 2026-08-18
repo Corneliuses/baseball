@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageContainer } from "@/components/layout/PageContainer";
+import { TeamNav } from "@/components/TeamNav";
 import { TeamSwitcher } from "@/components/TeamSwitcher";
+import type { Role } from "@/generated/prisma/enums";
 import { isOwnerEmail } from "@/lib/owner";
 import { getCurrentUser } from "@/lib/session";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -29,8 +32,9 @@ export default async function TeamLayout({
 }) {
   const { teamId } = await params;
 
+  let role: Role;
   try {
-    await requireTeamAccess(teamId, { intent: "read" });
+    ({ role } = await requireTeamAccess(teamId, { intent: "read" }));
   } catch (error) {
     if (error instanceof TeamAccessError) {
       notFound();
@@ -57,9 +61,19 @@ export default async function TeamLayout({
 
   return (
     <PageContainer>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
-        <h2 className="font-display text-2xl text-foreground">{team.name}</h2>
-        <TeamSwitcher teams={switcherTeams} currentTeamId={teamId} />
+      {/* The team's own header band: name, switcher, and the persistent nav.
+          TeamNav's role prop only decides which links render — every page
+          underneath still calls requireTeamAccess for itself. */}
+      <div className="mb-6 space-y-4 border-b-2 border-border pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <Link href={`/t/${teamId}`}>
+            <h2 className="font-display text-2xl text-foreground">
+              {team.name}
+            </h2>
+          </Link>
+          <TeamSwitcher teams={switcherTeams} currentTeamId={teamId} />
+        </div>
+        <TeamNav teamId={teamId} role={role} />
       </div>
       {children}
     </PageContainer>
