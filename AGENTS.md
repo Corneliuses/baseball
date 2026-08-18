@@ -214,6 +214,13 @@ production — the dev command can prompt, generate new migrations, and reset th
   **Which shape a real write actually returns is unverified** — this repo has not yet run a
   write against live Postgres that trips one of these constraints. Confirm it before relying
   on this in production, and adjust the matching in `roster-rules.ts` if it differs.
+- **`docs/design/design-plan.md` is checked against the code by a test.**
+  `src/design-plan-drift.test.ts` reads that document and asserts its colour-token values
+  against `globals.css` and its ``FIELD_ART.key = n`` geometry claims against
+  `diamond-geometry.ts`, because the document drifted from the code four times in its
+  first week. Changing a design token or a field radius will fail `pnpm check` until the
+  document is updated to match. Fix whichever side is wrong — usually the document — and
+  never delete the claim to silence the test. §13 of the document explains the format.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.

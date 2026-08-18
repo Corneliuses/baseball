@@ -15,7 +15,8 @@ the view page) so each phase can be picked up and built without re-deriving anyt
 > intent. Three things named below were deliberately **not** built: the save-success
 > confetti and the RSVP ⚾ micro-pop (§8), and the sign-in field illustration (§7). They
 > need a confetti dependency and new client components respectively, and were left for a
-> follow-up rather than half-done.
+> follow-up rather than half-done. §13 explains how this document is kept from drifting
+> again.
 
 ![Palette](assets/palette.svg)
 
@@ -69,14 +70,36 @@ The full palette with hex/HSL and usage is in the image above. Token changes lan
 |---|---|---|---|
 | `--background` | `42 70% 94%` Vintage Cream | `218 22% 10%` Dugout Charcoal | The single biggest de-black-and-whitening move |
 | `--foreground` | `224 42% 20%` Midnight Navy | `45 36% 88%` Chalk | Navy replaces near-black everywhere |
-| `--primary` | `131 39% 30%` Field Green | `120 41% 69%` night grass-glow | Buttons/links become *green*, not black |
-| `--secondary` | `25 56% 52%` Infield Clay at 15% | clay-dark surface | Warm secondary surfaces |
+| `--primary` | `131 39% 30%` Field Green | `120 41% 69%` grass-glow | Buttons/links become *green*, not black |
+| `--secondary` | `30 40% 87%` clay tint | `219 14% 20%` | Warm secondary surfaces — a tint, not full-strength clay |
 | `--accent` | `44 85% 86%` soft banana tint | `45 40% 24%` | Hover/ghost surfaces only — the *quiet* member of the banana family |
 | `--banana` | `44 100% 59%` Banana Yellow | `45 100% 65%` Floodlight | The one-per-screen wow. Separate from `--accent` so the loud value can't leak into every hover |
-| `--destructive` | `350 85% 42%` Stitch Red | lightened stitch | Also the seam-divider color |
+| `--destructive` | `350 85% 42%` Stitch Red | `352 70% 55%` | Also the seam-divider colour |
+| `--muted` | `40 32% 86%` | `219 14% 22%` | Quiet surfaces |
+| `--muted-foreground` | `30 12% 38%` | `40 15% 68%` | Secondary text, and the declined name *on the field* |
 | `--card` | `45 60% 98%` warm white | `220 19% 15%` | Cards stay lighter than the page → depth for free |
-| `--border` | `35 30% 82%` warm sand | `219 14% 24%` | Borders get warm, stop disappearing |
-| `--baseball-*` | retire or re-point at the above | — | One palette, not two competing ones |
+| `--border` | `35 30% 80%` warm sand | `219 14% 24%` | Borders get warm, stop disappearing |
+| `--ring` | `131 39% 30%` Field Green | `45 100% 65%` Floodlight | Focus rings — yellow at night, where green would vanish |
+
+The field's own palette, consumed by `FieldArt` in both diamonds:
+
+| Token | Light ("day game") | Dark ("night game") | Notes |
+|---|---|---|---|
+| `--grass` | `104 31% 55%` | `145 31% 20%` | Fair territory |
+| `--grass-stripe` | `104 33% 60%` | `145 29% 23%` | Mow rings, a shade up from the grass |
+| `--infield-grass` | `104 27% 50%` | `144 30% 17%` | The diamond inside the basepaths |
+| `--dirt` | `31 56% 57%` | `26 36% 35%` | Infield, home circle, mound |
+| `--track` | `33 62% 60%` | `25 36% 31%` | Warning track |
+| `--chalk` | `0 0% 100%` | `45 36% 88%` | Foul lines, basepaths, bases, plate |
+
+And the scoreboard, which is charcoal in **both** themes — a scoreboard is dark; light mode
+just means it is daytime around it:
+
+| Token | Light ("day game") | Dark ("night game") | Notes |
+|---|---|---|---|
+| `--scoreboard` | `218 22% 10%` | `218 22% 8%` | Panel ground |
+| `--scoreboard-foreground` | `45 36% 88%` | `45 36% 88%` | Readout text |
+| `--scoreboard-accent` | `45 100% 65%` | `45 100% 65%` | The lit figures |
 
 Dark mode is a **night game**: same field under floodlights — charcoal sky, deeper grass,
 glowing chalk, and the yellow gets *brighter*, not muted. It already keys off
@@ -126,24 +149,29 @@ The centerpiece, and the explicit second half of the brief. Full mockup, day and
 
 ### What gets drawn (back to front)
 
-All inside the existing `400 × 520` viewBox, behind the existing markers:
+All inside the existing viewBox — `DIAMOND_GEOMETRY.width = 400`,
+`DIAMOND_GEOMETRY.height = 520` — behind the existing markers:
 
 1. **Grass wedge** — fills the fair-territory fan from home plate `(200,420)` out along
-   both foul lines, clipped a second time to the fence arc (`parkRadius`) so the park
+   both foul lines, clipped a second time to the fence arc
+   (`FIELD_ART.parkRadius = 411`) so the park
    ends at the wall instead of running green out to the corners of the box; page-cream
    shows through in foul ground and beyond the fence, keeping the poster-illustration
    feel.
-2. **Mow stripes** — concentric rings centered on home (r 90/170/250/330, 40 wide) in a
-   slightly lighter green. This is 90% of the "real field" feeling for four circles of
-   effort.
-3. **Warning track + fence** — a tan arc band centred at r=392 (36 wide) and a 5px
-   **Banana Yellow fence line** at r=408. The fence is that screen's one banana. Both
-   sit far enough out that the deepest outfielder — CENTER_FIELD at y=75, so a marker
-   edge at y=55 — stands on grass rather than straddling the track.
+2. **Mow stripes** — concentric rings centred on home, `FIELD_ART.stripeWidth = 40` wide,
+   in a slightly lighter green. This is 90% of the "real field" feeling for four circles
+   of effort.
+3. **Warning track + fence** — a tan arc band at `FIELD_ART.trackRadius = 392`,
+   `FIELD_ART.trackWidth = 36` wide, and a **Banana Yellow fence line** at
+   `FIELD_ART.fenceRadius = 408`, `FIELD_ART.fenceWidth = 5`. The fence is that screen's
+   one banana. Both sit far enough out that the deepest outfielder — CENTER_FIELD at
+   y=75, so a marker edge at y=55 — stands on grass rather than straddling the track,
+   which `diamond-geometry.test.ts` pins.
 4. **Infield dirt** — `M200,444 L316,318 Q200,90 84,318 Z` (a diamond with an arced back
-   edge behind second), plus the home-plate circle (r 54 — big enough that the catcher
-   marker at y=452, and the `NoCatcherMarker` disc that replaces it on an allPlay board,
-   sit fully *on* dirt rather than hanging off its edge) and mound (r 18 at `(200,330)`).
+   edge behind second), plus the home-plate circle — big enough that the catcher marker
+   at y=452, and the `NoCatcherMarker` disc that replaces it on an allPlay board, sit
+   fully *on* dirt rather than hanging off its edge — and the mound at `(200,330)`.
+   `FIELD_ART.mound.r = 18`.
 5. **Infield grass** — the inset diamond `(200,398) (272,322) (200,246) (128,322)`.
    SS/2B markers at y=252 land on the dirt behind it, exactly where they stand in life.
 6. **Chalk** — white foul lines home→`(14,213)`/`(386,213)` and the basepath diamond;
@@ -221,11 +249,20 @@ Every dynasty starts somewhere." Copy stays informative first, funny second; par
 
 Via the existing `LazyMotion`/`m` setup only:
 
-- Page-level: 150–200ms fade-up on card mount; stagger lists (lineup, schedule) ~40ms.
-- Micro: RSVP pop, save-success tick, pennant hover tilt (±2°).
+- Page-level: the existing `Reveal` rise on card mount; lineup rows stagger in at ~40ms
+  intervals via the `animate-rise` utility, an inline `animation-delay` per row.
+- `animate-rise` is CSS, not Motion, and **translate-only** — no opacity, for the same
+  reason `Reveal` has none: Motion serialises `initial` into the server-rendered markup,
+  so a fade ships `opacity: 0` in the HTML and the lineup stays blank until the bundle
+  hydrates. At a field on one bar of signal the content has to be legible from the raw
+  HTML, with the animation as polish on top.
+- Micro: RSVP pop, save-success tick, pennant hover tilt (±2°). **Not built** — see the
+  status note at the top.
 - Celebration: one confetti burst (green/yellow/cream, ~1.2s) on chart save success only.
-- Hard rules: nothing dnd-kit touches gets Motion (documented collision); every
-  non-essential animation respects `prefers-reduced-motion`; nothing loops forever.
+  **Not built** — needs a dependency, deferred rather than half-done.
+- Hard rules: nothing dnd-kit touches gets Motion or `animate-rise` (documented
+  collision); every non-essential animation respects `prefers-reduced-motion`, which
+  `animate-rise` does in its own `@utility` block; nothing loops forever.
 
 ## 9. Voice
 
@@ -273,3 +310,37 @@ wow-per-effort.
   standing; Decision 16).
 - Dates through `calendar.ts` helpers only.
 - One banana per screen.
+
+## 13. Keeping this document honest
+
+This document ships in the same repository as the code it describes, which makes it a
+second source of truth — and a second source of truth rots. In this document's first week
+it rotted four times: the colour table named one `--accent` where the code had split
+`--accent` and `--banana`; `--secondary` and `--border` carried values that were never
+shipped; §6 specified a `<rect>` pill that was replaced by `text-halo` during
+implementation; and the field radii were the ones from before the visual-review fixes
+moved them. Three were caught by a reviewer reading the diff. That is expensive attention
+to spend on stale numbers.
+
+So `src/design-plan-drift.test.ts` now checks this file against the code on every
+`pnpm check`, and the sections above are written in a shape it can read:
+
+- **Colour tables.** A row of the form ``| `--token` | `H S% L%` … | `H S% L%` … |`` is a
+  claim. The test asserts the token exists in `globals.css` and that both values match.
+  Describing a token in words instead of an HSL triple is allowed — the cell is simply
+  not checked — so the guard only ever fires on a stated value that is *wrong*.
+- **Geometry.** Numbers are written as ``FIELD_ART.trackRadius = 392`` or
+  ``DIAMOND_GEOMETRY.height = 520``, one level of nesting allowed
+  (``FIELD_ART.mound.r = 18``). The test reads every such claim and compares it to the
+  real constant. Prose may still say "roughly a third of the way out" — only the
+  `Object.key = number` form is binding.
+- **Utilities.** Utilities named as part of the texture vocabulary must exist as
+  `@utility` blocks in `globals.css`.
+
+Everything else — rationale, principles, the screen-by-screen pass, voice — stays
+free-form on purpose. The goal is to catch stale *facts*, not to turn a design document
+into a schema.
+
+**When the test fails, fix whichever side is wrong** — usually this document, because the
+code moved and the prose did not. Deleting the claim to quiet the test throws away the
+only thing keeping the two in step.
