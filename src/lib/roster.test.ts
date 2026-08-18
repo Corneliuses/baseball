@@ -52,6 +52,7 @@ import {
   getChart,
   getRoster,
   getRosterEntry,
+  getRosterWithGuardians,
   isReturningCandidate,
   listReturningCandidates,
   removeRosterEntry,
@@ -95,6 +96,46 @@ describe("getRoster", () => {
     findManyRosterEntries.mockRejectedValue(new Error("connection refused"));
 
     await expect(getRoster("team-1")).resolves.toEqual([]);
+  });
+});
+
+describe("getRosterWithGuardians", () => {
+  it("scopes the query to the team and flattens guardian emails", async () => {
+    findManyRosterEntries.mockResolvedValue([
+      {
+        id: "entry-1",
+        jerseyNumber: 4,
+        player: {
+          id: "player-1",
+          name: "Ada",
+          dateOfBirth: null,
+          guardians: [
+            { user: { email: "mom@example.com" } },
+            { user: { email: "dad@example.com" } },
+          ],
+        },
+      },
+    ]);
+
+    const result = await getRosterWithGuardians("team-1");
+
+    expect(findManyRosterEntries).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { teamId: "team-1" } }),
+    );
+    expect(result).toEqual([
+      {
+        id: "entry-1",
+        jerseyNumber: 4,
+        player: { id: "player-1", name: "Ada", dateOfBirth: null },
+        guardianEmails: ["mom@example.com", "dad@example.com"],
+      },
+    ]);
+  });
+
+  it("returns an empty array when the database throws", async () => {
+    findManyRosterEntries.mockRejectedValue(new Error("connection refused"));
+
+    await expect(getRosterWithGuardians("team-1")).resolves.toEqual([]);
   });
 });
 

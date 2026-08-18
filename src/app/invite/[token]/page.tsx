@@ -13,14 +13,14 @@ import {
 import { getInvitationByToken } from "@/lib/invitations";
 import { isLiveInvitation } from "@/lib/invitation-token";
 
-import { requestInvitationLinkAction } from "./actions";
+import { acceptInvitationAction } from "./actions";
 
 export const metadata = {
   title: "You're invited — Youth Baseball Team Manager",
 };
 
 /// Masks all but the first character of the local part, so the page can
-/// confirm which address will receive mail without fully disclosing it to
+/// confirm which address the coach has on file without fully disclosing it to
 /// anyone who guesses or intercepts the link.
 function maskEmail(email: string): string {
   const [local, domain] = email.split("@");
@@ -32,19 +32,20 @@ function maskEmail(email: string): string {
 }
 
 /// Unauthenticated by design — proxy.ts's matcher is "/t/:path*" and this
-/// route is deliberately outside it. The token is the only credential: it
-/// authorizes sending mail to the address on the row, nothing more. Granting
-/// access itself happens later, when that emailed link is clicked — see
-/// design-doc.md #4 Decision 1.
+/// route is deliberately outside it. The token is the credential, and this
+/// page only reads it: accepting is the POST in actions.ts, which is what
+/// grants the membership and writes the session. Rendering must stay
+/// side-effect free, because mail scanners fetch this URL before the parent
+/// ever opens the message.
 export default async function InvitePage({
   params,
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ sent?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { token } = await params;
-  const { sent } = await searchParams;
+  const { error } = await searchParams;
 
   const invitation = await getInvitationByToken(token);
 
@@ -92,22 +93,33 @@ export default async function InvitePage({
           <CardHeader>
             <CardTitle>You&apos;re invited to join {invitation.teamName}</CardTitle>
             <CardDescription>
-              We&apos;ll email a one-time sign-in link to {maskEmail(invitation.email)}.
+              Accepting signs you in on this device — no password, and nothing
+              else to find in your inbox.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {sent ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                Check your email for the sign-in link.
+          <CardContent className="space-y-4">
+            {error ? (
+              <p role="alert" className="text-sm text-destructive">
+                Something went wrong accepting your invitation. Try again, or
+                ask your coach to send a new one.
               </p>
-            ) : (
-              <form action={requestInvitationLinkAction}>
-                <input type="hidden" name="token" value={token} />
-                <Button type="submit" className="w-full">
-                  Send me a sign-in link
-                </Button>
-              </form>
-            )}
+            ) : null}
+
+            <form action={acceptInvitationAction}>
+              <input type="hidden" name="token" value={token} />
+              <Button type="submit" className="w-full">
+                Accept invitation
+              </Button>
+            </form>
+
+            <p className="text-sm text-muted-foreground">
+              This invitation was sent to {maskEmail(invitation.email)}. It
+              works once — after that, sign in from{" "}
+              <Link href="/signin" className="font-medium text-primary underline">
+                the sign-in page
+              </Link>
+              .
+            </p>
           </CardContent>
         </Card>
       </div>

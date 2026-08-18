@@ -23,7 +23,7 @@ import { TeamAccessError } from "@/lib/team-access";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+  requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
   listDirectory.mockResolvedValue([]);
 });
 
@@ -33,16 +33,23 @@ describe("DirectoryPage", () => {
     expect(typeof DirectoryPage).toBe("function");
   });
 
-  it("is visible to a parent, not just the owner", async () => {
+  it("is visible to a coach", async () => {
     const { default: DirectoryPage } = await import("./page");
 
     await expect(
       DirectoryPage({ params: Promise.resolve({ teamId: "team-1" }) }),
     ).resolves.toBeDefined();
-    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", { intent: "read" });
+    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", {
+      intent: "read",
+      minRole: "COACH",
+    });
   });
 
-  it("calls notFound() for someone with no membership", async () => {
+  // Covers a parent pasting the URL too: the loader turns every
+  // TeamAccessError into notFound() without reading its reason, and the
+  // minRole: "COACH" assertion above pins where the parent lockout actually
+  // lives (team-access.test.ts proves a PARENT fails that gate).
+  it("calls notFound() when access is refused, before fetching", async () => {
     requireTeamAccess.mockRejectedValue(new TeamAccessError("nope", "no-membership"));
 
     const { default: DirectoryPage } = await import("./page");
@@ -50,6 +57,7 @@ describe("DirectoryPage", () => {
     await expect(
       DirectoryPage({ params: Promise.resolve({ teamId: "team-1" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(listDirectory).not.toHaveBeenCalled();
   });
 
   it("renders a parent's kids on this team", async () => {

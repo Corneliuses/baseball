@@ -52,11 +52,16 @@ export default async function Home() {
               Your teams are below.
             </p>
           </div>
-          {owner && (
-            <Button asChild>
-              <Link href="/t/new">Create a team</Link>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/profile">Your profile</Link>
             </Button>
-          )}
+            {owner && (
+              <Button asChild>
+                <Link href="/t/new">Create a team</Link>
+              </Button>
+            )}
+          </div>
         </div>
 
         <TeamSelector teams={teams} userTeamIds={userTeamIds} />

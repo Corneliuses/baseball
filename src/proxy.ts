@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { SESSION_COOKIE_NAMES } from "@/lib/session-cookie";
+
 /// Next.js 16 renamed Middleware to Proxy. This file lives in `src/` rather than
 /// the repository root because the convention is that it sits beside `app` — and
 /// this project's router is `src/app`. A root proxy.ts would simply never run,
@@ -17,14 +19,6 @@ import { NextResponse, type NextRequest } from "next/server";
 /// requireTeamAccess runs inside it.
 ///
 /// Cookie presence is not cookie validity. That is what "optimistic" means.
-
-/// Auth.js names the session cookie, adding the __Secure- prefix when cookies are
-/// secure (i.e. in production over HTTPS). Database sessions store a short token,
-/// so the chunked `.0` variants never come into play.
-const SESSION_COOKIE_NAMES = [
-  "authjs.session-token",
-  "__Secure-authjs.session-token",
-];
 
 export function proxy(request: NextRequest) {
   const hasSessionCookie = SESSION_COOKIE_NAMES.some((name) =>
@@ -44,6 +38,10 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(signInUrl);
 }
 
+/// `/profile` is matched alongside the team routes: it is signed-in-only and
+/// shows the person their own contact details. `/invite/[token]` stays out,
+/// deliberately — accepting an invitation is how someone gets a session in
+/// the first place.
 export const config = {
-  matcher: "/t/:path*",
+  matcher: ["/t/:path*", "/profile"],
 };

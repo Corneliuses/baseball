@@ -13,11 +13,33 @@ vi.mock("@/lib/roster", () => ({
   getRosterEntry: (...args: unknown[]) => getRosterEntry(...args),
 }));
 
+vi.mock("next/navigation", () => ({
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+}));
+
+import { TeamAccessError } from "@/lib/team-access";
+
 const BASE_ENTRY = {
   id: "entry-1",
   jerseyNumber: 7,
   player: { id: "player-1", name: "Ada", dateOfBirth: null },
   guardians: [],
+};
+
+const ENTRY_WITH_GUARDIAN = {
+  ...BASE_ENTRY,
+  guardians: [
+    {
+      id: "user-9",
+      name: "Sam",
+      email: "sam@example.com",
+      phone: "555-1234",
+      isMember: true,
+      hasSignedIn: true,
+    },
+  ],
 };
 
 beforeEach(() => {
@@ -47,18 +69,43 @@ describe("Roster entry page", () => {
     expect(markup).toContain("Remove player");
   });
 
-  it("hides edit and remove controls for a parent", async () => {
-    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
-    getRosterEntry.mockResolvedValue(BASE_ENTRY);
+  it("requires COACH and shows guardian contact details", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    getRosterEntry.mockResolvedValue(ENTRY_WITH_GUARDIAN);
 
     const { default: RosterEntryPage } = await import("./page");
-    const result = await RosterEntryPage({
-      params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
-      searchParams: Promise.resolve({}),
-    });
+    const markup = renderToStaticMarkup(
+      await RosterEntryPage({
+        params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
 
-    const markup = renderToStaticMarkup(result);
-    expect(markup).not.toContain("Remove player");
-    expect(markup).not.toContain("Save changes");
+    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", {
+      intent: "read",
+      minRole: "COACH",
+    });
+    expect(markup).toContain("Guardians");
+    expect(markup).toContain("sam@example.com");
+    expect(markup).toContain("555-1234");
+  });
+
+  // The route is coach-and-above like /directory: the page is the roster
+  // admin surface and carries every linked guardian's contact details, so a
+  // parent gets a 404 — and the guardian data is never even fetched.
+  it("calls notFound() below COACH, before fetching the entry", async () => {
+    requireTeamAccess.mockRejectedValue(
+      new TeamAccessError("Requires COACH", "insufficient-role"),
+    );
+
+    const { default: RosterEntryPage } = await import("./page");
+
+    await expect(
+      RosterEntryPage({
+        params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
+        searchParams: Promise.resolve({}),
+      }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(getRosterEntry).not.toHaveBeenCalled();
   });
 });

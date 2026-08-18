@@ -93,6 +93,51 @@ export async function acceptInvitations(
   return pending.length;
 }
 
+/**
+ * The `User` row for an invited address, created if it is not there yet.
+ *
+ * A parent linked to a player already has one — `linkGuardian` upserts it long
+ * before they ever sign in — but a coach invited from the members page does
+ * not: nothing writes a row for them until Auth.js does. Accepting an
+ * invitation has to work for both.
+ *
+ * `emailVerified` is stamped here because accepting proves the person holds the
+ * mailbox the token was mailed to, which is the same thing a magic link proves.
+ * `@auth/core` stamps it at exactly this point in its own email flow.
+ *
+ * The lookup is case-insensitive for the same reason `loadSignInContext`'s is:
+ * a `User` row written before `normalizeEmail` existed can differ in case, and
+ * a create keyed on the normalized form would collide with it on `User.email`'s
+ * unique index rather than finding it.
+ */
+export async function resolveInvitedUser(
+  email: string,
+  now: Date = new Date(),
+): Promise<{ id: string; email: string }> {
+  const address = normalizeEmail(email);
+
+  const existing = await db.user.findFirst({
+    where: { email: { equals: address, mode: "insensitive" } },
+    select: { id: true, email: true, emailVerified: true },
+  });
+
+  if (existing) {
+    if (existing.emailVerified === null) {
+      await db.user.update({
+        where: { id: existing.id },
+        data: { emailVerified: now },
+      });
+    }
+
+    return { id: existing.id, email: existing.email };
+  }
+
+  return db.user.create({
+    data: { email: address, emailVerified: now },
+    select: { id: true, email: true },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Creating and looking up invitations (#4)
 // ---------------------------------------------------------------------------

@@ -41,6 +41,51 @@ export async function listTeamMembers(teamId: string): Promise<TeamMember[]> {
   }
 }
 
+export type CoachContact = {
+  userId: string;
+  role: Role;
+  name: string | null;
+  email: string;
+  phone: string | null;
+};
+
+/**
+ * The coaching staff — OWNER and COACH rows only — with contact details.
+ *
+ * This is the one slice of the directory a parent may read. /directory is
+ * coach-and-above because it holds every family's contact details, and the
+ * recorded escape hatch is "a parent who needs to reach someone goes through
+ * the coach" — which only works if the coach is reachable. The role filter
+ * in the query (not in the caller) is the boundary: no PARENT row and no
+ * player link can leave the database through this function.
+ */
+export async function listCoachContacts(teamId: string): Promise<CoachContact[]> {
+  try {
+    const memberships = await db.membership.findMany({
+      where: { teamId, role: { in: ["OWNER", "COACH"] } },
+      select: {
+        userId: true,
+        role: true,
+        user: {
+          select: { name: true, email: true, phone: true },
+        },
+      },
+    });
+
+    return memberships.map((m) => ({
+      userId: m.userId,
+      role: m.role,
+      name: m.user.name,
+      email: m.user.email,
+      phone: m.user.phone,
+    }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to fetch coach contacts:", message);
+    return [];
+  }
+}
+
 export type DirectoryEntry = {
   userId: string;
   role: Role;
