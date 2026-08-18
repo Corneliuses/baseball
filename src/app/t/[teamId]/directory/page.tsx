@@ -20,14 +20,19 @@ const ROLE_LABELS: Record<string, string> = {
   PARENT: "Parent",
 };
 
-/// Coach-and-above only. The directory is every family's contact details in
-/// one list, so it is staff-facing: a parent gets no route to another
-/// family's phone number or email. Nothing links here for a parent, and
-/// minRole turns a pasted URL into a 404.
+/// Owner-only. The directory is every family's contact details in one list,
+/// so it is held by the narrowest audience that can still do the job: the
+/// one person who runs the team. COACH was considered and is too wide —
+/// a team can carry up to four coaches, they turn over season to season,
+/// and none of that is visible to the families whose numbers are on the
+/// page. A coach who needs to reach a family asks the owner.
+///
+/// Nothing links here below OWNER, and minRole turns a pasted URL into a
+/// 404 — the same shape /members already uses.
 ///
 /// Each member's kid list stays scoped to THIS team's roster (see
-/// design-doc.md #5 Decision 5), so a coach on this team never learns what
-/// other team a child also plays on.
+/// design-doc.md #5 Decision 5), so this page never reveals what other
+/// team a child also plays on.
 export default async function DirectoryPage({
   params,
 }: {
@@ -36,7 +41,7 @@ export default async function DirectoryPage({
   const { teamId } = await params;
 
   try {
-    await requireTeamAccess(teamId, { intent: "read", minRole: "COACH" });
+    await requireTeamAccess(teamId, { intent: "read", minRole: "OWNER" });
   } catch (caught) {
     if (caught instanceof TeamAccessError) {
       notFound();
