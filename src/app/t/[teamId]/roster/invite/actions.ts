@@ -27,12 +27,17 @@ const emailSchema = z.email();
 const messageSchema = z.string().trim().max(1000);
 
 /// Hard ceiling on rows in one batch. The rendered form never comes close —
-/// it is one row per unlinked player — but the action reads whatever fields
-/// the POST carries, and each row costs a query and (potentially) an email to
-/// an address taken straight from the request. Bounding the batch keeps a
-/// forged or repeated submission from turning one request into an unbounded
-/// send to arbitrary recipients.
-const MAX_ROWS = 100;
+/// it is one row per unlinked player, and a youth team is ~15 (product-brief.md)
+/// — but the action reads whatever fields the POST carries, and each row costs
+/// a query and (potentially) an email to an address taken straight from the
+/// request. Bounding the batch keeps a forged or repeated submission from
+/// turning one request into an unbounded send to arbitrary recipients.
+///
+/// Kept well under what MIN_SEND_INTERVAL_MS can fit inside the page's
+/// `maxDuration`: at 600ms a row, this is 18s of pacing before per-row work,
+/// against a 60s ceiling. A cap that could outlast the timeout would trade a
+/// clean rejection for a half-finished batch.
+const MAX_ROWS = 30;
 
 /// Resend's API is rate limited (2 requests/second by default), and a batch is
 /// the one place in this app that sends in a loop. Pace the sends so a

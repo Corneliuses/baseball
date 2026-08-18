@@ -76,12 +76,14 @@ export default async function BulkInvitePage({
   const statusParts = [
     sent ? `${sent} invitation${sent === "1" ? "" : "s"} sent` : null,
     linked ? `${linked} already-member parent${linked === "1" ? "" : "s"} linked` : null,
-    // Deliberately not "try again here": a failed send still created the
-    // guardian link, so that kid has moved to the covered list below and no
-    // longer has a row on this form. The player's page is where the
-    // invitation can actually be resent.
+    // Deliberately not "try again here", and deliberately vague about where.
+    // `failed` covers three different states: a send that failed (the guardian
+    // link exists, so that kid has moved to the covered list below and has no
+    // row on this form — the player's page can resend), a roster entry that
+    // vanished between render and submit (no link, and no player to open), and
+    // a row that threw (indeterminate). Only the roster can tell them apart.
     failed
-      ? `${failed} could not be sent — open the player from the roster to resend`
+      ? `${failed} could not be invited — check those players on the roster`
       : null,
   ].filter(Boolean);
 
@@ -108,12 +110,13 @@ export default async function BulkInvitePage({
 
       {/* An empty roster reaches this page with nothing to invite for, and so
           does a database outage — getRosterWithGuardians swallows read errors
-          to an empty list. Neither is "every player already has a parent", so
-          they get their own, non-committal line. */}
+          to an empty list. Neither is "every player already has a parent", and
+          this page cannot tell the two apart, so the line commits to neither:
+          it points at the roster, which is right either way. */}
       {roster.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No players on the roster yet. Add players first, then invite their
-          parents.
+          No players to invite parents for. Check the roster — invitations start
+          from the players on it.
         </p>
       ) : needingGuardians.length === 0 ? (
         <p className="text-sm text-muted-foreground">

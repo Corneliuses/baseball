@@ -210,7 +210,7 @@ describe("bulkInviteGuardiansAction", () => {
   it("rejects an oversized batch before writing", async () => {
     const data = new FormData();
     data.set("teamId", "team-1");
-    for (let i = 0; i < 101; i += 1) {
+    for (let i = 0; i < 31; i += 1) {
       data.set(`email-entry-${i}`, `parent${i}@example.com`);
     }
 

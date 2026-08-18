@@ -106,7 +106,7 @@ describe("Bulk invite page", () => {
     getRosterWithGuardians.mockResolvedValue([]);
 
     const markup = await renderPage();
-    expect(markup).toContain("No players on the roster yet");
+    expect(markup).toContain("No players to invite parents for");
     expect(markup).not.toContain("Every player already has a parent linked");
   });
 
@@ -115,7 +115,7 @@ describe("Bulk invite page", () => {
 
     expect(markup).toContain("3 invitations sent");
     expect(markup).toContain("1 already-member parent linked");
-    expect(markup).toContain("2 could not be sent");
+    expect(markup).toContain("2 could not be invited");
   });
 
   it("renders a friendly error banner", async () => {
