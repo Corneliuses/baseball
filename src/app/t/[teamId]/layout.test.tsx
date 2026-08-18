@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const requireTeamAccess = vi.fn();
@@ -30,6 +30,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+/// Every rendered anchor (open tag through close tag) pointing at one href.
+/// The layout renders TeamNav underneath, whose Home tab shares the team-home
+/// href — so a bare toContain on an href or a label can be satisfied by the
+/// wrong element entirely. Assertions here read the content of the anchor
+/// they name. Anchors never nest, so the lazy match is safe.
+function linksTo(html: string, href: string): string[] {
+  return [...html.matchAll(/<a [^>]*>[\s\S]*?<\/a>/g)]
+    .map((match) => match[0])
+    .filter((anchor) => anchor.includes(`href="${href}"`));
+}
+
 async function render(teamId = "team-1") {
   const { default: TeamLayout } = await import("./layout");
   return renderToStaticMarkup(
@@ -51,7 +62,6 @@ beforeEach(() => {
   getMemberTeams.mockResolvedValue([
     { id: "team-1", name: "Sluggers", season: "Fall 2026", archivedAt: null },
   ]);
-  getAllTeams.mockResolvedValue([]);
   getTeamById.mockResolvedValue({
     id: "team-1",
     name: "Sluggers",
@@ -61,22 +71,56 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("TeamLayout", () => {
-  // Families accumulate teams across seasons, and / is the only page listing
-  // them all. TeamSwitcher hides itself below two teams, so this link is the
-  // sole way back for a single-team caller — it must render unconditionally.
+  // The back link must render unconditionally — see the comment in layout.tsx.
+  // This case pins the load-bearing half: one team, so TeamSwitcher hides
+  // itself and this link is the only way back to /.
   it("links back to team selection even when the caller has one team", async () => {
     const html = await render();
 
-    expect(html).toContain('href="/"');
-    expect(html).toContain("All teams");
+    expect(html).not.toContain("<select");
+
+    const [backLink, ...rest] = linksTo(html, "/");
+    expect(backLink).toBeDefined();
+    expect(rest).toHaveLength(0);
+    expect(backLink).toContain("All teams");
+    // The arrow is decorative; it must stay out of the accessible name.
+    expect(backLink).toContain('<span aria-hidden="true">←</span>');
+  });
+
+  it("keeps the back link alongside the switcher for a multi-team owner", async () => {
+    vi.stubEnv("OWNER_EMAIL", "owner@example.com");
+    getCurrentUser.mockResolvedValue({
+      id: "user-1",
+      email: "owner@example.com",
+      name: "Mel",
+    });
+    getAllTeams.mockResolvedValue([
+      { id: "team-1", name: "Sluggers", season: "Fall 2026", archivedAt: null },
+      { id: "team-2", name: "Rockets", season: "Fall 2025", archivedAt: null },
+    ]);
+
+    const html = await render();
+
+    expect(getAllTeams).toHaveBeenCalled();
+    expect(getMemberTeams).not.toHaveBeenCalled();
+    expect(html).toContain("<select");
+    expect(linksTo(html, "/")[0]).toContain("All teams");
   });
 
   it("renders the team name linking to the team home", async () => {
     const html = await render();
 
-    expect(html).toContain("Sluggers");
-    expect(html).toContain('href="/t/team-1"');
+    // TeamNav's Home tab shares this href, so the header link is identified
+    // by carrying the team name rather than by the href alone.
+    const headerLink = linksTo(html, "/t/team-1").find((anchor) =>
+      anchor.includes("Sluggers"),
+    );
+    expect(headerLink).toBeDefined();
     expect(html).toContain("page body");
   });
 });
