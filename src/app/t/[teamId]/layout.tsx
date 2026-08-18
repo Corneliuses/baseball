@@ -66,11 +66,24 @@ export default async function TeamLayout({
           underneath still calls requireTeamAccess for itself. */}
       <div className="mb-6 space-y-4 border-b-2 border-border pb-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <Link href={`/t/${teamId}`}>
-            <h2 className="font-display text-2xl text-foreground">
-              {team.name}
-            </h2>
-          </Link>
+          <div className="space-y-1">
+            {/* Always rendered, unlike TeamSwitcher (which hides itself for
+                single-team callers): the same family accumulates teams across
+                seasons, and the selection page at / is the only place to see
+                them all — so the way back must not depend on how many teams
+                this person has today. */}
+            <Link
+              href="/"
+              className="inline-flex items-center rounded text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              ← All teams
+            </Link>
+            <Link href={`/t/${teamId}`} className="block">
+              <h2 className="font-display text-2xl text-foreground">
+                {team.name}
+              </h2>
+            </Link>
+          </div>
           <TeamSwitcher teams={switcherTeams} currentTeamId={teamId} />
         </div>
         <TeamNav teamId={teamId} role={role} />
