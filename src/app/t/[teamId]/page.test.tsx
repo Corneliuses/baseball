@@ -44,40 +44,30 @@ beforeEach(() => {
   });
 });
 
-describe("TeamHomePage navigation", () => {
-  it("shows a coach the coach links but not owner-only ones", async () => {
+describe("TeamHomePage", () => {
+  // Navigation moved to the layout's persistent TeamNav — its role gating is
+  // covered in src/components/TeamNav.test.tsx. The page itself renders team
+  // facts only, so the old button grid must not creep back in.
+  it("renders the team facts and no navigation links of its own", async () => {
     const html = await render();
 
-    expect(html).toContain('href="/t/team-1/readiness"');
-    expect(html).toContain('href="/t/team-1/chart"');
-    expect(html).toContain('href="/t/team-1/directory"');
-    expect(html).toContain('href="/t/team-1/roster"');
-    expect(html).not.toContain('href="/t/team-1/settings"');
+    expect(html).toContain("Fall 2026");
+    expect(html).toContain("All players bat and field");
+    expect(html).not.toContain('href="/t/team-1/');
   });
 
-  it("shows a parent only the parent links", async () => {
-    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+  it("flags an archived team as read-only", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: true,
+      archivedAt: new Date("2026-01-01T00:00:00Z"),
+    });
 
     const html = await render();
 
-    expect(html).not.toContain('href="/t/team-1/readiness"');
-    expect(html).not.toContain('href="/t/team-1/chart"');
-    expect(html).not.toContain('href="/t/team-1/directory"');
-    expect(html).not.toContain('href="/t/team-1/settings"');
-    // The parent's own surfaces are unaffected.
-    expect(html).toContain('href="/t/team-1/view"');
-    expect(html).toContain('href="/t/team-1/roster"');
-    expect(html).toContain('href="/t/team-1/schedule"');
-  });
-
-  it("shows an owner the coach links plus settings", async () => {
-    requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "user-1" });
-
-    const html = await render();
-
-    expect(html).toContain('href="/t/team-1/readiness"');
-    expect(html).toContain('href="/t/team-1/directory"');
-    expect(html).toContain('href="/t/team-1/settings"');
+    expect(html).toContain("archived and read-only");
   });
 });
 

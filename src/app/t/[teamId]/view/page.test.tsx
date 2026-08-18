@@ -100,15 +100,43 @@ describe("ViewPage access", () => {
   });
 });
 
-describe("ViewPage empty states", () => {
-  it("shows a no-upcoming-game empty state and never calls the chart reads", async () => {
+describe("ViewPage with no upcoming game", () => {
+  // The chart is standing, not per-game — it outlives the schedule, so a
+  // parent between games (or after the season's last one) still sees it.
+  it("still shows the standing chart under a no-upcoming-game header", async () => {
     nextGame.mockResolvedValue(null);
 
     const html = await render();
 
     expect(html).toContain("No upcoming game");
-    expect(getChart).not.toHaveBeenCalled();
+    expect(html).toContain("Ava");
+    expect(html).toContain("Batting order");
+    expect(html).toContain(">SS<");
   });
+
+  it("drops every RSVP decoration — there is no game to respond to", async () => {
+    nextGame.mockResolvedValue(null);
+
+    const html = await render();
+
+    expect(listEventRsvps).not.toHaveBeenCalled();
+    expect(html).not.toContain("No response");
+    expect(html).not.toContain("Going");
+    expect(html).not.toContain("RSVP is just for planning");
+  });
+
+  it("shows the no-chart empty state when there is no game and no chart", async () => {
+    nextGame.mockResolvedValue(null);
+    getChart.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain("No upcoming game");
+    expect(html).toContain("No chart set yet");
+  });
+});
+
+describe("ViewPage empty states", () => {
 
   it("shows a no-chart-set-yet empty state when every roster entry is benched", async () => {
     getChart.mockResolvedValue([
