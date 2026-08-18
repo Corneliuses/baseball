@@ -1,9 +1,9 @@
 import {
   DIAMOND_GEOMETRY,
-  DIAMOND_POLYGON,
   POSITION_COORDS,
   outfieldZoneCoords,
 } from "@/components/diamond-geometry";
+import { FieldArt } from "@/components/FieldArt";
 import {
   NO_CATCHER_TEXT,
   NoCatcherMarker,
@@ -55,7 +55,12 @@ function Marker({
     <g transform={`translate(${x} ${y})`}>
       <circle
         r={MARKER_RADIUS}
-        className={style ? style.markerClassName : "fill-card stroke-border"}
+        className={
+          // Markers now sit on grass and dirt, so every circle carries an
+          // opaque card fill — a tinted or transparent fill reads as a hole
+          // in the field instead of a badge on it.
+          style ? style.markerClassName : "fill-card/80 stroke-muted-foreground"
+        }
         strokeWidth={style ? style.markerStrokeWidth : 1.5}
         strokeDasharray={player ? undefined : "4 3"}
       />
@@ -70,14 +75,16 @@ function Marker({
         {label}
       </text>
 
+      {/* text-halo paints a background-colored stroke behind the glyphs so
+          names and tags stay readable on the grass (design-plan.md §6). */}
       <text
         y={NAME_OFFSET}
         textAnchor="middle"
         fill="currentColor"
         className={
           style
-            ? `text-[11px] font-medium ${style.nameClassName}`
-            : "fill-muted-foreground text-[11px] italic"
+            ? `text-halo text-[11px] font-medium ${style.nameClassName}`
+            : "text-halo fill-muted-foreground text-[11px] italic"
         }
       >
         {player ? shortName(player.playerName) : "Open"}
@@ -88,7 +95,7 @@ function Marker({
           y={TAG_OFFSET}
           textAnchor="middle"
           fill="currentColor"
-          className={`text-[9px] ${style.tagClassName}`}
+          className={`text-halo text-[9px] font-semibold ${style.tagClassName}`}
         >
           {style.label}
         </text>
@@ -132,11 +139,9 @@ export function Diamond({
         focusable="false"
         className="mx-auto w-full max-w-sm"
       >
-        <polygon
-          points={DIAMOND_POLYGON}
-          className="fill-none stroke-border"
-          strokeWidth={2}
-        />
+        {/* The painted field sits under every marker — FieldArt draws the
+            chalk basepaths that the bare polygon used to be. */}
+        <FieldArt />
 
         {allPlay ? <NoCatcherMarker /> : null}
 

@@ -27,14 +27,17 @@ export const RSVP_STYLE: Record<
     label: "Going",
     tagClassName: "text-primary",
     nameClassName: "text-foreground",
-    markerClassName: "fill-primary/10 stroke-primary",
-    markerStrokeWidth: 2.5,
+    // Marker fills are opaque now that the circles sit on FieldArt's grass
+    // and dirt — a translucent fill reads as a hole in the field. State is
+    // carried by ring color and weight, never fill alone.
+    markerClassName: "fill-card stroke-primary",
+    markerStrokeWidth: 3,
   },
   declined: {
     label: "Not going",
     tagClassName: "text-destructive",
     nameClassName: "text-muted-foreground opacity-60",
-    markerClassName: "fill-muted/40 stroke-muted-foreground",
+    markerClassName: "fill-muted stroke-muted-foreground",
     markerStrokeWidth: 1.5,
   },
   "no-response": {

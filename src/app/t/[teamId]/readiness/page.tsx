@@ -223,12 +223,15 @@ export default async function ReadinessPage({
         </Card>
       ) : (
         <>
-          <Card>
+          {/* The scoreboard (design-plan.md §7): charcoal in both themes — a
+              scoreboard is dark; light mode just means it's daytime around
+              it. Mono type overrides the card's slab title via cn/twMerge. */}
+          <Card className="border-2 border-scoreboard-accent/40 bg-scoreboard text-scoreboard-foreground shadow-md">
             <CardHeader>
-              <CardTitle>
+              <CardTitle className="font-mono text-lg font-bold uppercase tracking-widest text-scoreboard-accent">
                 {readiness.ready ? "Ready for game day" : "Needs attention"}
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="font-mono text-scoreboard-foreground/85">
                 {readiness.ready
                   ? "Nobody in the chart has said they can't make it."
                   : `${readiness.declined.length} ${
@@ -274,7 +277,7 @@ export default async function ReadinessPage({
                   {readiness.uncoveredPositions.map((position) => (
                     <li
                       key={position}
-                      className="rounded-md border border-destructive px-3 py-1 text-sm font-medium text-destructive"
+                      className="rounded-md border-2 border-destructive bg-destructive/10 px-3 py-1 font-mono text-sm font-bold text-destructive"
                     >
                       {POSITION_LABELS[position]}
                     </li>

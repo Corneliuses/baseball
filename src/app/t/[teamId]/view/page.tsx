@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { JerseyDot } from "@/components/JerseyDot";
 import { RSVP_STYLE } from "@/components/rsvp-style";
+import { StitchDivider } from "@/components/StitchDivider";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -61,7 +63,8 @@ export default async function ViewPage({
           <CardHeader>
             <CardTitle>No upcoming game</CardTitle>
             <CardDescription>
-              The lineup shows up here once a game is on the schedule.
+              The lineup shows up here once a game is on the schedule. Enjoy
+              the day off.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -143,22 +146,30 @@ export default async function ViewPage({
                   </p>
                 ) : (
                   <ol className="space-y-2">
-                    {chart.lineup.map((player) => {
+                    {chart.lineup.map((player, index) => {
                       const style = RSVP_STYLE[player.rsvpState];
                       return (
                         <li
                           key={player.playerId}
-                          className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
+                          className="animate-rise flex items-center justify-between gap-4 rounded-md border border-border bg-background/60 p-3"
+                          // Rows rise in batting order, like a lineup being
+                          // announced. Translate-only and reduced-motion-gated
+                          // (see animate-rise in globals.css).
+                          style={{ animationDelay: `${index * 40}ms` }}
                         >
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-muted-foreground">
-                              {player.battingOrder}
-                            </span>
-                            <span className={`text-sm font-medium ${style.nameClassName}`}>
+                          <div className="flex min-w-0 items-center gap-3">
+                            {/* The slot number wears a jersey (design-plan.md
+                                §7); the shirt number rides along in mono. */}
+                            <JerseyDot number={player.battingOrder ?? ""} />
+                            <span
+                              className={`truncate text-sm font-medium ${style.nameClassName}`}
+                            >
                               {player.playerName}
-                              {player.jerseyNumber !== null
-                                ? ` #${player.jerseyNumber}`
-                                : ""}
+                              {player.jerseyNumber !== null ? (
+                                <span className="ml-1 font-mono text-xs text-muted-foreground">
+                                  #{player.jerseyNumber}
+                                </span>
+                              ) : null}
                             </span>
                           </div>
                           <span className={`text-xs ${style.tagClassName}`}>
@@ -173,7 +184,9 @@ export default async function ViewPage({
             </Card>
           </div>
 
-          <p className="mt-6 text-xs text-muted-foreground">
+          <StitchDivider className="mt-6" />
+
+          <p className="mt-3 text-xs text-muted-foreground">
             <span className={RSVP_STYLE.attending.tagClassName}>
               {RSVP_STYLE.attending.label}
             </span>{" "}

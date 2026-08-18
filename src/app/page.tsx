@@ -20,7 +20,7 @@ export default async function Home() {
       <PageContainer>
         <div className="space-y-6 py-12 text-center">
           <div>
-            <h2 className="text-3xl font-bold text-foreground mb-2">
+            <h2 className="font-display text-3xl text-foreground mb-2">
               Welcome to Youth Baseball Team Manager
             </h2>
             <p className="text-lg text-muted-foreground">
@@ -45,7 +45,7 @@ export default async function Home() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-bold text-foreground mb-2">
+            <h2 className="font-display text-3xl text-foreground mb-2">
               {user.name ? `Welcome back, ${user.name}` : "Welcome back"}
             </h2>
             <p className="text-lg text-muted-foreground">

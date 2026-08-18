@@ -36,7 +36,9 @@ const CardTitle = React.forwardRef<
   <h2
     ref={ref}
     className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
+      // Alfa Slab One ships one weight — font-normal, or the browser
+      // synthesizes a fake bold on top of an already-slab face.
+      "font-display text-2xl font-normal leading-tight tracking-tight",
       className
     )}
     {...props}

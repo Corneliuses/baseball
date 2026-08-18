@@ -241,7 +241,11 @@ function MonthView({
                           <li key={event.id}>
                             <Link
                               href={`/t/${teamId}/schedule/${event.id}`}
-                              className="block truncate rounded bg-muted px-1 py-0.5 text-xs text-foreground hover:bg-accent"
+                              className={`block truncate rounded px-1 py-0.5 text-xs text-foreground hover:bg-accent ${
+                                event.type === "GAME"
+                                  ? "bg-primary/15"
+                                  : "bg-muted"
+                              }`}
                             >
                               <span className="font-medium">
                                 {formatEventTime(event.startsAt)}
@@ -298,39 +302,106 @@ function ListView({
       </div>
 
       {events.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {showPast ? "Nothing has happened yet." : "Nothing scheduled yet."}
+        <p className="rounded-md border-2 border-dashed border-border p-4 text-sm text-muted-foreground">
+          {showPast
+            ? "Nothing has happened yet. The season's still ahead."
+            : "Nothing scheduled yet. The season's wide open."}
         </p>
       ) : (
         <ul className="space-y-2">
-          {events.map((event) => (
-            <li key={event.id}>
-              <Card>
-                <CardContent className="p-4">
-                  <Link
-                    href={`/t/${teamId}/schedule/${event.id}`}
-                    className="flex flex-wrap items-baseline justify-between gap-2"
-                  >
-                    <span className="font-medium text-foreground">
-                      {eventTitle(event)}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {formatEventDayLabel(event.startsAt)} ·{" "}
-                      {formatEventTime(event.startsAt)}
-                    </span>
-                  </Link>
-                  {event.location ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {event.location}
-                    </p>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </li>
-          ))}
+          {events.map((event) =>
+            event.type === "GAME" ? (
+              <GameTicket key={event.id} teamId={teamId} event={event} />
+            ) : (
+              <PracticeCard key={event.id} teamId={teamId} event={event} />
+            ),
+          )}
         </ul>
       )}
     </div>
+  );
+}
+
+/// A game prints as a ticket stub (design-plan.md §7): clay border, slab
+/// opponent, and a perforated stub end. Games are the main event, so only
+/// they get ticket stock — practices print plain below.
+function GameTicket({
+  teamId,
+  event,
+}: {
+  teamId: string;
+  event: ScheduleEvent;
+}) {
+  return (
+    <li>
+      <Card className="overflow-hidden border-2 border-dirt/60 p-0">
+        <div className="flex items-stretch">
+          <Link
+            href={`/t/${teamId}/schedule/${event.id}`}
+            className="min-w-0 flex-1 p-4"
+          >
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-destructive">
+              Game
+            </p>
+            <p className="truncate font-display text-lg text-foreground">
+              {eventTitle(event)}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {formatEventDayLabel(event.startsAt)} ·{" "}
+              {formatEventTime(event.startsAt)}
+            </p>
+            {event.location ? (
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {event.location}
+              </p>
+            ) : null}
+          </Link>
+          {/* The stub: decorative, so it lives outside the link. */}
+          <div
+            aria-hidden="true"
+            className="flex w-16 shrink-0 items-center justify-center border-l-2 border-dashed border-dirt/60 bg-secondary"
+          >
+            <span className="rotate-90 whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-secondary-foreground">
+              Admit one
+            </span>
+          </div>
+        </div>
+      </Card>
+    </li>
+  );
+}
+
+/// Practices print on plain stock — a chalk-dashed border, no stub — so the
+/// list reads games-first at a glance.
+function PracticeCard({
+  teamId,
+  event,
+}: {
+  teamId: string;
+  event: ScheduleEvent;
+}) {
+  return (
+    <li>
+      <Card className="border-dashed shadow-none">
+        <CardContent className="p-4">
+          <Link
+            href={`/t/${teamId}/schedule/${event.id}`}
+            className="flex flex-wrap items-baseline justify-between gap-2"
+          >
+            <span className="font-medium text-foreground">
+              {eventTitle(event)}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {formatEventDayLabel(event.startsAt)} ·{" "}
+              {formatEventTime(event.startsAt)}
+            </span>
+          </Link>
+          {event.location ? (
+            <p className="mt-1 text-sm text-muted-foreground">{event.location}</p>
+          ) : null}
+        </CardContent>
+      </Card>
+    </li>
   );
 }
 

@@ -52,7 +52,11 @@ export default async function TeamHomePage({
           <Link href={`/t/${teamId}/schedule`}>Schedule</Link>
         </Button>
 
-        <Button asChild variant="outline">
+        {/* The payoff page gets this screen's one banana (design-plan.md §2). */}
+        <Button
+          asChild
+          className="bg-banana text-banana-foreground hover:bg-banana/90"
+        >
           <Link href={`/t/${teamId}/view`}>Lineup</Link>
         </Button>
 

@@ -21,9 +21,9 @@ import { CSS } from "@dnd-kit/utilities";
 
 import {
   DIAMOND_GEOMETRY,
-  DIAMOND_POLYGON,
   positionPercent,
 } from "@/components/diamond-geometry";
+import { FieldArt } from "@/components/FieldArt";
 import {
   NO_CATCHER_TEXT,
   NoCatcherMarker,
@@ -255,11 +255,10 @@ function Field({
           focusable="false"
           className="absolute inset-0 h-full w-full"
         >
-          <polygon
-            points={DIAMOND_POLYGON}
-            className="fill-none stroke-border"
-            strokeWidth={2}
-          />
+          {/* Same painted field as the view page — FieldArt draws the chalk
+              basepaths the bare polygon used to be. Background only: the drop
+              targets stay HTML, dnd-kit measurement is untouched. */}
+          <FieldArt />
           {noCatcher ? <NoCatcherMarker /> : null}
         </svg>
 
@@ -296,8 +295,12 @@ function PositionTarget({
       ref={setNodeRef}
       data-position={position}
       style={{ left: `${x}%`, top: `${y}%` }}
-      className={`absolute flex w-20 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-md border p-1 text-center ${
-        isOver ? "border-ring bg-muted/60" : "border-dashed border-border"
+      className={`absolute flex w-20 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-md border-2 p-1 text-center ${
+        // Chalk box on the field; the hover target is this screen's one
+        // banana (design-plan.md §7).
+        isOver
+          ? "border-banana bg-banana/25"
+          : "border-dashed border-chalk/70 bg-background/70"
       }`}
     >
       <span className="text-[11px] font-bold text-foreground">
@@ -335,8 +338,8 @@ function Zone({
       <h4 className="mb-2 text-sm font-medium text-muted-foreground">{title}</h4>
       <div
         ref={setNodeRef}
-        className={`flex min-h-16 flex-wrap gap-2 rounded-md border border-dashed p-3 ${
-          isOver ? "border-ring bg-muted/40" : "border-border"
+        className={`flex min-h-16 flex-wrap gap-2 rounded-md border-2 border-dashed p-3 ${
+          isOver ? "border-banana bg-banana/20" : "border-border"
         }`}
       >
         {draft.pool.length === 0 ? (
@@ -381,7 +384,7 @@ function Chip({
       style={{ transform: CSS.Translate.toString(transform) }}
       {...attributes}
       {...listeners}
-      className={`inline-flex cursor-grab touch-manipulation select-none items-center gap-1 rounded border border-border bg-background px-2 py-1 text-xs font-medium text-foreground ${
+      className={`inline-flex cursor-grab touch-manipulation select-none items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground shadow-sm ${
         isDragging ? "z-10 cursor-grabbing opacity-80 shadow-md" : ""
       }`}
     >

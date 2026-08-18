@@ -89,7 +89,11 @@ export default async function SignInPage({
                 ) : null}
               </div>
 
-              <Button type="submit" className="w-full">
+              {/* This screen's one banana (design-plan.md §2). */}
+              <Button
+                type="submit"
+                className="w-full bg-banana text-banana-foreground hover:bg-banana/90"
+              >
                 Email me a sign-in link
               </Button>
             </form>
