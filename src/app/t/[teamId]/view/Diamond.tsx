@@ -83,7 +83,7 @@ function Marker({
         fill="currentColor"
         className={
           style
-            ? `text-halo text-[11px] font-medium ${style.nameClassName}`
+            ? `text-halo text-[11px] font-medium ${style.markerNameClassName}`
             : "text-halo fill-muted-foreground text-[11px] italic"
         }
       >

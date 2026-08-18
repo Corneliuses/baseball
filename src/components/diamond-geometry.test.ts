@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   DIAMOND_GEOMETRY,
+  FIELD_ART,
   POSITION_COORDS,
   outfieldZoneCoords,
   positionPercent,
@@ -17,6 +18,42 @@ describe("DIAMOND_GEOMETRY", () => {
     // without error and simply cannot be seen.
     expect(POSITION_COORDS.CATCHER.y + DIAMOND_GEOMETRY.tagOffset).toBeLessThan(
       DIAMOND_GEOMETRY.height,
+    );
+  });
+});
+
+describe("FIELD_ART", () => {
+  it("seats the catcher's spot on the home dirt circle", () => {
+    // The catcher stands below home plate, so the dirt has to reach past that
+    // marker's bottom edge. Undersize it and the catcher — or, on an allPlay
+    // board, the disc that stands in for one — hangs off the dirt onto bare
+    // page, where a deliberate marker reads as a rendering artefact. Nothing
+    // errors; it just looks broken.
+    const catcherBottom =
+      POSITION_COORDS.CATCHER.y +
+      DIAMOND_GEOMETRY.markerRadius -
+      FIELD_ART.homeCircle.y;
+
+    expect(FIELD_ART.homeCircle.r).toBeGreaterThanOrEqual(catcherBottom);
+  });
+
+  it("keeps the deepest outfielder on grass, off the warning track", () => {
+    // The track is a band centred on trackRadius, so its inner edge is what
+    // the centre fielder must clear.
+    const trackInnerEdge =
+      FIELD_ART.homeCircle.y -
+      (FIELD_ART.trackRadius - FIELD_ART.trackWidth / 2);
+    const centreFielderTop =
+      POSITION_COORDS.CENTER_FIELD.y - DIAMOND_GEOMETRY.markerRadius;
+
+    expect(centreFielderTop).toBeGreaterThan(trackInnerEdge);
+  });
+
+  it("clips the park past the fence rather than through it", () => {
+    // The green is clipped to parkRadius so grass stops at the wall. Clip
+    // inside the fence stroke and the fence is shaved in half.
+    expect(FIELD_ART.parkRadius).toBeGreaterThanOrEqual(
+      FIELD_ART.fenceRadius + FIELD_ART.fenceWidth / 2,
     );
   });
 });

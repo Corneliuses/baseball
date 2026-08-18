@@ -296,20 +296,25 @@ function PositionTarget({
       data-position={position}
       style={{ left: `${x}%`, top: `${y}%` }}
       className={`absolute flex w-20 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-md border-2 p-1 text-center ${
-        // Chalk box on the field; the hover target is this screen's one
-        // banana (design-plan.md §7).
+        // A chalk box on the grass. The box itself stays unfilled: targets are
+        // 80px wide but neighbours like SS and 2B stand only 64px apart, so a
+        // filled box turns that overlap into two visibly stacked slabs. The
+        // label carries its own backing instead, which is also what keeps it
+        // readable over grass and dirt.
         isOver
           ? "border-banana bg-banana/25"
-          : "border-dashed border-chalk/70 bg-background/70"
+          : "border-dashed border-chalk/80"
       }`}
     >
-      <span className="text-[11px] font-bold text-foreground">
+      <span className="rounded bg-background/85 px-1 text-[11px] font-bold text-foreground">
         {POSITION_LABELS[position]}
       </span>
       {entry !== undefined ? (
         <Chip entry={entry} label={shortName(entry.playerName)} />
       ) : (
-        <span className="text-[11px] italic text-muted-foreground">Open</span>
+        <span className="rounded bg-background/85 px-1 text-[11px] italic text-muted-foreground">
+          Open
+        </span>
       )}
     </div>
   );

@@ -21,46 +21,60 @@ import { DIAMOND_POLYGON, FIELD_ART } from "@/components/diamond-geometry";
  * sr-only list, both owned by the callers — nothing here may grow a label.
  */
 export function FieldArt() {
-  // Both diamonds can never be on one page today, but the clip id must still
+  // Both diamonds can never be on one page today, but the clip ids must still
   // be unique per render tree — useId works in server and client components.
-  const clipId = useId();
+  // Two clips, nested, because the park is the *intersection* of fair
+  // territory and the fence arc: the wedge alone runs grass out to the corners
+  // of the box, which reads as a field with no outfield wall.
+  const id = useId();
+  const wedgeId = `${id}-wedge`;
+  const parkId = `${id}-park`;
 
   return (
     <g aria-hidden="true">
       <defs>
-        <clipPath id={clipId}>
+        <clipPath id={wedgeId}>
           <path d={FIELD_ART.fairTerritory} />
+        </clipPath>
+        <clipPath id={parkId}>
+          <circle
+            cx={FIELD_ART.homeCircle.x}
+            cy={FIELD_ART.homeCircle.y}
+            r={FIELD_ART.parkRadius}
+          />
         </clipPath>
       </defs>
 
-      <g clipPath={`url(#${clipId})`}>
-        <path d={FIELD_ART.fairTerritory} className="fill-grass" />
+      <g clipPath={`url(#${wedgeId})`}>
+        <g clipPath={`url(#${parkId})`}>
+          <path d={FIELD_ART.fairTerritory} className="fill-grass" />
 
-        {FIELD_ART.stripes.map((radius) => (
+          {FIELD_ART.stripes.map((radius) => (
+            <circle
+              key={radius}
+              cx={FIELD_ART.homeCircle.x}
+              cy={FIELD_ART.homeCircle.y}
+              r={radius}
+              className="fill-none stroke-grass-stripe"
+              strokeWidth={FIELD_ART.stripeWidth}
+            />
+          ))}
+
           <circle
-            key={radius}
             cx={FIELD_ART.homeCircle.x}
             cy={FIELD_ART.homeCircle.y}
-            r={radius}
-            className="fill-none stroke-grass-stripe"
-            strokeWidth={FIELD_ART.stripeWidth}
+            r={FIELD_ART.trackRadius}
+            className="fill-none stroke-track"
+            strokeWidth={FIELD_ART.trackWidth}
           />
-        ))}
-
-        <circle
-          cx={FIELD_ART.homeCircle.x}
-          cy={FIELD_ART.homeCircle.y}
-          r={FIELD_ART.trackRadius}
-          className="fill-none stroke-track"
-          strokeWidth={FIELD_ART.trackWidth}
-        />
-        <circle
-          cx={FIELD_ART.homeCircle.x}
-          cy={FIELD_ART.homeCircle.y}
-          r={FIELD_ART.fenceRadius}
-          className="fill-none stroke-banana"
-          strokeWidth={FIELD_ART.fenceWidth}
-        />
+          <circle
+            cx={FIELD_ART.homeCircle.x}
+            cy={FIELD_ART.homeCircle.y}
+            r={FIELD_ART.fenceRadius}
+            className="fill-none stroke-banana"
+            strokeWidth={FIELD_ART.fenceWidth}
+          />
+        </g>
       </g>
 
       <path d={FIELD_ART.infieldDirt} className="fill-dirt" />
