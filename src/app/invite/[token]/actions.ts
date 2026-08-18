@@ -50,25 +50,41 @@ export async function acceptInvitationAction(formData: FormData) {
   // have no session for.
   let destination = `/invite/${token}?error=1`;
 
+  // One instant for the decision and for every write it authorizes. Each
+  // function below takes `now` precisely so its caller can pin it; reading the
+  // clock separately in each would let the invitation be live when it is
+  // checked and expired by the time `acceptInvitations` filters on
+  // `expiresAt`, which grants no Membership while still writing a session — an
+  // invited coach would land on a team page `requireTeamAccess` then rejects.
+  const now = new Date();
+
   try {
     const invitation = await getInvitationByToken(token);
 
     // Re-checked rather than trusted from the page render: seconds pass
     // between the page loading and this submitting, and the invitation can
     // expire or be revoked in between.
-    if (!invitation || !isLiveInvitation(invitation, new Date())) {
+    if (!invitation || !isLiveInvitation(invitation, now)) {
       redirect(`/invite/${token}`);
     }
 
-    const user = await resolveInvitedUser(invitation.email);
+    const user = await resolveInvitedUser(invitation.email, now);
 
     // Order matters. This is the same idempotent write Auth.js runs from
     // `events.signIn`, and it goes first: if the session insert below fails,
     // the parent is already a member and `/signin` will let them in, whereas
     // the reverse would sign them in with no team to land on.
-    await acceptInvitations(user.id, user.email);
+    //
+    // A shared `now` cannot close the read-then-write gap itself: a coach
+    // revoking the invitation between the read above and this write still
+    // consumes nothing. That is knowingly left open rather than half-guarded.
+    // Bailing when the count is zero would be wrong — a parent's Membership is
+    // created by `linkGuardian` when they are first linked, so revoking their
+    // invitation leaves them genuinely entitled to the team, and a count check
+    // would lock out the common case to catch a millisecond of the rare one.
+    await acceptInvitations(user.id, user.email, now);
 
-    const session = await createUserSession(user.id);
+    const session = await createUserSession(user.id, now);
     const secure = usesSecureCookies({
       authUrl: process.env.AUTH_URL,
       forwardedProto: (await headers()).get("x-forwarded-proto"),

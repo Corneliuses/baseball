@@ -106,9 +106,13 @@ describe("acceptInvitationAction", () => {
     expect(await destinationOf(form("tok-1"))).toBe("/t/team-1");
 
     // The address comes from the invitation row, never from the form.
-    expect(resolveInvitedUser).toHaveBeenCalledWith("sam@example.com");
-    expect(acceptInvitations).toHaveBeenCalledWith("user-1", "sam@example.com");
-    expect(createUserSession).toHaveBeenCalledWith("user-1");
+    expect(resolveInvitedUser).toHaveBeenCalledWith("sam@example.com", NOW);
+    expect(acceptInvitations).toHaveBeenCalledWith(
+      "user-1",
+      "sam@example.com",
+      NOW,
+    );
+    expect(createUserSession).toHaveBeenCalledWith("user-1", NOW);
     expect(cookieSet).toHaveBeenCalledWith(
       "__Secure-authjs.session-token",
       "session-token-1",
@@ -148,6 +152,32 @@ describe("acceptInvitationAction", () => {
     await destinationOf(form("tok-1"));
 
     expect(order).toEqual(["accept", "session"]);
+  });
+
+  // Regression: the action used to read the clock separately in each step, so
+  // an invitation could be live when checked and expired by the time
+  // acceptInvitations filtered on expiresAt — granting no Membership while
+  // still writing a session. The clock is advanced past expiry mid-action to
+  // force exactly that interleaving.
+  it("judges liveness and consumes the invitation at one instant", async () => {
+    getInvitationByToken.mockResolvedValue({
+      ...liveInvitation(),
+      expiresAt: new Date(NOW.getTime() + 1_000),
+    });
+    resolveInvitedUser.mockImplementation(async () => {
+      vi.advanceTimersByTime(5_000);
+      return { id: "user-1", email: "sam@example.com" };
+    });
+
+    expect(await destinationOf(form("tok-1"))).toBe("/t/team-1");
+
+    // Not merely "some Date" — the instant the liveness check passed at, which
+    // is the only one the write is entitled to act on.
+    expect(acceptInvitations).toHaveBeenCalledWith(
+      "user-1",
+      "sam@example.com",
+      NOW,
+    );
   });
 
   it("sends an unknown token back to the invite page without writing anything", async () => {
