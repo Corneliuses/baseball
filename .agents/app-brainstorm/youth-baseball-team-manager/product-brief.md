@@ -47,9 +47,12 @@ their keep by telling the coach when a week *isn't* normal.
 
 Scoped to fit **6 weeks of evenings and weekends**.
 
-- **Auth & onboarding** — coach enters parent emails; each gets an invitation link;
-  clicking it issues a one-time, expiring magic link and creates the account. No
-  passwords. No self-serve signup.
+- **Auth & onboarding** — coach enters parent emails; each gets a one-time, expiring
+  invitation link; opening it and accepting creates the account and signs the parent in on
+  that device, in one trip. (Revised 2026-08-18: accepting used to *mail* a magic link,
+  making onboarding two emails; real parents stopped at the second one. The magic link
+  remains what `/signin` sends for everyone who is already a member.) No passwords. No
+  self-serve signup.
 - **Teams** — the owner creates a team per season and keeps past teams around. Every
   screen operates on exactly one **active team**, chosen from a team switcher. **Past
   teams are read-only** — they render completely but reject every mutation, so there's no

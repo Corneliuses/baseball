@@ -16,6 +16,10 @@ export type InvitationEmailProps = {
   teamName: string;
   acceptUrl: string;
   expiresAt: Date;
+  /// A note the coach typed for this batch of invitations. Lives only in the
+  /// email — deliberately not stored on `Invitation`, so there is no message
+  /// column and nothing to render on the accept page.
+  message?: string;
 };
 
 function formatExpiry(date: Date): string {
@@ -30,6 +34,7 @@ export function InvitationEmail({
   teamName,
   acceptUrl,
   expiresAt,
+  message,
 }: InvitationEmailProps) {
   return (
     <Html>
@@ -38,6 +43,9 @@ export function InvitationEmail({
       <Body style={{ fontFamily: "sans-serif", padding: "24px" }}>
         <Container>
           <Text>You&apos;ve been invited to join {teamName}.</Text>
+          {message ? (
+            <Text style={{ whiteSpace: "pre-wrap" }}>{message}</Text>
+          ) : null}
           <Button
             href={acceptUrl}
             style={{

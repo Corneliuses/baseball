@@ -7,10 +7,10 @@ vi.mock("@/lib/invitations", () => ({
   getInvitationByToken: (...args: unknown[]) => getInvitationByToken(...args),
 }));
 
-// The real action pulls in Auth.js and the Prisma client; the page only
+// The real action pulls in the Prisma client and next/headers; the page only
 // needs something form-shaped to point at. Matches src/app/signin/page.test.tsx.
 vi.mock("./actions", () => ({
-  requestInvitationLinkAction: vi.fn(),
+  acceptInvitationAction: vi.fn(),
 }));
 
 const NOW = new Date("2026-04-01T12:00:00Z");
@@ -25,11 +25,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function render(token: string, sent?: string) {
+async function render(token: string, error?: string) {
   const { default: InvitePage } = await import("./page");
   const result = await InvitePage({
     params: Promise.resolve({ token }),
-    searchParams: Promise.resolve({ sent }),
+    searchParams: Promise.resolve({ error }),
   });
   return renderToStaticMarkup(result);
 }
@@ -80,7 +80,7 @@ describe("Invite page", () => {
     expect(markup).toContain("Invitation expired");
   });
 
-  it("shows the send-link form for a live invitation, with the email masked", async () => {
+  it("shows the accept form for a live invitation, with the email masked", async () => {
     getInvitationByToken.mockResolvedValue({
       teamId: "team-1",
       teamName: "Cubs",
@@ -93,11 +93,30 @@ describe("Invite page", () => {
     const markup = await render("tok-1");
 
     expect(markup).toContain("Cubs");
-    expect(markup).toContain("Send me a sign-in link");
+    expect(markup).toContain("Accept invitation");
+    expect(markup).toContain("tok-1");
     expect(markup).not.toContain("sam@example.com");
   });
 
-  it("shows the sent confirmation instead of the form once sent=1", async () => {
+  // The whole point of the change: accepting must not send them back to an
+  // inbox for a second link.
+  it("does not offer to email a sign-in link", async () => {
+    getInvitationByToken.mockResolvedValue({
+      teamId: "team-1",
+      teamName: "Cubs",
+      email: "sam@example.com",
+      role: "PARENT",
+      expiresAt: new Date(NOW.getTime() + 1000),
+      acceptedAt: null,
+    });
+
+    const markup = await render("tok-1");
+
+    expect(markup).not.toContain("Send me a sign-in link");
+    expect(markup).not.toContain("Check your email");
+  });
+
+  it("keeps the accept form on screen alongside a failure message", async () => {
     getInvitationByToken.mockResolvedValue({
       teamId: "team-1",
       teamName: "Cubs",
@@ -109,7 +128,7 @@ describe("Invite page", () => {
 
     const markup = await render("tok-1", "1");
 
-    expect(markup).toContain("Check your email");
-    expect(markup).not.toContain("Send me a sign-in link");
+    expect(markup).toContain("Something went wrong accepting your invitation");
+    expect(markup).toContain("Accept invitation");
   });
 });

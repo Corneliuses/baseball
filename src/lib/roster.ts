@@ -84,6 +84,59 @@ export async function getRoster(teamId: string): Promise<RosterEntry[]> {
   }
 }
 
+export type RosterEntryWithGuardians = RosterEntry & {
+  /// Every guardian email linked to this player, in no particular order.
+  /// Empty means nobody has been invited for this kid yet — the signal the
+  /// bulk invite page (#4 follow-up) keys on.
+  guardianEmails: string[];
+};
+
+/**
+ * The roster with each player's linked guardian emails — for the bulk invite
+ * page, which needs to know which kids still have no parent attached.
+ *
+ * List shape, so database errors are swallowed to an empty result, matching
+ * `getRoster`'s rationale above.
+ */
+export async function getRosterWithGuardians(
+  teamId: string,
+): Promise<RosterEntryWithGuardians[]> {
+  try {
+    const entries = await db.rosterEntry.findMany({
+      where: { teamId },
+      select: {
+        id: true,
+        jerseyNumber: true,
+        player: {
+          select: {
+            id: true,
+            name: true,
+            dateOfBirth: true,
+            guardians: {
+              select: { user: { select: { email: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    return entries.map((entry) => ({
+      id: entry.id,
+      jerseyNumber: entry.jerseyNumber,
+      player: {
+        id: entry.player.id,
+        name: entry.player.name,
+        dateOfBirth: entry.player.dateOfBirth,
+      },
+      guardianEmails: entry.player.guardians.map(({ user }) => user.email),
+    }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to fetch roster with guardians:", message);
+    return [];
+  }
+}
+
 /**
  * The team's standing chart — every roster entry with its batting order and
  * position, for #8's view page.

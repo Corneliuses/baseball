@@ -31,10 +31,11 @@ src/generated/     # Prisma client output — gitignored, regenerate with pnpm d
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher),
 `/profile` (the signed-in person's own name and phone — global, not team-scoped, since
 those are `User` columns), and `/t/[teamId]/` (team home, settings, roster, members, the
-owner-only returning-player picker at `roster/returning`, the coach-only member directory,
-the coach-only roster entry detail at `roster/[entryId]`, the schedule at `schedule` /
-`schedule/[eventId]`, the read-only chart at `view`, and the two coach-only drag-and-drop
-chart editors — the batting order at `chart` and the positions diamond at
+owner-only returning-player picker at `roster/returning`, the coach-only bulk parent
+invite at `roster/invite`, the coach-only member directory, the coach-only roster entry
+detail at `roster/[entryId]`, the schedule at `schedule` / `schedule/[eventId]`, the
+read-only chart at `view`, and the two coach-only drag-and-drop chart editors — the
+batting order at `chart` and the positions diamond at
 `chart/positions`) plus `/t/new` for owner-gated team creation.
 
 **Contact details are staff-facing.** A parent never sees another family's phone or
@@ -224,6 +225,17 @@ production — the dev command can prompt, generate new migrations, and reset th
   **Which shape a real write actually returns is unverified** — this repo has not yet run a
   write against live Postgres that trips one of these constraints. Confirm it before relying
   on this in production, and adjust the matching in `roster-rules.ts` if it differs.
+- **Two things write the session cookie, and Auth.js is only one of them.** Accepting an
+  invitation at `/invite/[token]` signs the parent in directly — Auth.js v5 has no
+  "sign this user in" API under the database strategy, so `src/lib/sessions.ts` inserts the
+  `Session` row the way `@auth/core` does (a `randomUUID()` token, `expires` at now + max
+  age) and the action sets the cookie itself. Name and attributes come from
+  `src/lib/session-cookie.ts`, which restates Auth.js's defaults once for all three
+  consumers — Auth.js, that action, and `proxy.ts`. If `src/auth.ts` ever grows a `cookies`
+  block or a `session.generateSessionToken`, that module has to move with it or a parent
+  accepting an invitation gets a cookie the app cannot read. Accepting is a **POST**, never
+  a GET: it consumes the invitation, and corporate mail scanners follow every link in a
+  message before the recipient sees it.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.
@@ -244,3 +256,10 @@ production — the dev command can prompt, generate new migrations, and reset th
   whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
+- **The bulk invite action is the only place that sends in a loop, and three constants are
+  coupled across two files.** `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS`
+  (600ms) apart to stay under Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and
+  the page — not the action — declares `maxDuration = 60`, since that is the level governing
+  a Server Action's timeout. `MAX_ROWS × MIN_SEND_INTERVAL_MS` must stay well under
+  `maxDuration`, or an oversized batch times out half-finished instead of being rejected
+  cleanly. Raising the cap or the interval means revisiting the ceiling too.
