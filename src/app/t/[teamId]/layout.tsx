@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { TeamNav } from "@/components/TeamNav";
 import { TeamSwitcher } from "@/components/TeamSwitcher";
+import type { Role } from "@/generated/prisma/enums";
 import { isOwnerEmail } from "@/lib/owner";
 import { getCurrentUser } from "@/lib/session";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -31,7 +32,7 @@ export default async function TeamLayout({
 }) {
   const { teamId } = await params;
 
-  let role;
+  let role: Role;
   try {
     ({ role } = await requireTeamAccess(teamId, { intent: "read" }));
   } catch (error) {

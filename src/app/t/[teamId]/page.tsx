@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { Role } from "@/generated/prisma/enums";
 import { sortDirectory } from "@/lib/directory-rules";
 import { listCoachContacts } from "@/lib/memberships";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -22,7 +23,7 @@ export default async function TeamHomePage({
 }) {
   const { teamId } = await params;
 
-  let role;
+  let role: Role;
   try {
     ({ role } = await requireTeamAccess(teamId, { intent: "read" }));
   } catch (error) {

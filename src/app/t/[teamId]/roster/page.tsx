@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { Role } from "@/generated/prisma/enums";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -42,7 +43,7 @@ export default async function RosterPage({
   const { teamId } = await params;
   const { error, added } = await searchParams;
 
-  let role;
+  let role: Role;
   try {
     ({ role } = await requireTeamAccess(teamId, { intent: "read" }));
   } catch (caught) {
