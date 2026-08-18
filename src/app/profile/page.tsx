@@ -22,6 +22,7 @@ export const metadata = {
 const ERROR_MESSAGES: Record<string, string> = {
   "invalid-phone": "Phone number must be 32 characters or fewer.",
   "save-failed": "Your changes couldn't be saved. Try again.",
+  "signout-failed": "Signing out didn't work. Try again.",
 };
 
 /// The one place a person sees and fixes what the team has on file for them.
@@ -138,17 +139,15 @@ export default async function ProfilePage({
           </CardContent>
         </Card>
 
-        <div className="space-y-2">
-          <form action={signOutAction}>
-            <Button type="submit" variant="outline" className="w-full">
-              Sign out
-            </Button>
-          </form>
+        <form action={signOutAction} className="space-y-2">
+          <Button type="submit" variant="outline" className="w-full">
+            Sign out
+          </Button>
           <p className="text-center text-xs text-muted-foreground">
             Signs you out on this device only. Sign back in any time with an
             email link.
           </p>
-        </div>
+        </form>
       </div>
     </PageContainer>
   );

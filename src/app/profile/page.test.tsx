@@ -101,12 +101,19 @@ describe("ProfilePage", () => {
     expect(html).toContain("Your changes couldn&#x27;t be saved. Try again.");
   });
 
-  // The one sign-out affordance in the app — /profile is linked from the
-  // landing header and every team's nav, so it must actually be here.
-  it("offers a sign-out button", async () => {
+  // The one sign-out affordance in the app — /profile is reachable from the
+  // signed-in landing page's "Your profile" button and every team nav's
+  // Profile tab, so it must actually be here. renderToStaticMarkup emits no
+  // `action` attribute for a function action, so the closest observable claim
+  // is structural: a submit button labelled "Sign out" as the first child of
+  // its own form — a bare string match would still pass with the form gone
+  // and the button decorative.
+  it("offers a sign-out button wired as a form submit", async () => {
     const html = await render();
 
-    expect(html).toContain("Sign out");
+    expect(html).toMatch(
+      /<form[^>]*><button[^>]*type="submit"[^>]*>Sign out<\/button>/,
+    );
   });
 
   // A database error on the read must not render as "no number on file" —

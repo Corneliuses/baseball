@@ -55,12 +55,25 @@ export async function updateProfileAction(formData: FormData) {
 /**
  * Sign out on this device.
  *
- * Auth.js handles both kinds of session the app creates: a session written by
- * the invite-accept action uses the same Session table and cookie name as one
- * from a magic link (see src/lib/session-cookie.ts), so `signOut` deletes the
- * row whichever path minted it. Only this device's session dies — every other
- * device holds its own Session row and cookie.
+ * Both sign-in paths share one Session table and cookie name — see
+ * src/lib/session-cookie.ts — so `signOut` finds the row whichever path
+ * minted it. The row delete is best-effort, not guaranteed: `@auth/core`
+ * logs a failed deleteSession and clears the cookie anyway, so a database
+ * blip here can leave a row to age out on its own. Only this device's
+ * session is touched — every other device holds its own row and cookie.
  */
 export async function signOutAction() {
-  await signOut({ redirectTo: "/" });
+  try {
+    await signOut({ redirectTo: "/" });
+  } catch (error) {
+    // Next implements redirect() by throwing, and signOut's success path
+    // ends in one; never swallow that.
+    unstable_rethrow(error);
+
+    // Everything else — a malformed AUTH_URL, an Auth.js config failure —
+    // is logged server-side. Without this the repo's lack of an error.tsx
+    // means the person gets a raw error page while still signed in.
+    console.error("Sign-out failed:", error);
+    redirect("/profile?error=signout-failed");
+  }
 }
