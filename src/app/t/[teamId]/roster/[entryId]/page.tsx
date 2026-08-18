@@ -167,44 +167,41 @@ export default async function RosterEntryPage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Guardians</CardTitle>
-          <CardDescription>
-            Guardians linked here get access to this team as parents, and are mailed an
-            invitation the first time they&apos;re linked to anyone on this team.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {invited && !errorMessage ? (
-            <p role="status" className="text-sm text-muted-foreground">
-              Invitation sent.
-            </p>
-          ) : null}
+      {canEdit ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Guardians</CardTitle>
+            <CardDescription>
+              Guardians linked here get access to this team as parents, and are mailed an
+              invitation the first time they&apos;re linked to anyone on this team.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {invited && !errorMessage ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                Invitation sent.
+              </p>
+            ) : null}
 
-          {entry.guardians.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No guardians linked yet.</p>
-          ) : (
-            <ul className="space-y-2">
-              {entry.guardians.map((guardian) => (
-                <li
-                  key={guardian.id}
-                  className="space-y-3 rounded-md border border-border p-3"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {guardian.name ?? guardian.email}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{guardian.email}</p>
-                      {!canEdit && guardian.phone ? (
-                        <p className="text-sm text-muted-foreground">{guardian.phone}</p>
-                      ) : null}
-                      <p className="text-xs text-muted-foreground">
-                        {guardianStatus(guardian)}
-                      </p>
-                    </div>
-                    {canEdit ? (
+            {entry.guardians.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No guardians linked yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {entry.guardians.map((guardian) => (
+                  <li
+                    key={guardian.id}
+                    className="space-y-3 rounded-md border border-border p-3"
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {guardian.name ?? guardian.email}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{guardian.email}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {guardianStatus(guardian)}
+                        </p>
+                      </div>
                       <div className="flex shrink-0 gap-2">
                         {!guardian.hasSignedIn ? (
                           <form action={resendInvitationAction}>
@@ -225,9 +222,7 @@ export default async function RosterEntryPage({
                           </Button>
                         </form>
                       </div>
-                    ) : null}
-                  </div>
-                  {canEdit ? (
+                    </div>
                     <form
                       action={setGuardianPhoneAction}
                       className="flex items-end gap-2 border-t border-border pt-3"
@@ -255,13 +250,11 @@ export default async function RosterEntryPage({
                         Save phone
                       </Button>
                     </form>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
+                  </li>
+                ))}
+              </ul>
+            )}
 
-          {canEdit ? (
             <form action={linkGuardianAction} className="space-y-2 border-t border-border pt-4">
               <input type="hidden" name="teamId" value={teamId} />
               <input type="hidden" name="entryId" value={entryId} />
@@ -283,9 +276,9 @@ export default async function RosterEntryPage({
                 </Button>
               </div>
             </form>
-          ) : null}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {canEdit ? (
         <Card>

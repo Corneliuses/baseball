@@ -20,6 +20,20 @@ const BASE_ENTRY = {
   guardians: [],
 };
 
+const ENTRY_WITH_GUARDIAN = {
+  ...BASE_ENTRY,
+  guardians: [
+    {
+      id: "user-9",
+      name: "Sam",
+      email: "sam@example.com",
+      phone: "555-1234",
+      isMember: true,
+      hasSignedIn: true,
+    },
+  ],
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -60,5 +74,44 @@ describe("Roster entry page", () => {
     const markup = renderToStaticMarkup(result);
     expect(markup).not.toContain("Remove player");
     expect(markup).not.toContain("Save changes");
+  });
+
+  it("shows guardian contact details to a coach", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    getRosterEntry.mockResolvedValue(ENTRY_WITH_GUARDIAN);
+
+    const { default: RosterEntryPage } = await import("./page");
+    const markup = renderToStaticMarkup(
+      await RosterEntryPage({
+        params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+
+    expect(markup).toContain("Guardians");
+    expect(markup).toContain("sam@example.com");
+    expect(markup).toContain("555-1234");
+  });
+
+  // The same rule /directory now follows: a parent reads the player, never
+  // another family's contact details.
+  it("hides the guardians card and its contact details from a parent", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+    getRosterEntry.mockResolvedValue(ENTRY_WITH_GUARDIAN);
+
+    const { default: RosterEntryPage } = await import("./page");
+    const markup = renderToStaticMarkup(
+      await RosterEntryPage({
+        params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+
+    expect(markup).not.toContain("Guardians");
+    expect(markup).not.toContain("sam@example.com");
+    expect(markup).not.toContain("555-1234");
+    expect(markup).not.toContain("Sam");
+    // The player themself still renders.
+    expect(markup).toContain("Ada");
   });
 });

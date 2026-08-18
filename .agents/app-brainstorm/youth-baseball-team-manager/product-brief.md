@@ -77,8 +77,11 @@ Scoped to fit **6 weeks of evenings and weekends**.
   short **"you've been added to <team>"** email — no magic link, since they already have an
   account; just a heads-up and a way in. Explicitly *not* a bulk "copy last year's
   roster" — it's a deliberate pick, because rosters genuinely change.
-- **Directory** — parent name, phone, email, and their kids. Visible to all signed-in
-  members.
+- **Directory** — parent name, phone, email, and their kids. Visible to **coaches and the
+  owner only** (revised 2026-08-18; it previously read "visible to all signed-in members").
+  It is the whole team's contact details in one list, and a parent has no reason to hold
+  every other family's phone number and email; a parent who needs to reach someone goes
+  through the coach. Parents still see the schedule, the lineup, the roster, and RSVP.
 - **Schedule** — coach creates games and practices with location and time; parents see a
   month calendar view and a chronological list view.
 - **RSVP** — parent toggles attending / not attending per kid per event, **only for kids

@@ -23,7 +23,7 @@ import { TeamAccessError } from "@/lib/team-access";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+  requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
   listDirectory.mockResolvedValue([]);
 });
 
@@ -33,13 +33,16 @@ describe("DirectoryPage", () => {
     expect(typeof DirectoryPage).toBe("function");
   });
 
-  it("is visible to a parent, not just the owner", async () => {
+  it("is visible to a coach", async () => {
     const { default: DirectoryPage } = await import("./page");
 
     await expect(
       DirectoryPage({ params: Promise.resolve({ teamId: "team-1" }) }),
     ).resolves.toBeDefined();
-    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", { intent: "read" });
+    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", {
+      intent: "read",
+      minRole: "COACH",
+    });
   });
 
   it("calls notFound() for someone with no membership", async () => {
@@ -50,6 +53,22 @@ describe("DirectoryPage", () => {
     await expect(
       DirectoryPage({ params: Promise.resolve({ teamId: "team-1" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  // A parent who pastes the URL gets a 404, not a page of other families'
+  // phone numbers — requireTeamAccess raises insufficient-role for minRole
+  // COACH and the loader treats it exactly like no membership at all.
+  it("calls notFound() for a parent who pastes the URL", async () => {
+    requireTeamAccess.mockRejectedValue(
+      new TeamAccessError("Requires COACH, caller is PARENT", "insufficient-role"),
+    );
+
+    const { default: DirectoryPage } = await import("./page");
+
+    await expect(
+      DirectoryPage({ params: Promise.resolve({ teamId: "team-1" }) }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(listDirectory).not.toHaveBeenCalled();
   });
 
   it("renders a parent's kids on this team", async () => {

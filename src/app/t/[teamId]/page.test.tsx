@@ -63,4 +63,29 @@ describe("TeamHomePage navigation", () => {
 
     expect(html).toContain('href="/t/team-1/readiness"');
   });
+
+  it("links a coach to the directory", async () => {
+    const html = await render();
+
+    expect(html).toContain('href="/t/team-1/directory"');
+  });
+
+  it("does not show the directory to a parent", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+
+    const html = await render();
+
+    expect(html).not.toContain('href="/t/team-1/directory"');
+    // The roster stays open to a parent — it is the team's players, not
+    // every family's contact details.
+    expect(html).toContain('href="/t/team-1/roster"');
+  });
+
+  it("shows the directory to an owner too", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "user-1" });
+
+    const html = await render();
+
+    expect(html).toContain('href="/t/team-1/directory"');
+  });
 });
