@@ -40,13 +40,12 @@ export async function updateProfileAction(formData: FormData) {
   }
 
   revalidatePath("/profile");
-  // Every other page that renders these two columns. The staff-facing pair
-  // show this person's name, email, and phone to their coaches; the landing
-  // page greets them by name; and the team home page reads the same columns
-  // back through listCoachContacts, so a coach fixing their own number has
-  // to reach the card their parents actually dial.
+  // Every other page that renders User.name or User.phone. This list mirrors
+  // the table in src/lib/profile.ts — add a page there and here together, or
+  // it serves the old value and the save looks broken.
   revalidatePath("/t/[teamId]/directory", "page");
   revalidatePath("/t/[teamId]/roster/[entryId]", "page");
+  revalidatePath("/t/[teamId]/members", "page");
   revalidatePath("/t/[teamId]", "page");
   revalidatePath("/");
   redirect("/profile?saved=1");

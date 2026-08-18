@@ -10,6 +10,25 @@ import { db } from "./db";
 /// staff-facing views of someone else's contact details are `listDirectory`
 /// and the roster entry page, both gated at COACH.
 
+/// **Every page that renders `User.name` or `User.phone`.** `updateProfileAction`
+/// revalidates this list, and it is the list to check against when adding a
+/// page that shows a person's name or phone — a new consumer that is not
+/// revalidated serves the old value until something else happens to bust the
+/// cache, which is invisible in tests and looks like "the save didn't work".
+///
+/// | Page | Reads | Audience |
+/// |---|---|---|
+/// | `/` | name | the person themself ("Welcome back, …") |
+/// | `/profile` | name, phone | the person themself |
+/// | `/t/[teamId]` | name, phone | parents, via `listCoachContacts` — staff only |
+/// | `/t/[teamId]/directory` | name, phone | COACH+, via `listDirectory` |
+/// | `/t/[teamId]/roster/[entryId]` | name, phone | COACH+, via `getRosterEntry` |
+/// | `/t/[teamId]/members` | name | OWNER, via `listTeamMembers` |
+///
+/// `email` is absent deliberately: it is not editable here, so no page goes
+/// stale on it. `/t/[teamId]/roster/invite` reads guardian *emails* only and
+/// so is not on this list.
+
 export type Profile = {
   name: string | null;
   email: string;
