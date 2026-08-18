@@ -67,11 +67,13 @@ export function PageContainer({
 }>) {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      <header className="border-b border-border bg-card">
+      {/* Pinstriped band, per design-plan.md §5 — stripes live on header
+          surfaces only, never behind body text. */}
+      <header className="border-b-2 border-primary/30 bg-card bg-pinstripe">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center">
             <BaseballCornIcon />
-            <h1 className="text-2xl font-bold text-primary">
+            <h1 className="font-display text-xl text-primary sm:text-2xl">
               Youth Baseball Team Manager
             </h1>
           </div>

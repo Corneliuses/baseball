@@ -74,9 +74,12 @@ describe("PositionsEditor", () => {
     );
 
     const field = screen.getByRole("region", { name: "Diamond" });
-    expect(field.querySelector("circle")).toHaveClass(
-      "fill-muted-foreground/30",
-    );
+    // Selected by its class rather than as "the circle": FieldArt paints the
+    // field with circles of its own (mow stripes, mound, fence), so the disc
+    // is no longer the only one in the SVG.
+    expect(
+      field.querySelector("circle.fill-muted-foreground\\/30"),
+    ).toBeInTheDocument();
     expect(field).toHaveTextContent("the coach pitches");
   });
 
@@ -86,7 +89,7 @@ describe("PositionsEditor", () => {
     );
 
     const field = screen.getByRole("region", { name: "Diamond" });
-    expect(field.querySelector("circle")).toBeNull();
+    expect(field.querySelector("circle.fill-muted-foreground\\/30")).toBeNull();
     expect(field).toHaveTextContent("C");
   });
 

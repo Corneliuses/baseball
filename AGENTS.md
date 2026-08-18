@@ -23,6 +23,8 @@ src/app/           # Next.js App Router pages and layouts
 src/lib/           # Domain logic. Pure, DB-free modules live here with co-located tests
 src/emails/        # React Email templates plus their pure props builders
 src/generated/     # Prisma client output — gitignored, regenerate with pnpm db:generate
+src/components/    # Shared UI: shadcn primitives in ui/, plus the diamond and its geometry
+docs/design/       # The design plan and its SVG mockups — kept in step with the code by a test
 .agents/           # Product brief and stack decisions (decision record — do not edit)
 .claude/           # Agent config: workflow skills, agent defs, permissions (do not edit)
 ```
@@ -236,6 +238,13 @@ production — the dev command can prompt, generate new migrations, and reset th
   accepting an invitation gets a cookie the app cannot read. Accepting is a **POST**, never
   a GET: it consumes the invitation, and corporate mail scanners follow every link in a
   message before the recipient sees it.
+- **`docs/design/design-plan.md` is checked against the code by a test.**
+  `src/design-plan-drift.test.ts` reads that document and asserts its colour-token values
+  against `globals.css` and its ``FIELD_ART.key = n`` geometry claims against
+  `diamond-geometry.ts`, because the document drifted from the code four times in its
+  first week. Changing a design token or a field radius will fail `pnpm check` until the
+  document is updated to match. Fix whichever side is wrong — usually the document — and
+  never delete the claim to silence the test. §13 of the document explains the format.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.

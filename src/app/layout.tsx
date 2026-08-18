@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LazyMotion, domAnimation } from "motion/react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Alfa_Slab_One, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -10,6 +10,14 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+/// Display slab for headings and hero numbers only (design-plan.md §4) —
+/// exposed as the `font-display` utility via `--font-display` in globals.css.
+const alfaSlab = Alfa_Slab_One({
+  variable: "--font-alfa-slab",
+  weight: "400",
   subsets: ["latin"],
 });
 
@@ -34,7 +42,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${alfaSlab.variable} h-full antialiased`}
     >
       <body className="h-full">
         <LazyMotion features={domAnimation}>{children}</LazyMotion>

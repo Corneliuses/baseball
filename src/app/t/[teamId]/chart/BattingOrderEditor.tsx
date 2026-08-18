@@ -20,6 +20,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { JerseyDot } from "@/components/JerseyDot";
 import { Button } from "@/components/ui/button";
 import {
   buildBattingDraft,
@@ -200,15 +201,17 @@ function SlotItem({
       {...draggableProps}
       className={`flex touch-manipulation select-none items-center gap-3 rounded-md border p-3 ${
         entry !== undefined
-          ? "border-border bg-background cursor-grab"
-          : "border-dashed border-border bg-muted/30"
+          ? "border-border bg-card cursor-grab shadow-sm"
+          : "border-2 border-dashed border-border bg-muted/30"
       } ${isDragging ? "z-10 opacity-80 shadow-md cursor-grabbing" : ""} ${
-        isOver && !isDragging ? "ring-2 ring-ring" : ""
+        isOver && !isDragging ? "ring-2 ring-banana" : ""
       }`}
     >
-      <span className="w-6 shrink-0 text-right text-sm font-semibold text-muted-foreground">
-        {slotNumber}
-      </span>
+      {/* Static styling only on a dnd-kit element — no Motion, ever. */}
+      <JerseyDot
+        number={slotNumber}
+        className={entry === undefined ? "opacity-40" : ""}
+      />
       {entry !== undefined ? (
         <PlayerLabel entry={entry} />
       ) : (
@@ -234,8 +237,8 @@ function UnassignedPool({
       </h4>
       <div
         ref={setNodeRef}
-        className={`min-h-16 space-y-2 rounded-md border border-dashed p-3 ${
-          isOver ? "border-ring bg-muted/40" : "border-border"
+        className={`min-h-16 space-y-2 rounded-md border-2 border-dashed p-3 ${
+          isOver ? "border-banana bg-banana/20" : "border-border"
         }`}
       >
         {draft.unassigned.length === 0 ? (

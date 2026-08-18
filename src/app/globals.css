@@ -1,89 +1,119 @@
 @import "tailwindcss";
 
+/* "Pastoral Banana Ball" — see docs/design/design-plan.md. Old-school pastoral
+   baseball (cream paper, field green, infield clay, midnight navy) with one
+   loud Banana Yellow accent per screen. Dark mode is a night game under
+   floodlights, not an inverted spreadsheet. */
 :root {
   /* Background & foreground in HSL */
-  --background: 0 0% 100%;
-  --foreground: 217 33% 16%;
-
-  /* Baseball theme (hex → HSL). Overridden in the dark block below — these
-     are tuned for light surfaces and wash out on a dark card. */
-  --baseball-green: 104 48% 24%;
-  --baseball-brown: 43 60% 33%;
-  --baseball-blue: 217 100% 29%;
-  --baseball-red: 0 90% 56%;
+  --background: 42 70% 94%;
+  --foreground: 224 42% 20%;
 
   /* shadcn/ui design tokens.
      `--primary` is the brand SURFACE and `--primary-foreground` is the text
      that sits on it — `bg-primary text-primary-foreground`. Keep primary dark
      here and light in the dark block; transposing the pair makes `text-primary`
      near-invisible and turns the default Button into a white-on-white slab. */
-  --primary: 24 100% 10%;
-  --primary-foreground: 24 9% 98%;
+  --primary: 131 39% 30%;
+  --primary-foreground: 42 70% 96%;
 
-  --secondary: 24 5% 90%;
-  --secondary-foreground: 24 9% 10%;
+  --secondary: 30 40% 87%;
+  --secondary-foreground: 25 50% 25%;
 
-  --destructive: 0 84% 60%;
+  --destructive: 350 85% 42%;
   --destructive-foreground: 0 0% 98%;
 
-  --muted: 24 5% 74%;
-  --muted-foreground: 15 4% 36%;
+  --muted: 40 32% 86%;
+  --muted-foreground: 30 12% 38%;
 
-  --accent: 24 9% 98%;
-  --accent-foreground: 24 100% 10%;
+  /* Accent is the *hover-tint* member of the banana family — soft enough for
+     outline/ghost button hovers. The full-strength banana lives in --banana
+     below and is rationed: one big yellow thing per screen. */
+  --accent: 44 85% 86%;
+  --accent-foreground: 224 42% 20%;
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 15 23% 10%;
+  --banana: 44 100% 59%;
+  --banana-foreground: 224 42% 20%;
 
-  --card: 0 0% 100%;
-  --card-foreground: 15 23% 10%;
+  --popover: 45 60% 98%;
+  --popover-foreground: 224 42% 20%;
 
-  --border: 24 6% 93%;
-  --input: 24 6% 93%;
-  --ring: 24 100% 10%;
+  --card: 45 60% 98%;
+  --card-foreground: 224 42% 20%;
+
+  --border: 35 30% 80%;
+  --input: 35 30% 80%;
+  --ring: 131 39% 30%;
+
+  /* The field itself — consumed by FieldArt (both diamonds). Tuned as a flat
+     poster illustration: markers and text must stay readable on top. */
+  --grass: 104 31% 55%;
+  --grass-stripe: 104 33% 60%;
+  --infield-grass: 104 27% 50%;
+  --dirt: 31 56% 57%;
+  --track: 33 62% 60%;
+  --chalk: 0 0% 100%;
+
+  /* The readiness scoreboard is charcoal in BOTH themes — a scoreboard is
+     dark; light mode just means it's daytime around it. */
+  --scoreboard: 218 22% 10%;
+  --scoreboard-foreground: 45 36% 88%;
+  --scoreboard-accent: 45 100% 65%;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: 217 33% 6%;
-    --foreground: 200 10% 98%;
+    --background: 218 22% 10%;
+    --foreground: 45 36% 88%;
 
-    /* Lightened so they keep contrast against --card (15 23% 12%). */
-    --baseball-green: 104 40% 65%;
-    --baseball-brown: 43 50% 65%;
-    --baseball-blue: 217 80% 72%;
-    --baseball-red: 0 85% 70%;
+    --primary: 120 41% 69%;
+    --primary-foreground: 218 22% 10%;
 
-    --primary: 24 9% 98%;
-    --primary-foreground: 24 100% 10%;
+    --secondary: 219 14% 20%;
+    --secondary-foreground: 45 36% 88%;
 
-    --secondary: 24 9% 20%;
-    --secondary-foreground: 24 9% 98%;
-
-    --destructive: 0 84% 60%;
+    --destructive: 352 70% 55%;
     --destructive-foreground: 0 0% 98%;
 
-    --muted: 15 10% 40%;
-    --muted-foreground: 15 4% 74%;
+    --muted: 219 14% 22%;
+    --muted-foreground: 40 15% 68%;
 
-    --accent: 24 100% 10%;
-    --accent-foreground: 24 9% 98%;
+    --accent: 45 40% 24%;
+    --accent-foreground: 45 36% 88%;
 
-    --popover: 15 23% 10%;
-    --popover-foreground: 15 23% 98%;
+    /* Floodlight: the banana gets brighter at night, never muted. */
+    --banana: 45 100% 65%;
+    --banana-foreground: 218 22% 10%;
 
-    --card: 15 23% 12%;
-    --card-foreground: 15 23% 98%;
+    --popover: 220 19% 15%;
+    --popover-foreground: 45 36% 88%;
 
-    --border: 15 13% 22%;
-    --input: 15 13% 22%;
-    --ring: 24 100% 10%;
+    --card: 220 19% 15%;
+    --card-foreground: 45 36% 88%;
+
+    --border: 219 14% 24%;
+    --input: 219 14% 24%;
+    --ring: 45 100% 65%;
+
+    --grass: 145 31% 20%;
+    --grass-stripe: 145 29% 23%;
+    --infield-grass: 144 30% 17%;
+    --dirt: 26 36% 35%;
+    --track: 25 36% 31%;
+    --chalk: 45 36% 88%;
+
+    --scoreboard: 218 22% 8%;
+    --scoreboard-foreground: 45 36% 88%;
+    --scoreboard-accent: 45 100% 65%;
   }
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Display slab for headings and hero numbers only, 20px+ — slab body text is
+     a ransom note. Loaded in layout.tsx via next/font. */
+  --font-display: var(--font-alfa-slab);
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -105,12 +135,62 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
   /* hsl() wrappers, like every token above. Without them these expand to a
-     bare `104 48% 24%`, which is not a color value — any `text-baseball-green`
-     or `fill-baseball-green` utility silently produces an invalid declaration. */
-  --color-baseball-green: hsl(var(--baseball-green));
-  --color-baseball-brown: hsl(var(--baseball-brown));
-  --color-baseball-blue: hsl(var(--baseball-blue));
-  --color-baseball-red: hsl(var(--baseball-red));
+     bare `44 100% 59%`, which is not a color value — any `text-banana` or
+     `fill-grass` utility silently produces an invalid declaration. */
+  --color-banana: hsl(var(--banana));
+  --color-banana-foreground: hsl(var(--banana-foreground));
+  --color-grass: hsl(var(--grass));
+  --color-grass-stripe: hsl(var(--grass-stripe));
+  --color-infield-grass: hsl(var(--infield-grass));
+  --color-dirt: hsl(var(--dirt));
+  --color-track: hsl(var(--track));
+  --color-chalk: hsl(var(--chalk));
+  --color-scoreboard: hsl(var(--scoreboard));
+  --color-scoreboard-foreground: hsl(var(--scoreboard-foreground));
+  --color-scoreboard-accent: hsl(var(--scoreboard-accent));
+}
+
+/* Vertical pinstripes for header bands and hero surfaces only — never behind
+   body text. Foreground-derived so it survives both themes. */
+@utility bg-pinstripe {
+  background-image: repeating-linear-gradient(
+    90deg,
+    hsl(var(--foreground) / 0.05) 0,
+    hsl(var(--foreground) / 0.05) 1px,
+    transparent 1px,
+    transparent 24px
+  );
+}
+
+/* Halo for SVG <text> sitting on the field art: paints the stroke *behind*
+   the glyph fill, so navy names stay readable on grass without needing a
+   measured pill rect behind every label. */
+@utility text-halo {
+  paint-order: stroke;
+  stroke: hsl(var(--background));
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+/* A lineup-announcement rise for list rows, staggered per row with an inline
+   animation-delay. Translate-only, same reasoning as Reveal.tsx: no opacity,
+   so the raw HTML is legible before (and without) any animation. CSS-only —
+   never attach to anything dnd-kit drags. */
+@utility animate-rise {
+  animation: rise 0.35s ease-out both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(8px);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 @layer base {

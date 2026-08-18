@@ -39,6 +39,62 @@ export const POSITION_COORDS: Record<Position, { x: number; y: number }> = {
 /// The infield polygon, in the same coordinate space.
 export const DIAMOND_POLYGON = "200,420 290,320 200,230 110,320";
 
+/// The painted field behind the markers (design-plan.md §6), in the same
+/// coordinate space as POSITION_COORDS and consumed only by `FieldArt` — which
+/// both the view page's diamond and the drag editor render, under the same
+/// sharing rule as the coordinates themselves: a field one page paints and the
+/// other doesn't is its own kind of bug.
+///
+/// Everything is derived from the geometry above rather than re-eyeballed:
+/// home plate is the polygon's bottom vertex (200,420), the bases are its
+/// other three, the mound sits between the pitcher marker and home, and the
+/// home dirt circle's radius is what keeps the catcher marker at y=452
+/// standing on dirt rather than on bare page.
+export const FIELD_ART = {
+  /// Fair territory: home plate out along both foul lines to the top corners.
+  /// Grass, stripes, track, and fence are all clipped to this wedge.
+  fairTerritory: "M200,420 L400,198 L400,0 L0,0 L0,198 Z",
+  /// Mowed-stripe rings, centred on home plate: radius + strokeWidth pairs.
+  stripes: [90, 170, 250, 330],
+  stripeWidth: 40,
+  /// Warning track band and fence arc, also centred on home plate. The fence
+  /// is drawn in banana yellow — that screen's one banana.
+  ///
+  /// Pushed out far enough that the deepest outfielder (CENTER_FIELD at y=75,
+  /// so a marker top edge of y=55) stands on grass rather than straddling the
+  /// track. Check that gap before moving either radius.
+  trackRadius: 392,
+  trackWidth: 36,
+  fenceRadius: 408,
+  fenceWidth: 5,
+  /// Everything green is clipped to this too, so the park ends at the fence
+  /// instead of grass running out to the corners of the box. Sits just past
+  /// the fence stroke (fenceRadius + fenceWidth/2) so the fence itself is not
+  /// clipped in half.
+  parkRadius: 411,
+  /// Infield dirt: a diamond whose back edge bows behind second base.
+  infieldDirt: "M200,444 L316,318 Q200,90 84,318 Z",
+  /// The grass diamond inside the basepaths.
+  infieldGrass: "M200,398 L272,322 L200,246 L128,322 Z",
+  /// Home-plate dirt circle and pitcher's mound. The radius is not cosmetic:
+  /// the catcher's spot sits at y=452 with a 20-radius marker, so anything
+  /// under 52 leaves the catcher — and, on an allPlay board, the disc that
+  /// stands in for the catcher — hanging off the dirt onto bare page.
+  homeCircle: { x: 200, y: 420, r: 54 },
+  mound: { x: 200, y: 330, r: 18 },
+  pitchingRubber: { x: 193, y: 327, width: 14, height: 4 },
+  /// Chalk foul lines, home plate to where each leaves the wedge.
+  foulLines: ["M200,420 L14,213", "M200,420 L386,213"],
+  /// Bases as rotated squares on the polygon's corners, plus the plate.
+  baseSize: 14,
+  bases: [
+    { x: 290, y: 320 },
+    { x: 200, y: 230 },
+    { x: 110, y: 320 },
+  ],
+  homePlate: "M193,413 L207,413 L207,420 L200,427 L193,420 Z",
+} as const;
+
 /// The same coordinates as percentages, for the editor — its drop targets are
 /// absolutely positioned HTML rather than SVG nodes, because dnd-kit measures
 /// with `getBoundingClientRect` and drags HTML chips by writing `transform`.

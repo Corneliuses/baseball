@@ -1,0 +1,283 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 640" font-family="Helvetica, Arial, sans-serif">
+  <style>
+    .h { font: 800 20px 'Arial Black', Arial, sans-serif; letter-spacing: 1px; }
+    .cap { font: 12px Helvetica, Arial, sans-serif; }
+    .abbr { font: 800 11px Arial, sans-serif; }
+    .name { font: 700 11px Arial, sans-serif; }
+    .tag { font: 600 8px Arial, sans-serif; }
+
+    /* ------ day game ------ */
+    .day .sky      { fill: #FAF3E3; }
+    .day .grass    { fill: #7FB069; }
+    .day .stripe   { stroke: #8CBB77; }
+    .day .track    { stroke: #D9A05B; }
+    .day .fence    { stroke: #FFC72C; }
+    .day .dirt     { fill: #CE9455; }
+    .day .ingrass  { fill: #6EA25C; }
+    .day .chalk    { stroke: #FFFFFF; }
+    .day .base     { fill: #FFFFFF; stroke: #B98A50; }
+    .day .rubber   { fill: #FFFFFF; }
+    .day .m-going  { fill: #FAF3E3; stroke: #2F6B3A; }
+    .day .m-none   { fill: #FAF3E3; stroke: #1E2A4A; }
+    .day .m-out    { fill: #E7E2D4; stroke: #8A8574; }
+    .day .abbr     { fill: #1E2A4A; }
+    .day .abbr-out { fill: #8A8574; }
+    .day .name     { fill: #1E2A4A; }
+    .day .name-out { fill: #4C4A40; opacity: .65; }
+    .day .pill     { fill: #FAF3E3; opacity: .92; }
+    .day .t-going  { fill: #2F6B3A; }
+    .day .t-out    { fill: #C8102E; }
+    .day .t-none   { fill: #6B665A; }
+
+    /* ------ night game ------ */
+    .night .sky     { fill: #14181F; }
+    .night .grass   { fill: #234230; }
+    .night .stripe  { stroke: #294B37; }
+    .night .track   { stroke: #6B4A32; }
+    .night .fence   { stroke: #FFD24D; }
+    .night .dirt    { fill: #7A563A; }
+    .night .ingrass { fill: #1F3A2A; }
+    .night .chalk   { stroke: #EDE7D6; }
+    .night .base    { fill: #EDE7D6; stroke: #4A352A; }
+    .night .rubber  { fill: #EDE7D6; }
+    .night .m-going { fill: #1B2620; stroke: #8FD08F; }
+    .night .m-none  { fill: #1E2530; stroke: #C9C2AE; }
+    .night .m-out   { fill: #1A1E26; stroke: #5A5648; }
+    .night .abbr    { fill: #EDE7D6; }
+    .night .abbr-out{ fill: #8A8574; }
+    .night .name    { fill: #EDE7D6; }
+    .night .name-out{ fill: #9B968A; opacity: .75; }
+    .night .pill    { fill: #232A36; opacity: .95; }
+    .night .t-going { fill: #8FD08F; }
+    .night .t-out   { fill: #F08A9B; }
+    .night .t-none  { fill: #A9A292; }
+  </style>
+
+  <rect width="880" height="640" fill="#FAF3E3"/>
+  <text x="30" y="36" class="h" fill="#1E2A4A">THE DIAMOND, REDRAWN</text>
+  <text x="30" y="56" class="cap" fill="#4C4A40">Same 400×520 viewBox, same POSITION_COORDS — the field art just finally shows up. Left: day game (light). Right: night game (dark).</text>
+
+  <defs>
+    <clipPath id="wedge">
+      <path d="M200,420 L400,198 L400,0 L0,0 L0,198 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- ================= DAY FIELD ================= -->
+  <g class="day" transform="translate(20,80)">
+    <rect width="400" height="520" class="sky" rx="12"/>
+    <g clip-path="url(#wedge)">
+      <rect width="400" height="440" class="grass"/>
+      <g fill="none" stroke-width="40">
+        <circle cx="200" cy="420" r="90"  class="stripe"/>
+        <circle cx="200" cy="420" r="170" class="stripe"/>
+        <circle cx="200" cy="420" r="250" class="stripe"/>
+        <circle cx="200" cy="420" r="330" class="stripe"/>
+      </g>
+      <circle cx="200" cy="420" r="377" fill="none" stroke-width="36" class="track"/>
+      <circle cx="200" cy="420" r="395" fill="none" stroke-width="5" class="fence"/>
+    </g>
+
+    <!-- infield dirt, home circle, mound -->
+    <path d="M200,444 L316,318 Q200,90 84,318 Z" class="dirt"/>
+    <circle cx="200" cy="420" r="42" class="dirt"/>
+    <path d="M200,398 L272,322 L200,246 L128,322 Z" class="ingrass"/>
+    <circle cx="200" cy="330" r="18" class="dirt"/>
+
+    <!-- chalk -->
+    <g fill="none" stroke-width="3" stroke-linecap="round" class="chalk">
+      <path d="M200,420 L14,213"/>
+      <path d="M200,420 L386,213"/>
+    </g>
+    <g fill="none" stroke-width="2.5" stroke-linecap="round" class="chalk" opacity=".9">
+      <path d="M200,420 L290,320 L200,230 L110,320 Z"/>
+    </g>
+
+    <!-- bases + plate + rubber -->
+    <g stroke-width="1">
+      <rect x="-7" y="-7" width="14" height="14" transform="translate(290,320) rotate(45)" class="base"/>
+      <rect x="-7" y="-7" width="14" height="14" transform="translate(200,230) rotate(45)" class="base"/>
+      <rect x="-7" y="-7" width="14" height="14" transform="translate(110,320) rotate(45)" class="base"/>
+      <path d="M193,413 L207,413 L207,420 L200,427 L193,420 Z" class="base"/>
+      <rect x="193" y="327" width="14" height="4" rx="1" class="rubber"/>
+    </g>
+
+    <!-- markers: sample chart with the three RSVP states -->
+    <!-- CF Rio, no response -->
+    <g transform="translate(200,75)">
+      <circle r="20" class="m-none" stroke-width="2" stroke-dasharray="4 3"/>
+      <text dy="4" text-anchor="middle" class="abbr">CF</text>
+      <text y="34" text-anchor="middle" class="name">Rio</text>
+      <rect x="-26" y="40" width="52" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-none">NO RESPONSE</text>
+    </g>
+    <!-- LF Ozzy, going -->
+    <g transform="translate(75,130)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">LF</text>
+      <text y="34" text-anchor="middle" class="name">Ozzy</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <!-- RF Nell, going -->
+    <g transform="translate(325,130)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">RF</text>
+      <text y="34" text-anchor="middle" class="name">Nell</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <!-- SS Theo, declined -->
+    <g transform="translate(168,252)">
+      <circle r="20" class="m-out" stroke-width="1.5"/>
+      <text dy="4" text-anchor="middle" class="abbr-out abbr">SS</text>
+      <text y="34" text-anchor="middle" class="name name-out">Theo</text>
+      <rect x="-24" y="40" width="48" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-out">NOT GOING</text>
+    </g>
+    <!-- 2B Ava, going -->
+    <g transform="translate(232,252)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">2B</text>
+      <text y="34" text-anchor="middle" class="name">Ava</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <!-- 3B June, going -->
+    <g transform="translate(108,300)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">3B</text>
+      <text y="34" text-anchor="middle" class="name">June</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <!-- 1B Sam, no response -->
+    <g transform="translate(292,300)">
+      <circle r="20" class="m-none" stroke-width="2" stroke-dasharray="4 3"/>
+      <text dy="4" text-anchor="middle" class="abbr">1B</text>
+      <text y="34" text-anchor="middle" class="name">Sam</text>
+      <rect x="-26" y="40" width="52" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-none">NO RESPONSE</text>
+    </g>
+    <!-- P Maya, going -->
+    <g transform="translate(200,338)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">P</text>
+      <text y="34" text-anchor="middle" class="name">Maya</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <!-- C Leo, going -->
+    <g transform="translate(200,452)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">C</text>
+      <text y="34" text-anchor="middle" class="name">Leo</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+  </g>
+
+  <!-- ================= NIGHT FIELD ================= -->
+  <g class="night" transform="translate(460,80)">
+    <rect width="400" height="520" class="sky" rx="12"/>
+    <g clip-path="url(#wedge)">
+      <rect width="400" height="440" class="grass"/>
+      <g fill="none" stroke-width="40">
+        <circle cx="200" cy="420" r="90"  class="stripe"/>
+        <circle cx="200" cy="420" r="170" class="stripe"/>
+        <circle cx="200" cy="420" r="250" class="stripe"/>
+        <circle cx="200" cy="420" r="330" class="stripe"/>
+      </g>
+      <circle cx="200" cy="420" r="377" fill="none" stroke-width="36" class="track"/>
+      <circle cx="200" cy="420" r="395" fill="none" stroke-width="5" class="fence"/>
+    </g>
+
+    <path d="M200,444 L316,318 Q200,90 84,318 Z" class="dirt"/>
+    <circle cx="200" cy="420" r="42" class="dirt"/>
+    <path d="M200,398 L272,322 L200,246 L128,322 Z" class="ingrass"/>
+    <circle cx="200" cy="330" r="18" class="dirt"/>
+
+    <g fill="none" stroke-width="3" stroke-linecap="round" class="chalk">
+      <path d="M200,420 L14,213"/>
+      <path d="M200,420 L386,213"/>
+    </g>
+    <g fill="none" stroke-width="2.5" stroke-linecap="round" class="chalk" opacity=".9">
+      <path d="M200,420 L290,320 L200,230 L110,320 Z"/>
+    </g>
+
+    <g stroke-width="1">
+      <rect x="-7" y="-7" width="14" height="14" transform="translate(290,320) rotate(45)" class="base"/>
+      <rect x="-7" y="-7" width="14" height="14" transform="translate(200,230) rotate(45)" class="base"/>
+      <rect x="-7" y="-7" width="14" height="14" transform="translate(110,320) rotate(45)" class="base"/>
+      <path d="M193,413 L207,413 L207,420 L200,427 L193,420 Z" class="base"/>
+      <rect x="193" y="327" width="14" height="4" rx="1" class="rubber"/>
+    </g>
+
+    <g transform="translate(200,75)">
+      <circle r="20" class="m-none" stroke-width="2" stroke-dasharray="4 3"/>
+      <text dy="4" text-anchor="middle" class="abbr">CF</text>
+      <text y="34" text-anchor="middle" class="name">Rio</text>
+      <rect x="-26" y="40" width="52" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-none">NO RESPONSE</text>
+    </g>
+    <g transform="translate(75,130)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">LF</text>
+      <text y="34" text-anchor="middle" class="name">Ozzy</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <g transform="translate(325,130)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">RF</text>
+      <text y="34" text-anchor="middle" class="name">Nell</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <g transform="translate(168,252)">
+      <circle r="20" class="m-out" stroke-width="1.5"/>
+      <text dy="4" text-anchor="middle" class="abbr-out abbr">SS</text>
+      <text y="34" text-anchor="middle" class="name name-out">Theo</text>
+      <rect x="-24" y="40" width="48" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-out">NOT GOING</text>
+    </g>
+    <g transform="translate(232,252)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">2B</text>
+      <text y="34" text-anchor="middle" class="name">Ava</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <g transform="translate(108,300)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">3B</text>
+      <text y="34" text-anchor="middle" class="name">June</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <g transform="translate(292,300)">
+      <circle r="20" class="m-none" stroke-width="2" stroke-dasharray="4 3"/>
+      <text dy="4" text-anchor="middle" class="abbr">1B</text>
+      <text y="34" text-anchor="middle" class="name">Sam</text>
+      <rect x="-26" y="40" width="52" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-none">NO RESPONSE</text>
+    </g>
+    <g transform="translate(200,338)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">P</text>
+      <text y="34" text-anchor="middle" class="name">Maya</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+    <g transform="translate(200,452)">
+      <circle r="20" class="m-going" stroke-width="3"/>
+      <text dy="4" text-anchor="middle" class="abbr">C</text>
+      <text y="34" text-anchor="middle" class="name">Leo</text>
+      <rect x="-17" y="40" width="34" height="12" rx="6" class="pill"/>
+      <text y="49" text-anchor="middle" class="tag t-going">GOING</text>
+    </g>
+  </g>
+
+  <text x="220" y="622" text-anchor="middle" class="cap" fill="#4C4A40">Day game — Vintage Cream page, mowed-stripe grass, banana-yellow fence</text>
+  <text x="660" y="622" text-anchor="middle" class="cap" fill="#4C4A40">Night game — dugout charcoal, floodlit chalk, the fence still glows</text>
+</svg>

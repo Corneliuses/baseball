@@ -58,7 +58,7 @@ export default async function TeamLayout({
   return (
     <PageContainer>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
-        <h2 className="text-2xl font-bold text-foreground">{team.name}</h2>
+        <h2 className="font-display text-2xl text-foreground">{team.name}</h2>
         <TeamSwitcher teams={switcherTeams} currentTeamId={teamId} />
       </div>
       {children}

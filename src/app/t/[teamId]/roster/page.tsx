@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { JerseyDot } from "@/components/JerseyDot";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -87,7 +88,9 @@ export default async function RosterPage({
       ) : null}
 
       {roster.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No players yet.</p>
+        <p className="rounded-md border-2 border-dashed border-border p-4 text-sm text-muted-foreground">
+          No players yet. Every dynasty starts somewhere.
+        </p>
       ) : (
         <ul className="space-y-2">
           {roster.map((entry) => (
@@ -95,9 +98,13 @@ export default async function RosterPage({
               <Card>
                 <CardContent className="flex items-center justify-between gap-4 p-4">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
-                      {entry.jerseyNumber ?? "—"}
-                    </span>
+                    {entry.jerseyNumber !== null ? (
+                      <JerseyDot number={entry.jerseyNumber} />
+                    ) : (
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
+                        —
+                      </span>
+                    )}
                     <span className="font-medium text-foreground">
                       {entry.player.name}
                     </span>
