@@ -65,6 +65,12 @@ export default async function TeamHomePage({
             <Button asChild variant="outline">
               <Link href={`/t/${teamId}/chart`}>Edit batting order</Link>
             </Button>
+
+            {/* Coach-and-above: the directory is every family's contact
+                details, so a parent gets no link and no route to it. */}
+            <Button asChild variant="outline">
+              <Link href={`/t/${teamId}/directory`}>Directory</Link>
+            </Button>
           </>
         )}
 
@@ -73,18 +79,9 @@ export default async function TeamHomePage({
         </Button>
 
         {role === "OWNER" && (
-          <>
-            {/* Owner-only, alongside settings: the directory is every
-                family's contact details in one list, so coaches get no link
-                and no route to it either. */}
-            <Button asChild variant="outline">
-              <Link href={`/t/${teamId}/directory`}>Directory</Link>
-            </Button>
-
-            <Button asChild variant="outline">
-              <Link href={`/t/${teamId}/settings`}>Team settings</Link>
-            </Button>
-          </>
+          <Button asChild variant="outline">
+            <Link href={`/t/${teamId}/settings`}>Team settings</Link>
+          </Button>
         )}
       </div>
     </div>
