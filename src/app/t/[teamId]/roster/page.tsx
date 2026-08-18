@@ -60,11 +60,18 @@ export default async function RosterPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-xl font-semibold text-foreground">Roster</h3>
-        {isOwner ? (
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/t/${teamId}/roster/returning`}>Add returning player</Link>
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {canEdit ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/t/${teamId}/roster/invite`}>Invite parents</Link>
+            </Button>
+          ) : null}
+          {isOwner ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/t/${teamId}/roster/returning`}>Add returning player</Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {errorMessage ? (
