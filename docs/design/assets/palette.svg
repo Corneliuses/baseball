@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" font-family="Helvetica, Arial, sans-serif">
+  <style>
+    .h    { font: 800 20px 'Arial Black', Arial, sans-serif; letter-spacing: 1px; fill: #1E2A4A; }
+    .name { font: 800 13px 'Arial Black', Arial, sans-serif; fill: #1E2A4A; }
+    .hex  { font: 600 11px 'Courier New', monospace; fill: #6B665A; }
+    .use  { font: 11px Helvetica, Arial, sans-serif; fill: #4C4A40; }
+    .dk   { fill: #EDE7D6; }
+  </style>
+  <rect width="960" height="400" fill="#FAF3E3"/>
+  <text x="30" y="40" class="h">PASTORAL BANANA BALL — PALETTE</text>
+
+  <!-- core swatches -->
+  <g transform="translate(30,64)">
+    <g>
+      <rect width="135" height="90" rx="10" fill="#FAF3E3" stroke="#C9793F" stroke-width="2"/>
+      <text y="112" class="name">Vintage Cream</text>
+      <text y="128" class="hex">#FAF3E3 · 42 70% 94%</text>
+      <text y="144" class="use">Page background, cards.</text>
+      <text y="158" class="use">Kills the white-on-white.</text>
+    </g>
+    <g transform="translate(155,0)">
+      <rect width="135" height="90" rx="10" fill="#2F6B3A"/>
+      <text y="112" class="name">Field Green</text>
+      <text y="128" class="hex">#2F6B3A · 131 39% 30%</text>
+      <text y="144" class="use">Primary buttons, links,</text>
+      <text y="158" class="use">"Going", the grass.</text>
+    </g>
+    <g transform="translate(310,0)">
+      <rect width="135" height="90" rx="10" fill="#C9793F"/>
+      <text y="112" class="name">Infield Clay</text>
+      <text y="128" class="hex">#C9793F · 25 56% 52%</text>
+      <text y="144" class="use">Secondary accents, borders,</text>
+      <text y="158" class="use">the dirt, ticket stubs.</text>
+    </g>
+    <g transform="translate(465,0)">
+      <rect width="135" height="90" rx="10" fill="#FFC72C"/>
+      <text y="112" class="name">Banana Yellow</text>
+      <text y="128" class="hex">#FFC72C · 44 100% 59%</text>
+      <text y="144" class="use">The wow: CTAs, highlights,</text>
+      <text y="158" class="use">drop targets, the fence.</text>
+    </g>
+    <g transform="translate(620,0)">
+      <rect width="135" height="90" rx="10" fill="#1E2A4A"/>
+      <text y="112" class="name">Midnight Navy</text>
+      <text y="128" class="hex">#1E2A4A · 224 42% 20%</text>
+      <text y="144" class="use">Text, headings, jersey</text>
+      <text y="158" class="use">numbers. Replaces black.</text>
+    </g>
+    <g transform="translate(775,0)">
+      <rect width="135" height="90" rx="10" fill="#C8102E"/>
+      <text y="112" class="name">Stitch Red</text>
+      <text y="128" class="hex">#C8102E · 350 85% 42%</text>
+      <text y="144" class="use">Destructive, "Not going",</text>
+      <text y="158" class="use">stitch dividers. Sparingly.</text>
+    </g>
+  </g>
+
+  <!-- night game strip -->
+  <g transform="translate(30,250)">
+    <rect width="900" height="110" rx="12" fill="#14181F"/>
+    <text x="20" y="30" class="name dk">NIGHT GAME (dark mode)</text>
+    <g transform="translate(20,44)">
+      <rect width="120" height="26" rx="6" fill="#14181F" stroke="#3A4150"/>
+      <text x="8" y="17" class="hex dk">#14181F bg</text>
+      <g transform="translate(134,0)">
+        <rect width="120" height="26" rx="6" fill="#1E2530"/>
+        <text x="8" y="17" class="hex dk">#1E2530 card</text>
+      </g>
+      <g transform="translate(268,0)">
+        <rect width="120" height="26" rx="6" fill="#234230"/>
+        <text x="8" y="17" class="hex dk">#234230 grass</text>
+      </g>
+      <g transform="translate(402,0)">
+        <rect width="120" height="26" rx="6" fill="#FFD24D"/>
+        <text x="8" y="17" class="hex" fill="#1E2A4A">#FFD24D floodlight</text>
+      </g>
+      <g transform="translate(536,0)">
+        <rect width="120" height="26" rx="6" fill="#EDE7D6"/>
+        <text x="8" y="17" class="hex" fill="#1E2A4A">#EDE7D6 chalk text</text>
+      </g>
+      <g transform="translate(670,0)">
+        <rect width="120" height="26" rx="6" fill="#7A563A"/>
+        <text x="8" y="17" class="hex dk">#7A563A night dirt</text>
+      </g>
+    </g>
+    <text x="20" y="96" class="use" fill="#A9A292">Dark mode is a night game under the lights, not an inverted spreadsheet — same field, floodlit.</text>
+  </g>
+</svg>
