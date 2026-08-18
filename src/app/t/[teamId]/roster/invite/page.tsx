@@ -19,10 +19,21 @@ export const metadata = {
   title: "Invite parents — Youth Baseball Team Manager",
 };
 
+/// Every other action in this app does one round trip; this one loops, and
+/// `bulkInviteGuardiansAction` paces its sends 600ms apart to stay under
+/// Resend's rate limit. A full first-season batch is one row per player —
+/// ~15 for a youth team (product-brief.md) — so roughly 15 × (600ms + the
+/// row's own queries and send), comfortably past the seconds a single-shot
+/// action needs but well inside this ceiling. Set at the page level because
+/// that is what governs a Server Action's timeout, per Next's route segment
+/// config docs.
+export const maxDuration = 60;
+
 const ERROR_MESSAGES: Record<string, string> = {
   "invalid-email": "One of the email addresses isn't valid. Nothing was sent.",
   "invalid-message": "The message is too long — keep it under 1,000 characters.",
   "no-emails": "Enter at least one email address.",
+  "too-many": "That's too many invitations for one batch. Nothing was sent.",
   access: "You no longer have access to make this change.",
 };
 
@@ -65,7 +76,13 @@ export default async function BulkInvitePage({
   const statusParts = [
     sent ? `${sent} invitation${sent === "1" ? "" : "s"} sent` : null,
     linked ? `${linked} already-member parent${linked === "1" ? "" : "s"} linked` : null,
-    failed ? `${failed} could not be sent — check the addresses and try again` : null,
+    // Deliberately not "try again here": a failed send still created the
+    // guardian link, so that kid has moved to the covered list below and no
+    // longer has a row on this form. The player's page is where the
+    // invitation can actually be resent.
+    failed
+      ? `${failed} could not be sent — open the player from the roster to resend`
+      : null,
   ].filter(Boolean);
 
   return (
@@ -89,7 +106,16 @@ export default async function BulkInvitePage({
         </p>
       ) : null}
 
-      {needingGuardians.length === 0 ? (
+      {/* An empty roster reaches this page with nothing to invite for, and so
+          does a database outage — getRosterWithGuardians swallows read errors
+          to an empty list. Neither is "every player already has a parent", so
+          they get their own, non-committal line. */}
+      {roster.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No players on the roster yet. Add players first, then invite their
+          parents.
+        </p>
+      ) : needingGuardians.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Every player already has a parent linked. To add another parent for a
           kid, open the player from the roster.

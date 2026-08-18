@@ -102,6 +102,14 @@ describe("Bulk invite page", () => {
     expect(markup).not.toContain('name="message"');
   });
 
+  it("doesn't claim every player is covered when the roster reads empty", async () => {
+    getRosterWithGuardians.mockResolvedValue([]);
+
+    const markup = await renderPage();
+    expect(markup).toContain("No players on the roster yet");
+    expect(markup).not.toContain("Every player already has a parent linked");
+  });
+
   it("summarizes the batch outcome from query params", async () => {
     const markup = await renderPage({ sent: "3", linked: "1", failed: "2" });
 

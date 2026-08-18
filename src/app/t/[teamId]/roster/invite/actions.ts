@@ -26,10 +26,29 @@ const emailSchema = z.email();
 /// the cap guards Resend's payload, not a database column.
 const messageSchema = z.string().trim().max(1000);
 
+/// Hard ceiling on rows in one batch. The rendered form never comes close —
+/// it is one row per unlinked player — but the action reads whatever fields
+/// the POST carries, and each row costs a query and (potentially) an email to
+/// an address taken straight from the request. Bounding the batch keeps a
+/// forged or repeated submission from turning one request into an unbounded
+/// send to arbitrary recipients.
+const MAX_ROWS = 100;
+
+/// Resend's API is rate limited (2 requests/second by default), and a batch is
+/// the one place in this app that sends in a loop. Pace the sends so a
+/// full-team invite doesn't get its tail rejected as 429s — which would count
+/// as `failed` rows the coach can no longer retry from this page, since the
+/// guardian link already exists by then.
+const MIN_SEND_INTERVAL_MS = 600;
+
 /// One `email-<entryId>` field per player row. Blank rows are players the
 /// coach chose to skip, not errors.
+///
+/// Deduplicated by entryId, first row wins: the form renders exactly one input
+/// per player, so a repeated key can only come from a forged POST, and letting
+/// it through would mail several addresses per kid.
 function collectRows(formData: FormData): { entryId: string; email: string }[] {
-  const rows: { entryId: string; email: string }[] = [];
+  const byEntryId = new Map<string, string>();
   for (const [key, value] of formData.entries()) {
     if (!key.startsWith("email-") || typeof value !== "string") {
       continue;
@@ -38,9 +57,13 @@ function collectRows(formData: FormData): { entryId: string; email: string }[] {
     if (!email) {
       continue;
     }
-    rows.push({ entryId: key.slice("email-".length), email });
+    const entryId = key.slice("email-".length);
+    if (!entryId || byEntryId.has(entryId)) {
+      continue;
+    }
+    byEntryId.set(entryId, email);
   }
-  return rows;
+  return [...byEntryId].map(([entryId, email]) => ({ entryId, email }));
 }
 
 /**
@@ -71,6 +94,9 @@ export async function bulkInviteGuardiansAction(formData: FormData) {
   if (rows.length === 0) {
     redirect(`/t/${teamId}/roster/invite?error=no-emails`);
   }
+  if (rows.length > MAX_ROWS) {
+    redirect(`/t/${teamId}/roster/invite?error=too-many`);
+  }
   if (rows.some((row) => !emailSchema.safeParse(row.email).success)) {
     redirect(`/t/${teamId}/roster/invite?error=invalid-email`);
   }
@@ -91,6 +117,8 @@ export async function bulkInviteGuardiansAction(formData: FormData) {
       VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
       VERCEL_URL: process.env.VERCEL_URL,
     };
+
+    let lastSendAt = 0;
 
     for (const row of rows) {
       try {
@@ -117,6 +145,14 @@ export async function bulkInviteGuardiansAction(formData: FormData) {
           token: result.invitation.token,
           env,
         });
+        // Wait out only the remainder of the interval — a slow send has
+        // already paid for itself.
+        const waitMs = lastSendAt + MIN_SEND_INTERVAL_MS - Date.now();
+        if (waitMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+        lastSendAt = Date.now();
+
         const outcome = await sendEmail({
           to: result.email,
           subject,

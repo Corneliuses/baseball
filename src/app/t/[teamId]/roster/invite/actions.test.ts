@@ -192,6 +192,34 @@ describe("bulkInviteGuardiansAction", () => {
     expect(url).toBe("/t/team-1/roster/invite?error=no-emails");
   });
 
+  it("keeps only the first row per entry, so a forged POST can't fan out", async () => {
+    const data = new FormData();
+    data.set("teamId", "team-1");
+    data.append("email-entry-1", "a@example.com");
+    data.append("email-entry-1", "attacker@example.com");
+
+    const url = await redirectUrlOf(bulkInviteGuardiansAction(data));
+
+    expect(url).toBe("/t/team-1/roster/invite?sent=1");
+    expect(linkGuardian).toHaveBeenCalledTimes(1);
+    expect(linkGuardian).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "a@example.com" }),
+    );
+  });
+
+  it("rejects an oversized batch before writing", async () => {
+    const data = new FormData();
+    data.set("teamId", "team-1");
+    for (let i = 0; i < 101; i += 1) {
+      data.set(`email-entry-${i}`, `parent${i}@example.com`);
+    }
+
+    const url = await redirectUrlOf(bulkInviteGuardiansAction(data));
+
+    expect(url).toBe("/t/team-1/roster/invite?error=too-many");
+    expect(linkGuardian).not.toHaveBeenCalled();
+  });
+
   it("counts an already-member guardian as linked without emailing", async () => {
     linkGuardian.mockResolvedValueOnce({
       userId: "user-x",
