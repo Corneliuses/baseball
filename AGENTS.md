@@ -28,13 +28,21 @@ src/generated/     # Prisma client output — gitignored, regenerate with pnpm d
 ```
 
 `src/app/` now has real routes: `/` (auth-gated landing), `/signin`, `/invite/[token]`
-(unauthenticated invitation accept page — deliberately outside proxy.ts's matcher), and
-`/t/[teamId]/` (team home, settings, roster, members, the owner-only returning-player
-picker at `roster/returning`, the coach-only bulk parent invite at `roster/invite`, the
-member directory, the schedule at `schedule` / `schedule/[eventId]`, the read-only chart
-at `view`, and the two coach-only drag-and-drop chart editors — the batting order at
-`chart` and the positions diamond at
+(unauthenticated invitation accept page — deliberately outside proxy.ts's matcher),
+`/profile` (the signed-in person's own name and phone — global, not team-scoped, since
+those are `User` columns), and `/t/[teamId]/` (team home, settings, roster, members, the
+owner-only returning-player picker at `roster/returning`, the coach-only bulk parent
+invite at `roster/invite`, the coach-only member directory, the coach-only roster entry
+detail at `roster/[entryId]`, the schedule at `schedule` / `schedule/[eventId]`, the
+read-only chart at `view`, and the two coach-only drag-and-drop chart editors — the
+batting order at `chart` and the positions diamond at
 `chart/positions`) plus `/t/new` for owner-gated team creation.
+
+**Contact details are staff-facing.** A parent never sees another family's phone or
+email: `/directory` and `roster/[entryId]` are both COACH+, and the team home page gives
+parents a coaching-staff-only contact card (`listCoachContacts`) so "ask your coach" is
+an actual route. `/profile` is the counterpart — the one place a person reads back, and
+fixes, what the team has on file for them.
 
 ## Tech Stack
 
@@ -87,7 +95,9 @@ non-null) reject **every** write regardless of role, owner included.
 ### Proxy is optimistic-only
 
 `proxy.ts` (Next 16's renamed Middleware) does exactly one job here: redirect to sign-in
-when no session cookie is present, matching `/t/:path*`. It must stay that way.
+when no session cookie is present, matching `/t/:path*` and `/profile`. It must stay
+that way — matching another signed-in-only path is fine, reading the database there is
+not.
 
 Do **not** move the membership, role, or archived check into it. Proxy runs on every
 request including prefetches, so a database lookup there fires on link hover; the Next.js

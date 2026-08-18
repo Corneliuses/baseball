@@ -16,8 +16,8 @@ function request(path: string, cookies: Record<string, string> = {}) {
 }
 
 describe("proxy", () => {
-  it("only runs on team-scoped routes", () => {
-    expect(config.matcher).toBe("/t/:path*");
+  it("runs on the signed-in-only routes: team-scoped pages and /profile", () => {
+    expect(config.matcher).toEqual(["/t/:path*", "/profile"]);
   });
 
   it("redirects to sign-in when no session cookie is present", () => {

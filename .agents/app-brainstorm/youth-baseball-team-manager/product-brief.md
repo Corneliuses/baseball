@@ -80,8 +80,24 @@ Scoped to fit **6 weeks of evenings and weekends**.
   short **"you've been added to <team>"** email — no magic link, since they already have an
   account; just a heads-up and a way in. Explicitly *not* a bulk "copy last year's
   roster" — it's a deliberate pick, because rosters genuinely change.
-- **Directory** — parent name, phone, email, and their kids. Visible to all signed-in
-  members.
+- **Directory** — parent name, phone, email, and their kids. Visible to **coaches and the
+  owner only** (revised 2026-08-18; it previously read "visible to all signed-in members").
+  It is the whole team's contact details in one list, and a parent has no reason to hold
+  every other family's phone number and email; a parent who needs to reach someone goes
+  through the coach. To make that path real, the team home page shows parents a
+  **coaching-staff contact card** (owner and coaches only — name, email, phone; no
+  other family's data). Parents still see the schedule, the lineup, the roster, and
+  RSVP. Owner-only was considered and rejected the same day: coaches already read
+  contact details family-by-family through the roster entry pages their job requires,
+  so excluding them from the directory would remove the convenient list without
+  removing the access — while leaving an assistant coach at the field unable to call
+  a parent.
+- **Your profile** — each person sees and edits their own name and phone at `/profile`
+  (added 2026-08-18). #5 logged "a parent expects to edit their own phone" as an accepted
+  risk on the assumption they could at least see the value; closing the directory to
+  parents removed the last screen that showed it, so a coach's typo became undetectable
+  by the one person who knows it is wrong. Email is not editable — it is the magic-link
+  identity, so changing it is an account migration, not a profile edit.
 - **Schedule** — coach creates games and practices with location and time; parents see a
   month calendar view and a chronological list view.
 - **RSVP** — parent toggles attending / not attending per kid per event, **only for kids
