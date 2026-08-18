@@ -5,6 +5,10 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { db } from "@/lib/db";
 import { acceptInvitations, loadSignInContext } from "@/lib/invitations";
 import { decideSignIn } from "@/lib/signin-gate";
+import {
+  SESSION_MAX_AGE_SECONDS,
+  SESSION_UPDATE_AGE_SECONDS,
+} from "@/lib/sessions";
 
 /// Auth.js v5 — magic link only, gated by the Invitation table.
 ///
@@ -16,12 +20,6 @@ import { decideSignIn } from "@/lib/signin-gate";
 /// request rather than at import, so a missing RESEND_API_KEY fails when someone
 /// actually tries to sign in instead of at build time. src/lib/db.ts defers
 /// DATABASE_URL for the same reason — the build must not require secrets.
-
-/// Long enough that a parent at a ballfield is not re-authenticating on a phone,
-/// sliding so that opening the app keeps it alive. Database sessions make this
-/// safe: a 90-day window is revocable by deleting the row.
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 90;
-const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
