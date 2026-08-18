@@ -89,6 +89,12 @@ Scoped to fit **6 weeks of evenings and weekends**.
   so excluding them from the directory would remove the convenient list without
   removing the access — while leaving an assistant coach at the field unable to call
   a parent.
+- **Your profile** — each person sees and edits their own name and phone at `/profile`
+  (added 2026-08-18). #5 logged "a parent expects to edit their own phone" as an accepted
+  risk on the assumption they could at least see the value; closing the directory to
+  parents removed the last screen that showed it, so a coach's typo became undetectable
+  by the one person who knows it is wrong. Email is not editable — it is the magic-link
+  identity, so changing it is an account migration, not a profile edit.
 - **Schedule** — coach creates games and practices with location and time; parents see a
   month calendar view and a chronological list view.
 - **RSVP** — parent toggles attending / not attending per kid per event, **only for kids

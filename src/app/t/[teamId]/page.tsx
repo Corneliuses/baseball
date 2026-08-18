@@ -100,6 +100,12 @@ export default async function TeamHomePage({
             <Link href={`/t/${teamId}/settings`}>Team settings</Link>
           </Button>
         )}
+
+        {/* Everyone: your own name and phone, including the number the
+            coaching staff will call. Not team-scoped — see /profile. */}
+        <Button asChild variant="outline">
+          <Link href="/profile">Your profile</Link>
+        </Button>
       </div>
 
       {coachContacts.length > 0 && (

@@ -44,6 +44,10 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(signInUrl);
 }
 
+/// `/profile` is matched alongside the team routes: it is signed-in-only and
+/// shows the person their own contact details. `/invite/[token]` stays out,
+/// deliberately — accepting an invitation is how someone gets a session in
+/// the first place.
 export const config = {
-  matcher: "/t/:path*",
+  matcher: ["/t/:path*", "/profile"],
 };
