@@ -13,7 +13,7 @@ import {
 import { getProfile } from "@/lib/profile";
 import { getCurrentUser } from "@/lib/session";
 
-import { updateProfileAction } from "./actions";
+import { signOutAction, updateProfileAction } from "./actions";
 
 export const metadata = {
   title: "Your profile — Youth Baseball Team Manager",
@@ -137,6 +137,18 @@ export default async function ProfilePage({
             </form>
           </CardContent>
         </Card>
+
+        <div className="space-y-2">
+          <form action={signOutAction}>
+            <Button type="submit" variant="outline" className="w-full">
+              Sign out
+            </Button>
+          </form>
+          <p className="text-center text-xs text-muted-foreground">
+            Signs you out on this device only. Sign back in any time with an
+            email link.
+          </p>
+        </div>
       </div>
     </PageContainer>
   );

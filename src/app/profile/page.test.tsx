@@ -14,6 +14,7 @@ vi.mock("@/lib/profile", () => ({
 
 vi.mock("./actions", () => ({
   updateProfileAction: vi.fn(),
+  signOutAction: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -98,6 +99,14 @@ describe("ProfilePage", () => {
 
     expect(html).not.toContain("Saved.");
     expect(html).toContain("Your changes couldn&#x27;t be saved. Try again.");
+  });
+
+  // The one sign-out affordance in the app — /profile is linked from the
+  // landing header and every team's nav, so it must actually be here.
+  it("offers a sign-out button", async () => {
+    const html = await render();
+
+    expect(html).toContain("Sign out");
   });
 
   // A database error on the read must not render as "no number on file" —

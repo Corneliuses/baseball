@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 
+import { signOut } from "@/auth";
 import { normalizePhone } from "@/lib/phone";
 import { updateProfile } from "@/lib/profile";
 import { getCurrentUser } from "@/lib/session";
@@ -49,4 +50,17 @@ export async function updateProfileAction(formData: FormData) {
   revalidatePath("/t/[teamId]", "page");
   revalidatePath("/");
   redirect("/profile?saved=1");
+}
+
+/**
+ * Sign out on this device.
+ *
+ * Auth.js handles both kinds of session the app creates: a session written by
+ * the invite-accept action uses the same Session table and cookie name as one
+ * from a magic link (see src/lib/session-cookie.ts), so `signOut` deletes the
+ * row whichever path minted it. Only this device's session dies — every other
+ * device holds its own Session row and cookie.
+ */
+export async function signOutAction() {
+  await signOut({ redirectTo: "/" });
 }
