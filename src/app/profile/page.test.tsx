@@ -82,6 +82,15 @@ describe("ProfilePage", () => {
     await expect(render()).rejects.toThrow("NEXT_REDIRECT:/signin?callbackUrl=%2Fprofile");
   });
 
+  // ?error= is user-controlled; a prototype-chain key must fall through to
+  // the generic message rather than resolving an Object.prototype member
+  // into the tree, which is not a renderable child and crashes the page.
+  it("treats prototype-chain error keys as unknown errors", async () => {
+    const html = await render({ error: "__proto__" });
+
+    expect(html).toContain("Something went wrong.");
+  });
+
   it("surfaces a rejected phone number", async () => {
     const html = await render({ error: "invalid-phone" });
 

@@ -19,11 +19,15 @@ export const metadata = {
   title: "Your profile — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+// Null prototype: the key comes straight from the ?error= query param, and on
+// a plain object ?error=__proto__ or ?error=constructor would resolve an
+// Object.prototype member — truthy, so the fallback never fires — into a
+// non-renderable React child that crashes the page.
+const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null), {
   "invalid-phone": "Phone number must be 32 characters or fewer.",
   "save-failed": "Your changes couldn't be saved. Try again.",
   "signout-failed": "Signing out didn't work. Try again.",
-};
+});
 
 /// The one place a person sees and fixes what the team has on file for them.
 ///
