@@ -2,6 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { sortDirectory } from "@/lib/directory-rules";
+import { listCoachContacts } from "@/lib/memberships";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -30,6 +38,15 @@ export default async function TeamHomePage({
   if (!team) {
     notFound();
   }
+
+  // Parents only: the coaching staff's contact card. /directory is
+  // coach-and-above, and its recorded escape hatch — "a parent who needs to
+  // reach someone goes through the coach" — needs the coach to be reachable
+  // in-app. listCoachContacts selects OWNER and COACH rows only, so nothing
+  // here is another family's data. Coaches and the owner get the full
+  // directory instead, so the card would be redundant for them.
+  const coachContacts =
+    role === "PARENT" ? sortDirectory(await listCoachContacts(teamId)) : [];
 
   return (
     <div className="space-y-6">
@@ -84,6 +101,47 @@ export default async function TeamHomePage({
           </Button>
         )}
       </div>
+
+      {coachContacts.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-lg font-semibold text-foreground">Coaches</h3>
+          <ul className="space-y-2">
+            {coachContacts.map((coach) => (
+              <li key={coach.userId}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      {coach.name ?? coach.email}{" "}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        · {coach.role === "OWNER" ? "Owner" : "Coach"}
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    <p>
+                      <a
+                        href={`mailto:${coach.email}`}
+                        className="text-foreground underline"
+                      >
+                        {coach.email}
+                      </a>
+                    </p>
+                    <p className="text-muted-foreground">
+                      {coach.phone ? (
+                        <a href={`tel:${coach.phone}`} className="underline">
+                          {coach.phone}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </p>
+                  </CardContent>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

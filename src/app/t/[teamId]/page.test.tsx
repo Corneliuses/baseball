@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 const requireTeamAccess = vi.fn();
 const getTeamById = vi.fn();
+const listCoachContacts = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -11,6 +12,10 @@ vi.mock("@/lib/team-access", () => ({
 
 vi.mock("@/lib/teams", () => ({
   getTeamById: (...args: unknown[]) => getTeamById(...args),
+}));
+
+vi.mock("@/lib/memberships", () => ({
+  listCoachContacts: (...args: unknown[]) => listCoachContacts(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -29,6 +34,7 @@ async function render(teamId = "team-1") {
 beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+  listCoachContacts.mockResolvedValue([]);
   getTeamById.mockResolvedValue({
     id: "team-1",
     name: "Sluggers",
@@ -39,53 +45,77 @@ beforeEach(() => {
 });
 
 describe("TeamHomePage navigation", () => {
-  it("links a coach to next-game readiness", async () => {
+  it("shows a coach the coach links but not owner-only ones", async () => {
     const html = await render();
 
     expect(html).toContain('href="/t/team-1/readiness"');
-    expect(html).toContain("Next-game readiness");
+    expect(html).toContain('href="/t/team-1/chart"');
+    expect(html).toContain('href="/t/team-1/directory"');
+    expect(html).toContain('href="/t/team-1/roster"');
+    expect(html).not.toContain('href="/t/team-1/settings"');
   });
 
-  it("does not show readiness to a parent", async () => {
+  it("shows a parent only the parent links", async () => {
     requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
 
     const html = await render();
 
     expect(html).not.toContain('href="/t/team-1/readiness"');
-    // The parent's own path to the chart is unaffected.
+    expect(html).not.toContain('href="/t/team-1/chart"');
+    expect(html).not.toContain('href="/t/team-1/directory"');
+    expect(html).not.toContain('href="/t/team-1/settings"');
+    // The parent's own surfaces are unaffected.
     expect(html).toContain('href="/t/team-1/view"');
+    expect(html).toContain('href="/t/team-1/roster"');
+    expect(html).toContain('href="/t/team-1/schedule"');
   });
 
-  it("shows readiness to an owner too", async () => {
+  it("shows an owner the coach links plus settings", async () => {
     requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "user-1" });
 
     const html = await render();
 
     expect(html).toContain('href="/t/team-1/readiness"');
-  });
-
-  it("links a coach to the directory", async () => {
-    const html = await render();
-
     expect(html).toContain('href="/t/team-1/directory"');
+    expect(html).toContain('href="/t/team-1/settings"');
   });
+});
 
-  it("does not show the directory to a parent", async () => {
+describe("TeamHomePage coach contacts", () => {
+  const STAFF = [
+    {
+      userId: "user-9",
+      role: "OWNER",
+      name: "Mel",
+      email: "mel@example.com",
+      phone: "555-9876",
+    },
+    {
+      userId: "user-8",
+      role: "COACH",
+      name: "Pat",
+      email: "pat@example.com",
+      phone: null,
+    },
+  ];
+
+  it("shows a parent the coaching staff's contact card", async () => {
     requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+    listCoachContacts.mockResolvedValue(STAFF);
 
     const html = await render();
 
-    expect(html).not.toContain('href="/t/team-1/directory"');
-    // The roster stays open to a parent — it is the team's players, not
-    // every family's contact details.
-    expect(html).toContain('href="/t/team-1/roster"');
+    expect(listCoachContacts).toHaveBeenCalledWith("team-1");
+    expect(html).toContain("Coaches");
+    expect(html).toContain('href="mailto:mel@example.com"');
+    expect(html).toContain('href="tel:555-9876"');
+    expect(html).toContain("Pat");
   });
 
-  it("shows the directory to an owner too", async () => {
-    requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "user-1" });
-
+  it("does not fetch or render the card for a coach", async () => {
     const html = await render();
 
-    expect(html).toContain('href="/t/team-1/directory"');
+    expect(listCoachContacts).not.toHaveBeenCalled();
+    expect(html).not.toContain("Coaches");
   });
 });

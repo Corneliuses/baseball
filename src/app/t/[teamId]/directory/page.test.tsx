@@ -45,23 +45,12 @@ describe("DirectoryPage", () => {
     });
   });
 
-  it("calls notFound() for someone with no membership", async () => {
+  // Covers a parent pasting the URL too: the loader turns every
+  // TeamAccessError into notFound() without reading its reason, and the
+  // minRole: "COACH" assertion above pins where the parent lockout actually
+  // lives (team-access.test.ts proves a PARENT fails that gate).
+  it("calls notFound() when access is refused, before fetching", async () => {
     requireTeamAccess.mockRejectedValue(new TeamAccessError("nope", "no-membership"));
-
-    const { default: DirectoryPage } = await import("./page");
-
-    await expect(
-      DirectoryPage({ params: Promise.resolve({ teamId: "team-1" }) }),
-    ).rejects.toThrow("NEXT_NOT_FOUND");
-  });
-
-  // A parent who pastes the URL gets a 404, not a page of other families'
-  // phone numbers — requireTeamAccess raises insufficient-role for minRole
-  // COACH and the loader treats it exactly like no membership at all.
-  it("calls notFound() for a parent who pastes the URL", async () => {
-    requireTeamAccess.mockRejectedValue(
-      new TeamAccessError("Requires COACH, caller is PARENT", "insufficient-role"),
-    );
 
     const { default: DirectoryPage } = await import("./page");
 

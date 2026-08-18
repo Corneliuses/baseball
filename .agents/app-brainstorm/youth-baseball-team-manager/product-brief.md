@@ -81,11 +81,14 @@ Scoped to fit **6 weeks of evenings and weekends**.
   owner only** (revised 2026-08-18; it previously read "visible to all signed-in members").
   It is the whole team's contact details in one list, and a parent has no reason to hold
   every other family's phone number and email; a parent who needs to reach someone goes
-  through the coach. Parents still see the schedule, the lineup, the roster, and RSVP.
-  Owner-only was considered and rejected the same day: coaches already read contact
-  details family-by-family through the roster entry pages their job requires, so
-  excluding them from the directory would remove the convenient list without removing
-  the access — while leaving an assistant coach at the field unable to call a parent.
+  through the coach. To make that path real, the team home page shows parents a
+  **coaching-staff contact card** (owner and coaches only — name, email, phone; no
+  other family's data). Parents still see the schedule, the lineup, the roster, and
+  RSVP. Owner-only was considered and rejected the same day: coaches already read
+  contact details family-by-family through the roster entry pages their job requires,
+  so excluding them from the directory would remove the convenient list without
+  removing the access — while leaving an assistant coach at the field unable to call
+  a parent.
 - **Schedule** — coach creates games and practices with location and time; parents see a
   month calendar view and a chronological list view.
 - **RSVP** — parent toggles attending / not attending per kid per event, **only for kids

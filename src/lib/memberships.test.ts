@@ -29,13 +29,64 @@ vi.mock("./db", () => ({
   },
 }));
 
-import { LastOwnerError, listDirectory, listTeamMembers, setMemberRole } from "./memberships";
+import {
+  LastOwnerError,
+  listCoachContacts,
+  listDirectory,
+  listTeamMembers,
+  setMemberRole,
+} from "./memberships";
 
 beforeEach(() => {
   vi.clearAllMocks();
   transaction.mockImplementation((callback: (tx: unknown) => unknown) =>
     callback(tx),
   );
+});
+
+describe("listCoachContacts", () => {
+  it("filters to OWNER and COACH in the query itself", async () => {
+    findManyMemberships.mockResolvedValue([]);
+
+    await listCoachContacts("team-1");
+
+    expect(findManyMemberships).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { teamId: "team-1", role: { in: ["OWNER", "COACH"] } },
+      }),
+    );
+  });
+
+  it("maps staff rows to flat contact records", async () => {
+    findManyMemberships.mockResolvedValue([
+      {
+        userId: "user-1",
+        role: "OWNER",
+        user: { name: "Mel", email: "mel@example.com", phone: "555-9876" },
+      },
+    ]);
+
+    const contacts = await listCoachContacts("team-1");
+
+    expect(contacts).toEqual([
+      {
+        userId: "user-1",
+        role: "OWNER",
+        name: "Mel",
+        email: "mel@example.com",
+        phone: "555-9876",
+      },
+    ]);
+  });
+
+  it("returns an empty list when the query fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    findManyMemberships.mockRejectedValue(new Error("boom"));
+
+    await expect(listCoachContacts("team-1")).resolves.toEqual([]);
+
+    consoleError.mockRestore();
+  });
 });
 
 describe("listTeamMembers", () => {

@@ -50,10 +50,14 @@ function guardianStatus(guardian: RosterEntryGuardian): string {
   return guardian.hasSignedIn ? "Signed in" : "Invitation pending";
 }
 
-/// Every member reads. Editing and removal require COACH+, enforced both by
-/// hiding the controls here and by requireTeamAccess inside each action —
-/// this page's own check is "read" so a parent can still land here from the
-/// roster list, matching the settings-page pattern of read-to-view.
+/// Coach-and-above, like /directory: this page is the roster admin surface —
+/// jersey and DOB edits plus every linked guardian's name, email, and phone —
+/// and the roster list has never rendered its link to parents. Gating the
+/// whole route (rather than hiding the guardian card in JSX) makes the
+/// boundary structural: guardian contact details are only ever fetched for a
+/// caller already proven COACH+, so no future edit to this page's markup can
+/// leak them to a parent. Each mutating action re-checks COACH+ with write
+/// intent for itself.
 export default async function RosterEntryPage({
   params,
   searchParams,
@@ -64,9 +68,8 @@ export default async function RosterEntryPage({
   const { teamId, entryId } = await params;
   const { error, saved, invited } = await searchParams;
 
-  let role;
   try {
-    ({ role } = await requireTeamAccess(teamId, { intent: "read" }));
+    await requireTeamAccess(teamId, { intent: "read", minRole: "COACH" });
   } catch (caught) {
     if (caught instanceof TeamAccessError) {
       notFound();
@@ -79,7 +82,6 @@ export default async function RosterEntryPage({
     notFound();
   }
 
-  const canEdit = role !== "PARENT";
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
 
   return (
@@ -93,213 +95,201 @@ export default async function RosterEntryPage({
         </CardHeader>
 
         <CardContent>
-          {canEdit ? (
-            <form action={updateRosterEntryAction} className="space-y-4">
-              <input type="hidden" name="teamId" value={teamId} />
-              <input type="hidden" name="entryId" value={entryId} />
+          <form action={updateRosterEntryAction} className="space-y-4">
+            <input type="hidden" name="teamId" value={teamId} />
+            <input type="hidden" name="entryId" value={entryId} />
 
-              <div className="space-y-2">
-                <label htmlFor="name" className="block text-sm font-medium text-foreground">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  defaultValue={entry.player.name}
-                  aria-describedby={errorMessage ? "entry-error" : undefined}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
+            <div className="space-y-2">
+              <label htmlFor="name" className="block text-sm font-medium text-foreground">
+                Name
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                required
+                defaultValue={entry.player.name}
+                aria-describedby={errorMessage ? "entry-error" : undefined}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
 
-              <div className="space-y-2">
-                <label htmlFor="dateOfBirth" className="block text-sm font-medium text-foreground">
-                  Date of birth (optional)
-                </label>
-                <input
-                  id="dateOfBirth"
-                  name="dateOfBirth"
-                  type="date"
-                  defaultValue={toDateInputValue(entry.player.dateOfBirth)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
+            <div className="space-y-2">
+              <label htmlFor="dateOfBirth" className="block text-sm font-medium text-foreground">
+                Date of birth (optional)
+              </label>
+              <input
+                id="dateOfBirth"
+                name="dateOfBirth"
+                type="date"
+                defaultValue={toDateInputValue(entry.player.dateOfBirth)}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
 
-              <div className="space-y-2">
-                <label htmlFor="jerseyNumber" className="block text-sm font-medium text-foreground">
-                  Jersey number (optional)
-                </label>
-                <input
-                  id="jerseyNumber"
-                  name="jerseyNumber"
-                  type="number"
-                  min={0}
-                  max={99}
-                  defaultValue={entry.jerseyNumber ?? ""}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
+            <div className="space-y-2">
+              <label htmlFor="jerseyNumber" className="block text-sm font-medium text-foreground">
+                Jersey number (optional)
+              </label>
+              <input
+                id="jerseyNumber"
+                name="jerseyNumber"
+                type="number"
+                min={0}
+                max={99}
+                defaultValue={entry.jerseyNumber ?? ""}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
 
-              {errorMessage ? (
-                <p id="entry-error" role="alert" className="text-sm text-destructive">
-                  {errorMessage}
-                </p>
-              ) : null}
-
-              {saved && !errorMessage ? (
-                <p role="status" className="text-sm text-muted-foreground">
-                  Saved.
-                </p>
-              ) : null}
-
-              <Button type="submit" className="w-full">
-                Save changes
-              </Button>
-            </form>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {entry.player.dateOfBirth
-                ? `Born ${toDateInputValue(entry.player.dateOfBirth)}`
-                : "No date of birth on file."}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {canEdit ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Guardians</CardTitle>
-            <CardDescription>
-              Guardians linked here get access to this team as parents, and are mailed an
-              invitation the first time they&apos;re linked to anyone on this team.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {invited && !errorMessage ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                Invitation sent.
+            {errorMessage ? (
+              <p id="entry-error" role="alert" className="text-sm text-destructive">
+                {errorMessage}
               </p>
             ) : null}
 
-            {entry.guardians.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No guardians linked yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {entry.guardians.map((guardian) => (
-                  <li
-                    key={guardian.id}
-                    className="space-y-3 rounded-md border border-border p-3"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">
-                          {guardian.name ?? guardian.email}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{guardian.email}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {guardianStatus(guardian)}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        {!guardian.hasSignedIn ? (
-                          <form action={resendInvitationAction}>
-                            <input type="hidden" name="teamId" value={teamId} />
-                            <input type="hidden" name="entryId" value={entryId} />
-                            <input type="hidden" name="userId" value={guardian.id} />
-                            <Button type="submit" variant="outline" size="sm">
-                              Resend
-                            </Button>
-                          </form>
-                        ) : null}
-                        <form action={unlinkGuardianAction}>
+            {saved && !errorMessage ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                Saved.
+              </p>
+            ) : null}
+
+            <Button type="submit" className="w-full">
+              Save changes
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Guardians</CardTitle>
+          <CardDescription>
+            Guardians linked here get access to this team as parents, and are mailed an
+            invitation the first time they&apos;re linked to anyone on this team.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {invited && !errorMessage ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              Invitation sent.
+            </p>
+          ) : null}
+
+          {entry.guardians.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No guardians linked yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {entry.guardians.map((guardian) => (
+                <li
+                  key={guardian.id}
+                  className="space-y-3 rounded-md border border-border p-3"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {guardian.name ?? guardian.email}
+                      </p>
+                      <p className="text-sm text-muted-foreground">{guardian.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {guardianStatus(guardian)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      {!guardian.hasSignedIn ? (
+                        <form action={resendInvitationAction}>
                           <input type="hidden" name="teamId" value={teamId} />
                           <input type="hidden" name="entryId" value={entryId} />
                           <input type="hidden" name="userId" value={guardian.id} />
                           <Button type="submit" variant="outline" size="sm">
-                            Unlink
+                            Resend
                           </Button>
                         </form>
-                      </div>
+                      ) : null}
+                      <form action={unlinkGuardianAction}>
+                        <input type="hidden" name="teamId" value={teamId} />
+                        <input type="hidden" name="entryId" value={entryId} />
+                        <input type="hidden" name="userId" value={guardian.id} />
+                        <Button type="submit" variant="outline" size="sm">
+                          Unlink
+                        </Button>
+                      </form>
                     </div>
-                    <form
-                      action={setGuardianPhoneAction}
-                      className="flex items-end gap-2 border-t border-border pt-3"
-                    >
-                      <input type="hidden" name="teamId" value={teamId} />
-                      <input type="hidden" name="entryId" value={entryId} />
-                      <input type="hidden" name="userId" value={guardian.id} />
-                      <div className="flex-1 space-y-1">
-                        <label
-                          htmlFor={`phone-${guardian.id}`}
-                          className="block text-xs font-medium text-foreground"
-                        >
-                          Phone
-                        </label>
-                        <input
-                          id={`phone-${guardian.id}`}
-                          name="phone"
-                          type="tel"
-                          defaultValue={guardian.phone ?? ""}
-                          placeholder="(555) 123-4567"
-                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                        />
-                      </div>
-                      <Button type="submit" variant="outline" size="sm">
-                        Save phone
-                      </Button>
-                    </form>
-                  </li>
-                ))}
-              </ul>
-            )}
+                  </div>
+                  <form
+                    action={setGuardianPhoneAction}
+                    className="flex items-end gap-2 border-t border-border pt-3"
+                  >
+                    <input type="hidden" name="teamId" value={teamId} />
+                    <input type="hidden" name="entryId" value={entryId} />
+                    <input type="hidden" name="userId" value={guardian.id} />
+                    <div className="flex-1 space-y-1">
+                      <label
+                        htmlFor={`phone-${guardian.id}`}
+                        className="block text-xs font-medium text-foreground"
+                      >
+                        Phone
+                      </label>
+                      <input
+                        id={`phone-${guardian.id}`}
+                        name="phone"
+                        type="tel"
+                        defaultValue={guardian.phone ?? ""}
+                        placeholder="(555) 123-4567"
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <Button type="submit" variant="outline" size="sm">
+                      Save phone
+                    </Button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
 
-            <form action={linkGuardianAction} className="space-y-2 border-t border-border pt-4">
-              <input type="hidden" name="teamId" value={teamId} />
-              <input type="hidden" name="entryId" value={entryId} />
+          <form action={linkGuardianAction} className="space-y-2 border-t border-border pt-4">
+            <input type="hidden" name="teamId" value={teamId} />
+            <input type="hidden" name="entryId" value={entryId} />
 
-              <label htmlFor="guardianEmail" className="block text-sm font-medium text-foreground">
-                Add a guardian by email
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="guardianEmail"
-                  name="email"
-                  type="email"
-                  required
-                  placeholder="parent@example.com"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                <Button type="submit" variant="outline">
-                  Add
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {canEdit ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Remove from roster</CardTitle>
-            <CardDescription>
-              Removes this player&apos;s spot on this team only. The player and their
-              guardians are not deleted.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={removeRosterEntryAction}>
-              <input type="hidden" name="teamId" value={teamId} />
-              <input type="hidden" name="entryId" value={entryId} />
-              <Button type="submit" variant="destructive">
-                Remove player
+            <label htmlFor="guardianEmail" className="block text-sm font-medium text-foreground">
+              Add a guardian by email
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="guardianEmail"
+                name="email"
+                type="email"
+                required
+                placeholder="parent@example.com"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <Button type="submit" variant="outline">
+                Add
               </Button>
-            </form>
-          </CardContent>
-        </Card>
-      ) : null}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Remove from roster</CardTitle>
+          <CardDescription>
+            Removes this player&apos;s spot on this team only. The player and their
+            guardians are not deleted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={removeRosterEntryAction}>
+            <input type="hidden" name="teamId" value={teamId} />
+            <input type="hidden" name="entryId" value={entryId} />
+            <Button type="submit" variant="destructive">
+              Remove player
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
