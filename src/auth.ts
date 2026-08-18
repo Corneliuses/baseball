@@ -1,9 +1,9 @@
 import NextAuth from "next-auth";
-import Resend from "next-auth/providers/resend";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 
 import { db } from "@/lib/db";
 import { acceptInvitations, loadSignInContext } from "@/lib/invitations";
+import { resendProvider } from "@/lib/resend-provider";
 import { decideSignIn } from "@/lib/signin-gate";
 import {
   SESSION_MAX_AGE_SECONDS,
@@ -17,31 +17,19 @@ import {
 /// here is wiring.
 ///
 /// Note the lazy config form: `NextAuth(() => config)` evaluates the config per
-/// request rather than at import, so a missing RESEND_API_KEY fails when someone
-/// actually tries to sign in instead of at build time. src/lib/db.ts defers
-/// DATABASE_URL for the same reason — the build must not require secrets.
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not set — see .env.example`);
-  }
-  return value;
-}
+/// request rather than at import, so the build must not require secrets — same
+/// reason src/lib/db.ts defers DATABASE_URL. But per-request is not the same as
+/// per-send: every page calls auth() to read the session, so a RESEND_API_KEY
+/// check that merely sat in this factory would throw on every single page view,
+/// not just a sign-in attempt — including a signed-out visitor on the marketing
+/// page, who triggers no email at all. resendProvider() (src/lib/resend-provider.ts)
+/// pushes that check one level further in, to the moment sendVerificationRequest
+/// actually fires, which is only the "request a magic link" step of sign-in.
 
 export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
   adapter: PrismaAdapter(db),
 
-  providers: [
-    Resend({
-      apiKey: requireEnv("RESEND_API_KEY"),
-      // Must be explicit. The provider's default `from` is an authjs.dev address
-      // that this project does not control, and mail from an unverified domain
-      // is the difference between parents seeing invitations and never finding
-      // them.
-      from: requireEnv("EMAIL_FROM"),
-    }),
-  ],
+  providers: [resendProvider()],
 
   session: {
     strategy: "database",

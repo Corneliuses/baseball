@@ -66,11 +66,34 @@ export default async function TeamLayout({
           underneath still calls requireTeamAccess for itself. */}
       <div className="mb-6 space-y-4 border-b-2 border-border pb-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <Link href={`/t/${teamId}`}>
-            <h2 className="font-display text-2xl text-foreground">
-              {team.name}
-            </h2>
-          </Link>
+          <div className="space-y-1">
+            {/* Always rendered, unlike TeamSwitcher (which hides itself for
+                single-team callers): the same family accumulates teams across
+                seasons, and the selection page at / is the only place to see
+                them all — so the way back must not depend on how many teams
+                this person has today.
+
+                Deliberately NOT the outline-Button back link the inner pages
+                use (e.g. schedule/[eventId]): this sits over the team name on
+                every screen, and a button there outshouts the heading it
+                belongs to. It reads as a breadcrumb instead — but it still
+                keeps Button's full focus recipe (ring-offset-background
+                included, or the ring offset falls back to white in dark mode)
+                and pads its hit area outward with -m-2/p-2 so the visual
+                stays a quiet text link while the tap target does not. */}
+            <Link
+              href="/"
+              className="-m-2 inline-flex items-center gap-1.5 rounded-md p-2 text-sm font-semibold text-muted-foreground ring-offset-background transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <span aria-hidden="true">←</span>
+              All teams
+            </Link>
+            <Link href={`/t/${teamId}`} className="block">
+              <h2 className="font-display text-2xl text-foreground">
+                {team.name}
+              </h2>
+            </Link>
+          </div>
           <TeamSwitcher teams={switcherTeams} currentTeamId={teamId} />
         </div>
         <TeamNav teamId={teamId} role={role} />
