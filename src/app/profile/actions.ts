@@ -40,9 +40,14 @@ export async function updateProfileAction(formData: FormData) {
   }
 
   revalidatePath("/profile");
-  // This person's name and phone are rendered in two staff-facing places, and
-  // their name also appears in the team switcher chrome.
+  // Every other page that renders these two columns. The staff-facing pair
+  // show this person's name, email, and phone to their coaches; the landing
+  // page greets them by name; and the team home page reads the same columns
+  // back through listCoachContacts, so a coach fixing their own number has
+  // to reach the card their parents actually dial.
   revalidatePath("/t/[teamId]/directory", "page");
   revalidatePath("/t/[teamId]/roster/[entryId]", "page");
+  revalidatePath("/t/[teamId]", "page");
+  revalidatePath("/");
   redirect("/profile?saved=1");
 }
