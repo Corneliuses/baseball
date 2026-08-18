@@ -30,9 +30,10 @@ src/generated/     # Prisma client output — gitignored, regenerate with pnpm d
 `src/app/` now has real routes: `/` (auth-gated landing), `/signin`, `/invite/[token]`
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher), and
 `/t/[teamId]/` (team home, settings, roster, members, the owner-only returning-player
-picker at `roster/returning`, the member directory, the schedule at `schedule` /
-`schedule/[eventId]`, the read-only chart at `view`, and the two coach-only drag-and-drop
-chart editors — the batting order at `chart` and the positions diamond at
+picker at `roster/returning`, the coach-only bulk parent invite at `roster/invite`, the
+member directory, the schedule at `schedule` / `schedule/[eventId]`, the read-only chart
+at `view`, and the two coach-only drag-and-drop chart editors — the batting order at
+`chart` and the positions diamond at
 `chart/positions`) plus `/t/new` for owner-gated team creation.
 
 ## Tech Stack
@@ -245,3 +246,10 @@ production — the dev command can prompt, generate new migrations, and reset th
   whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
+- **The bulk invite action is the only place that sends in a loop, and three constants are
+  coupled across two files.** `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS`
+  (600ms) apart to stay under Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and
+  the page — not the action — declares `maxDuration = 60`, since that is the level governing
+  a Server Action's timeout. `MAX_ROWS × MIN_SEND_INTERVAL_MS` must stay well under
+  `maxDuration`, or an oversized batch times out half-finished instead of being rejected
+  cleanly. Raising the cap or the interval means revisiting the ceiling too.
