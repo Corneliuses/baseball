@@ -126,6 +126,11 @@ describe("web app manifest", () => {
   it.each((manifest().icons ?? []).map((icon) => icon.src))(
     "%s exists in public/",
     (src) => {
+      // `join`, never `resolve`. Every `src` here is rooted ("/icon-192.png"),
+      // and `resolve` discards everything before an absolute segment — it would
+      // check the filesystem root, find nothing, and turn this into a check that
+      // fails for a reason having nothing to do with the icons. `join` treats
+      // the leading slash as an ordinary separator, which is what is wanted.
       expect(existsSync(join(repoRoot, "public", src as string))).toBe(true);
     },
   );
