@@ -250,8 +250,8 @@ production — the dev command can prompt, generate new migrations, and reset th
   the real-device test in #14 must check, and it is why the app has to stay fully usable
   without installing. If it is confirmed, the remedy is an emailed sign-in *code* the
   person types into whichever container they are standing in, not a link; that is an auth
-  change well beyond the PWA work. Until it is checked, treat the iOS half of
-  `InstallPrompt` as provisional.
+  change well beyond the PWA work, designed and costed in #60. Until it is checked, treat
+  the iOS half of `InstallPrompt` as provisional.
 - **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting` plus
   `clients.claim` and no `fetch` handler — Decision 9, and the reason there is no Workbox
   build step. Adding a `fetch` handler is not a small change: every page under `/t/[teamId]`

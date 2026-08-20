@@ -92,7 +92,8 @@
       strands a parent in an app they cannot sign into. Raised in review, unverified,
       and the reason the iOS branch of `InstallPrompt` is provisional. Remedy if
       confirmed: an emailed sign-in code rather than a link (an auth change, not a PWA
-      one) — or drop the iOS tip until that exists.
+      one), designed in #60 — or drop the iOS tip until that exists. Close #60 without
+      action if the app comes up signed in.
 
 ## Pre-Commit Gate
 
