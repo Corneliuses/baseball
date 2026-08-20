@@ -13,6 +13,7 @@ import type { Role } from "@/generated/prisma/enums";
 import { listTeamMembers } from "@/lib/memberships";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 
+import { AudienceFields } from "./AudienceFields";
 import { sendTeamMessageAction } from "./actions";
 
 export const metadata = {
@@ -27,16 +28,23 @@ export const metadata = {
 /// docs — the same coupling as roster/invite.
 export const maxDuration = 60;
 
-const ERROR_MESSAGES: Record<string, string> = {
+// Null prototype: the key comes straight from the ?error= query param, and
+// on a plain object ?error=__proto__ or ?error=constructor would resolve an
+// Object.prototype member instead of falling through to the fallback,
+// crashing the page on a non-renderable React child. Same fix as /profile.
+const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null), {
   "invalid-audience": "Choose who this message goes to. Nothing was sent.",
   "invalid-subject": "Enter a subject — keep it under 200 characters.",
   "invalid-body": "Enter a message — keep it under 5,000 characters.",
   "forbidden-audience": "You can't message that group. Nothing was sent.",
-  "invalid-target": "That parent isn't on this team. Nothing was sent.",
+  // Covers both "no parent chosen" and "chosen parent isn't on this team" —
+  // resolveRecipients returns the same reason for both, so the copy commits
+  // to neither.
+  "invalid-target": "Choose a parent to message. Nothing was sent.",
   "no-recipients": "There's nobody in that group to email yet.",
   "too-many": "That's too many recipients for one send. Nothing was sent.",
   access: "You no longer have access to send this.",
-};
+});
 
 /// Any member may open this page — a parent's audience is fixed to the
 /// coaching staff, a coach picks between the whole parent group and one
@@ -117,35 +125,7 @@ export default async function NewMessagePage({
             <input type="hidden" name="teamId" value={teamId} />
 
             {isCoach ? (
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-medium text-foreground">To</legend>
-                <label className="flex items-center gap-2 text-sm text-foreground">
-                  <input
-                    type="radio"
-                    name="audience"
-                    value="ALL_PARENTS"
-                    defaultChecked
-                  />
-                  All parents
-                </label>
-                <label className="flex items-center gap-2 text-sm text-foreground">
-                  <input type="radio" name="audience" value="INDIVIDUAL_PARENT" />
-                  One parent:
-                  <select
-                    name="targetUserId"
-                    aria-label="Which parent"
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    defaultValue=""
-                  >
-                    <option value="">Choose a parent…</option>
-                    {parents.map((parent) => (
-                      <option key={parent.userId} value={parent.userId}>
-                        {parent.name ?? parent.email}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </fieldset>
+              <AudienceFields parents={parents} />
             ) : (
               <input type="hidden" name="audience" value="ALL_COACHES" />
             )}

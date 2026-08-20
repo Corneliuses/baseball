@@ -30,10 +30,15 @@ const audienceSchema = z.enum(MESSAGE_AUDIENCES);
 
 /// Sanity ceiling on one fan-out, playing the MAX_ROWS role from the bulk
 /// invite: recipients resolve from Membership rows rather than the POST, so
-/// this bounds a runaway roster, not a forged form. 50 × MIN_SEND_INTERVAL_MS
-/// is 30s of pacing — comfortably inside the page's `maxDuration = 60`, and
-/// the two must move together (see AGENTS.md on the invite batch's coupling).
-const MAX_RECIPIENTS = 50;
+/// this bounds a runaway roster, not a forged form. Matches MAX_ROWS exactly
+/// rather than picking a separate number: the loop's wall-clock is bounded by
+/// MIN_SEND_INTERVAL_MS only when a send is faster than the interval — a slow
+/// Resend round trip adds on top rather than being absorbed by it — so the
+/// real worst case is closer to MAX_RECIPIENTS × (send latency), not
+/// MAX_RECIPIENTS × 600ms. 30 keeps the same margin against the page's
+/// `maxDuration = 60` that the invite batch already relies on; the two
+/// constants must move together (see AGENTS.md on that coupling).
+const MAX_RECIPIENTS = 30;
 
 /// Resend's API is rate limited (2 requests/second by default). Same pacing
 /// as `bulkInviteGuardiansAction` — these two actions are the only places the
@@ -98,6 +103,17 @@ export async function sendTeamMessageAction(formData: FormData) {
     });
 
     const members = await listTeamMembers(teamId);
+    if (members.length === 0) {
+      // requireTeamAccess just proved the caller holds a membership on this
+      // team, so their own row must be in `members` — an empty result here
+      // is never a real "this team has nobody in it", it's listTeamMembers
+      // swallowing a database error to protect its read-only callers (the
+      // directory, the compose page's own parent picker). Propagate rather
+      // than let that read failure surface as a misleading "nobody to email"
+      // or "that parent isn't on this team" — team-access.ts takes the same
+      // fail-closed stance on its own lookup.
+      throw new Error("Failed to load team members for messaging");
+    }
 
     const resolved = resolveRecipients({
       audience,

@@ -285,6 +285,22 @@ describe("sendTeamMessageAction — validation and access", () => {
     expect(requireTeamAccess).not.toHaveBeenCalled();
   });
 
+  // requireTeamAccess just proved the caller holds a membership on this
+  // team, so an empty listTeamMembers result can only mean its read
+  // silently failed (it swallows DB errors for its read-only callers) — not
+  // that the team truly has nobody in it. That must not surface as a
+  // misleading "nobody to email" redirect; it has to fail closed, matching
+  // team-access.ts's own stance on its lookup.
+  it("throws rather than misreporting a listTeamMembers failure as no-recipients", async () => {
+    listTeamMembers.mockResolvedValue([]);
+
+    await expect(sendTeamMessageAction(form(BROADCAST))).rejects.toThrow(
+      "Failed to load team members for messaging",
+    );
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
   it("redirects to access error when the caller lacks access", async () => {
     requireTeamAccess.mockRejectedValue(
       new TeamAccessError("denied", "archived"),
