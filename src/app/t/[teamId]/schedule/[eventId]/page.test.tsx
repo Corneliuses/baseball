@@ -6,6 +6,7 @@ const getEvent = vi.fn();
 const getRoster = vi.fn();
 const listEventRsvps = vi.fn();
 const guardedRosteredPlayerIds = vi.fn();
+const getTeamById = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -25,6 +26,10 @@ vi.mock("@/lib/rsvps", () => ({
   guardedRosteredPlayerIds: (...args: unknown[]) => guardedRosteredPlayerIds(...args),
 }));
 
+vi.mock("@/lib/teams", () => ({
+  getTeamById: (...args: unknown[]) => getTeamById(...args),
+}));
+
 vi.mock("../actions", () => ({
   updateEventAction: vi.fn(),
   deleteEventAction: vi.fn(),
@@ -42,12 +47,17 @@ import { TeamAccessError } from "@/lib/team-access";
 const game = {
   id: "event-1",
   type: "GAME" as const,
-  // 6:00 PM Central on 15 August 2026 (CDT, UTC-5).
+  // 6:00 PM Central on 15 August 2026 (CDT, UTC-5). In the past relative to
+  // any real test run, so RSVP-button tests use futureGame below.
   startsAt: new Date("2026-08-15T23:00:00Z"),
   location: "Field 3",
   opponent: "Hawks",
   notes: "Bring water",
 };
+
+/// RSVPs close for past events, so tests asserting live RSVP controls pin a
+/// date that stays in the future.
+const futureGame = { ...game, startsAt: new Date("2100-08-15T23:00:00Z") };
 
 async function render(searchParams: Record<string, string> = {}) {
   const { default: EventPage } = await import("./page");
@@ -76,6 +86,12 @@ beforeEach(() => {
   getRoster.mockResolvedValue([]);
   listEventRsvps.mockResolvedValue([]);
   guardedRosteredPlayerIds.mockResolvedValue(new Set());
+  getTeamById.mockResolvedValue({
+    id: "team-1",
+    name: "Sharks",
+    allPlay: true,
+    archivedAt: null,
+  });
 });
 
 describe("EventPage access", () => {
@@ -252,6 +268,7 @@ describe("EventPage attendance", () => {
   });
 
   it("offers Going / Not going toggles only for players the caller guards", async () => {
+    getEvent.mockResolvedValue(futureGame);
     getRoster.mockResolvedValue(roster);
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
 
@@ -263,6 +280,76 @@ describe("EventPage attendance", () => {
     const benFormCount = html.split('value="ben"').length - 1;
     expect(avaFormCount).toBe(2);
     expect(benFormCount).toBe(0);
+  });
+
+  it("adds a Clear button once a guarded player has a response", async () => {
+    getEvent.mockResolvedValue(futureGame);
+    getRoster.mockResolvedValue(roster);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+    listEventRsvps.mockResolvedValue([{ playerId: "ava", attending: true }]);
+
+    const html = await render();
+
+    // Going + Not going + Clear = three rsvpAction forms for Ava.
+    expect(html.split('value="ava"').length - 1).toBe(3);
+    expect(html).toContain("Clear");
+    expect(html).toContain('value="clear"');
+  });
+
+  it("offers no Clear button while a player is still at no-response", async () => {
+    getEvent.mockResolvedValue(futureGame);
+    getRoster.mockResolvedValue(roster);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    expect(html).not.toContain('value="clear"');
+  });
+
+  it("closes RSVPs for a past event, keeping the states visible", async () => {
+    // The shared fixture's 2026 date is already past.
+    getRoster.mockResolvedValue(roster);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+    listEventRsvps.mockResolvedValue([{ playerId: "ava", attending: true }]);
+
+    const html = await render();
+
+    expect(html).toContain("This event has already happened, so RSVPs are closed.");
+    // The state badge stays; the buttons go.
+    expect(html).toContain("Going");
+    expect(html.split('value="ava"').length - 1).toBe(0);
+  });
+
+  it("closes RSVPs on an archived team and says why", async () => {
+    getEvent.mockResolvedValue(futureGame);
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sharks",
+      allPlay: true,
+      archivedAt: new Date("2026-08-01"),
+    });
+    getRoster.mockResolvedValue(roster);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    expect(html).toContain("This team is archived and read-only");
+    expect(html.split('value="ava"').length - 1).toBe(0);
+  });
+
+  it("hides the edit and delete controls on an archived team", async () => {
+    getEvent.mockResolvedValue(futureGame);
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sharks",
+      allPlay: true,
+      archivedAt: new Date("2026-08-01"),
+    });
+
+    const html = await render();
+
+    expect(html).not.toContain("Edit event");
+    expect(html).not.toContain("Delete event");
   });
 
   it("lists players in the same order as the roster page, not database order", async () => {

@@ -105,8 +105,9 @@ describe("acceptInvitationAction", () => {
   it("grants the membership, writes a session cookie, and lands on the team", async () => {
     expect(await destinationOf(form("tok-1"))).toBe("/t/team-1");
 
-    // The address comes from the invitation row, never from the form.
-    expect(resolveInvitedUser).toHaveBeenCalledWith("sam@example.com", NOW);
+    // The address comes from the invitation row, never from the form; no
+    // name was offered, so none is passed.
+    expect(resolveInvitedUser).toHaveBeenCalledWith("sam@example.com", NOW, null);
     expect(acceptInvitations).toHaveBeenCalledWith(
       "user-1",
       "sam@example.com",
@@ -124,6 +125,28 @@ describe("acceptInvitationAction", () => {
         expires: EXPIRES,
       },
     );
+  });
+
+  it("passes a trimmed optional name through to resolveInvitedUser", async () => {
+    const data = form("tok-1");
+    data.set("name", "  Sam Rivera  ");
+
+    await destinationOf(data);
+
+    expect(resolveInvitedUser).toHaveBeenCalledWith(
+      "sam@example.com",
+      NOW,
+      "Sam Rivera",
+    );
+  });
+
+  it("treats a blank name as not provided", async () => {
+    const data = form("tok-1");
+    data.set("name", "   ");
+
+    await destinationOf(data);
+
+    expect(resolveInvitedUser).toHaveBeenCalledWith("sam@example.com", NOW, null);
   });
 
   it("writes the unprefixed cookie name over plain HTTP", async () => {

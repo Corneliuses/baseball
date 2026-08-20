@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
-import { wallClockToInstant } from "@/lib/calendar";
-import { guardedRosteredPlayerIds, upsertRsvp } from "@/lib/rsvps";
+import { startOfDayInZone, wallClockToInstant } from "@/lib/calendar";
+import { clearRsvp, guardedRosteredPlayerIds, upsertRsvp } from "@/lib/rsvps";
 import {
   createEvent,
   deleteEvent,
@@ -221,7 +221,11 @@ export async function deleteEventAction(formData: FormData) {
   redirect(`/t/${teamId}/schedule`);
 }
 
-const rsvpResponseSchema = z.enum(["attending", "declined"]);
+/// "clear" returns the family to no-response — deleting the row, not writing
+/// a third value. Without it, one mis-tap into Going or Not going is
+/// permanent: the tri-state model has an absent-row state the UI could
+/// otherwise never reach again.
+const rsvpResponseSchema = z.enum(["attending", "declined", "clear"]);
 
 /**
  * Prove the caller may write to this team, that the event they named is on
@@ -269,7 +273,20 @@ export async function rsvpAction(formData: FormData) {
     // Write against the id `getEvent` resolved, not the raw form field — same
     // convention as the roster actions deriving playerId from getRosterEntry.
     const event = await requireGuardedEvent(teamId, eventId, playerId);
-    await upsertRsvp(event.id, playerId, parsedResponse.data === "attending");
+
+    // RSVPs close once the event's day has passed — the same start-of-today
+    // boundary that moves it from Upcoming to Past on the schedule, so a
+    // family can still respond to tonight's game after first pitch, but
+    // last month's attendance can't be rewritten from the "Show past" list.
+    if (event.startsAt < startOfDayInZone(new Date())) {
+      redirect(`/t/${teamId}/schedule/${eventId}?error=event-past`);
+    }
+
+    if (parsedResponse.data === "clear") {
+      await clearRsvp(event.id, playerId);
+    } else {
+      await upsertRsvp(event.id, playerId, parsedResponse.data === "attending");
+    }
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {

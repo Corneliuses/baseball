@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const findManyRsvps = vi.fn();
 const upsertRsvpMock = vi.fn();
+const deleteManyRsvps = vi.fn();
 const findManyGuardianPlayers = vi.fn();
 
 vi.mock("./db", () => ({
@@ -9,6 +10,7 @@ vi.mock("./db", () => ({
     rsvp: {
       findMany: (...args: unknown[]) => findManyRsvps(...args),
       upsert: (...args: unknown[]) => upsertRsvpMock(...args),
+      deleteMany: (...args: unknown[]) => deleteManyRsvps(...args),
     },
     guardianPlayer: {
       findMany: (...args: unknown[]) => findManyGuardianPlayers(...args),
@@ -16,7 +18,12 @@ vi.mock("./db", () => ({
   },
 }));
 
-import { guardedRosteredPlayerIds, listEventRsvps, upsertRsvp } from "./rsvps";
+import {
+  clearRsvp,
+  guardedRosteredPlayerIds,
+  listEventRsvps,
+  upsertRsvp,
+} from "./rsvps";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -93,5 +100,23 @@ describe("upsertRsvp", () => {
       create: { eventId: "event-1", playerId: "ava", attending: true },
       update: { attending: true },
     });
+  });
+});
+
+describe("clearRsvp", () => {
+  it("deletes the row for exactly this event and player", async () => {
+    deleteManyRsvps.mockResolvedValue({ count: 1 });
+
+    await clearRsvp("event-1", "player-1");
+
+    expect(deleteManyRsvps).toHaveBeenCalledWith({
+      where: { eventId: "event-1", playerId: "player-1" },
+    });
+  });
+
+  it("is a no-op rather than an error when no row exists", async () => {
+    deleteManyRsvps.mockResolvedValue({ count: 0 });
+
+    await expect(clearRsvp("event-1", "player-1")).resolves.toBeUndefined();
   });
 });

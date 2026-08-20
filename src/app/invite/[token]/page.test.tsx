@@ -49,6 +49,17 @@ describe("Invite page", () => {
     expect(markup).toContain("Invitation not found");
   });
 
+  // Neither failure state may dead-end: a revoked or expired invitation often
+  // belongs to someone whose Membership already exists, so sign-in works.
+  it("offers a way out of the unknown-token state", async () => {
+    getInvitationByToken.mockResolvedValue(null);
+
+    const markup = await render("bad-token");
+
+    expect(markup).toContain("/signin");
+    expect(markup).toContain("Go to sign in");
+  });
+
   it("shows an already-accepted state and a link to sign in", async () => {
     getInvitationByToken.mockResolvedValue({
       teamId: "team-1",
@@ -78,6 +89,23 @@ describe("Invite page", () => {
     const markup = await render("tok-1");
 
     expect(markup).toContain("Invitation expired");
+    expect(markup).toContain("Go to sign in");
+  });
+
+  it("asks for an optional name on the live invitation form", async () => {
+    getInvitationByToken.mockResolvedValue({
+      teamId: "team-1",
+      teamName: "Cubs",
+      email: "sam@example.com",
+      role: "PARENT",
+      expiresAt: new Date(NOW.getTime() + 1000),
+      acceptedAt: null,
+    });
+
+    const markup = await render("tok-1");
+
+    expect(markup).toContain("Your name (optional)");
+    expect(markup).toContain('name="name"');
   });
 
   it("shows the accept form for a live invitation, with the email masked", async () => {

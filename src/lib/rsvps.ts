@@ -55,3 +55,17 @@ export async function upsertRsvp(
     update: { attending },
   });
 }
+
+/// Returns the family to "no response" — a real modelled state (the absent
+/// row), which a mis-tap into Going or Not going could otherwise never reach
+/// again. `deleteMany` rather than `delete` so clearing an already-clear
+/// response is a no-op instead of a P2025. Same trust contract as
+/// `upsertRsvp`: callers have already proven event and guardianship.
+export async function clearRsvp(
+  eventId: string,
+  playerId: string,
+): Promise<void> {
+  await db.rsvp.deleteMany({
+    where: { eventId, playerId },
+  });
+}
