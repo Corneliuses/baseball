@@ -229,14 +229,29 @@ production — the dev command can prompt, generate new migrations, and reset th
   `formatEventDateTime`, `dayKey`, `buildMonthGrid`, etc.).
 - **`.env.example` is gitignore-exempt** via an explicit `!.env.example` negation, since
   the Next.js scaffold ignores `.env*`. Keep that negation if you touch `.gitignore`.
-- **Declaring `metadata.icons` at all suppresses the file-convention
-  `<link rel="apple-touch-icon">`.** `src/app/apple-icon.png` exists and Next serves it as
-  a route either way, but the link tag is only emitted when no `icons` block is present —
-  the `icon` entries merge with the file convention, the apple one does not. So
-  `src/app/layout.tsx` declares `icons.apple` explicitly. Dropping that key breaks nothing
-  visible: the build passes, every page renders, and only an actual iPhone shows it, by
-  putting a screenshot of the page on the home screen instead of the crest.
-  `layout.test.tsx` pins the declaration and `manifest.test.ts` pins the file it points at.
+- **Declaring `metadata.icons` at all turns off file-convention icons entirely.** Next
+  gates the whole static-icon merge on that key being unset (`resolve-metadata.js`:
+  `if (!resolvedMetadata.icons)`), so with the block present in `src/app/layout.tsx` both
+  `src/app/icon.*` and `src/app/apple-icon.*` are dropped from the markup — Next still
+  serves them as routes, it just stops linking them. `favicon.ico` is the sole exception,
+  prepended by a separate unconditional special case, which is why it still appears
+  without being named. **Anything that is not favicon.ico must be listed in the `icons`
+  object**, so adding `src/app/icon.png` and expecting it to show up will not work.
+  `icons.apple` is declared for exactly this reason; dropping it breaks nothing visible —
+  the build passes and every page renders — and only an actual iPhone shows it, by putting
+  a screenshot of the page on the home screen instead of the crest. `layout.test.tsx` pins
+  the declaration and `manifest.test.ts` pins the file it points at.
+- **An installed iOS Home Screen app may not share Safari's cookies — and this app is
+  magic-link only.** iOS gives a standalone web app its own storage container. If that
+  holds here, the sequence is a dead end: a parent installs from Safari, opens the app,
+  finds it signed out, requests a magic link, and the link opens in *Safari* — iOS has no
+  way to route it back to a Home Screen web app — so the session lands in the container
+  the app cannot read, every time, forever. **This is unverified**, it is the first thing
+  the real-device test in #14 must check, and it is why the app has to stay fully usable
+  without installing. If it is confirmed, the remedy is an emailed sign-in *code* the
+  person types into whichever container they are standing in, not a link; that is an auth
+  change well beyond the PWA work. Until it is checked, treat the iOS half of
+  `InstallPrompt` as provisional.
 - **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting` plus
   `clients.claim` and no `fetch` handler — Decision 9, and the reason there is no Workbox
   build step. Adding a `fetch` handler is not a small change: every page under `/t/[teamId]`

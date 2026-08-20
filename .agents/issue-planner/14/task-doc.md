@@ -61,6 +61,19 @@
   `useSyncExternalStore` for the hydration boundary and reads the platform facts
   at render, so every state write happens in a callback.
 
+- [x] **Post-review:** move the `beforeinstallprompt` capture out of the component
+      into `src/components/install-availability.ts`, loaded by `PwaRegistrar` from
+      the root layout. The event fires once per document load, so a listener that
+      only existed on team home missed it entirely on the normal path (land on `/`,
+      sign in, tap through — a client-side navigation). The Install button never
+      appeared in the flow everyone actually uses.
+- [x] **Post-review:** cap the iOS tip at three showings
+      (`ybtm:install-tip-showings`). iOS fires no `appinstalled` and partitions the
+      Home Screen app's storage, so a parent who follows the steps leaves no trace
+      Safari can read and the card would otherwise reappear forever for exactly the
+      people who complied. The count is frozen at mount so the card cannot vanish
+      mid-visit.
+
 ## Phase 4: Verification
 
 - [x] Confirm `src/app/layout.tsx` still exports `robots: { index: false,
@@ -73,6 +86,13 @@
       apple-touch-icon link, and `noindex, nofollow`
 - [ ] Manual (operator, real phones): install on iOS Safari and Android Chrome;
       check icon, name, standalone display
+- [ ] **Blocking, iOS:** after installing, open the Home Screen app and confirm it is
+      still signed in. If it is signed out, request a magic link from inside it — the
+      link opens in Safari, and if the app stays signed out afterwards then installing
+      strands a parent in an app they cannot sign into. Raised in review, unverified,
+      and the reason the iOS branch of `InstallPrompt` is provisional. Remedy if
+      confirmed: an emailed sign-in code rather than a link (an auth change, not a PWA
+      one) — or drop the iOS tip until that exists.
 
 ## Pre-Commit Gate
 
@@ -97,8 +117,9 @@ Commands from `AGENTS.md` §Commands:
 | `src/app/PwaRegistrar.test.tsx` | **New** — registration tests |
 | `src/app/layout.tsx` | Render `<PwaRegistrar />`; declare `icons.apple`; note why noindex stays |
 | `src/app/layout.test.tsx` | **New** — pins noindex and the apple-icon declaration |
-| `AGENTS.md` | Two gotchas: the apple-icon suppression, and why `sw.js` caches nothing |
+| `AGENTS.md` | Gotchas: file-convention icons off when `icons` is declared, why `sw.js` caches nothing, the unverified iOS storage-partition risk, and static test imports |
 | `next.config.ts` | `headers()` — no-cache for `/sw.js` |
 | `src/components/InstallPrompt.tsx` | **New** — add-to-home-screen affordance |
+| `src/components/install-availability.ts` | **New** — module-scope store for the install event |
 | `src/components/InstallPrompt.test.tsx` | **New** — affordance tests |
 | `src/app/t/[teamId]/page.tsx` | Render `<InstallPrompt />` |

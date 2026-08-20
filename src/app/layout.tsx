@@ -27,16 +27,21 @@ export const metadata: Metadata = {
   title: "Youth Baseball Team Manager",
   description:
     "Manage your youth baseball team's roster, schedule, and lineup with ease.",
-  /// `apple` is declared here even though `src/app/apple-icon.png` already
-  /// exists and Next serves it at `/apple-icon.png`, because declaring `icons`
-  /// at all suppresses the `<link rel="apple-touch-icon">` that the file
-  /// convention would otherwise emit on its own. Verified against a build: with
-  /// this block removed the link appears, with it present and no `apple` key it
-  /// silently does not — the `icon` entries merge, the apple one does not. The
-  /// failure is invisible everywhere except an actual iPhone, which shows a
-  /// screenshot of the page as the home-screen icon instead of the crest.
-  /// `layout.test.tsx` pins the declaration; `manifest.test.ts` pins the file
-  /// it points at.
+  /// **Declaring this block at all turns off file-convention icons.** Next
+  /// gates the whole static-icon merge on `icons` being unset
+  /// (`resolve-metadata.js`: `if (!resolvedMetadata.icons)`), so with this
+  /// object present, `src/app/icon.*` AND `src/app/apple-icon.*` are both
+  /// dropped — even though Next still serves them as routes. The one exception
+  /// is `favicon.ico`, prepended by a separate unconditional special case,
+  /// which is why it still appears below without being named here.
+  ///
+  /// So anything that is not favicon.ico has to be listed in this object, and
+  /// `apple` is listed for that reason and no other. Verified against builds
+  /// both ways, including one with a `src/app/icon.png` present that never
+  /// reached the markup. The failure is invisible everywhere except an actual
+  /// iPhone, which shows a screenshot of the page as the home-screen icon
+  /// instead of the crest. `layout.test.tsx` pins the declaration;
+  /// `manifest.test.ts` pins the file it points at.
   icons: {
     icon: "/favicon.svg",
     apple: { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },

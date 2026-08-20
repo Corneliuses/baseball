@@ -35,12 +35,12 @@ describe("root metadata", () => {
     expect(metadata.title).toBe("Youth Baseball Team Manager");
   });
 
-  // Declaring `icons` at all suppresses the apple-touch-icon link that
-  // `src/app/apple-icon.png` would otherwise emit by file convention — the
-  // `icon` entries merge, the apple one does not. Dropping this key therefore
-  // costs the iOS home-screen icon and nothing else: no build error, no failing
-  // page, just a screenshot of the app where the crest should be, visible only
-  // on a real iPhone. Verified against a production build before it was pinned.
+  // Declaring `icons` at all makes Next skip the file-convention icon merge
+  // wholesale, so `src/app/apple-icon.png` is served as a route but never
+  // linked unless it is named here. Dropping this key therefore costs the iOS
+  // home-screen icon and nothing else: no build error, no failing page, just a
+  // screenshot of the app where the crest should be, visible only on a real
+  // iPhone. Verified against production builds before it was pinned.
   it("declares the apple-touch-icon that the icons block would otherwise suppress", () => {
     // `Metadata["icons"]` also admits a bare URL and an array of icons; this
     // narrows to the descriptor object the layout actually uses, and fails

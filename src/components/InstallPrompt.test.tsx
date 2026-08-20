@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { InstallPrompt, isIos } from "./InstallPrompt";
+import { isIos } from "./InstallPrompt";
 
 /**
  * Almost every case this component handles ends in rendering nothing, and each
@@ -13,6 +13,13 @@ import { InstallPrompt, isIos } from "./InstallPrompt";
  * jsdom supplies none of the browser state this reads — no matchMedia, no
  * install event, a fixed user agent — so each test builds the phone it means to
  * describe.
+ *
+ * The component is imported fresh per test. `install-availability.ts` holds the
+ * captured install offer in module scope on purpose (a window event that fires
+ * once per document load cannot live in component state), so without
+ * `resetModules` the event caught by one test would still be held for the next.
+ * The usual objection to dynamic imports in tests — that the first test pays
+ * for the whole module graph — does not apply to a card and two UI primitives.
  */
 
 const IPHONE =
@@ -20,19 +27,21 @@ const IPHONE =
 const ANDROID_CHROME =
   "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 
-/// Stands up the browser conditions a test is describing: which phone, whether
-/// the app is already on the home screen, and whether this one was dismissed
-/// before.
+const TIP_KEY = "ybtm:install-tip-showings";
+const DISMISSED_KEY = "ybtm:install-prompt-dismissed";
+
 function givenBrowser({
   userAgent = ANDROID_CHROME,
   standalone = false,
   dismissed = false,
   maxTouchPoints = 0,
+  iosTipShowings = 0,
 }: {
   userAgent?: string;
   standalone?: boolean;
   dismissed?: boolean;
   maxTouchPoints?: number;
+  iosTipShowings?: number;
 } = {}) {
   // defineProperty rather than spyOn: jsdom defines neither of these as a
   // configurable getter, and does not define maxTouchPoints at all.
@@ -58,16 +67,28 @@ function givenBrowser({
 
   window.localStorage.clear();
   if (dismissed) {
-    window.localStorage.setItem("ybtm:install-prompt-dismissed", "1");
+    window.localStorage.setItem(DISMISSED_KEY, "1");
+  }
+  if (iosTipShowings > 0) {
+    window.localStorage.setItem(TIP_KEY, String(iosTipShowings));
   }
 }
 
-/// Fires the Chromium install event the component waits for, and hands back the
+/// Loads the component and its store fresh, so the module-scope install offer
+/// starts empty and the store's window listeners are attached for this test.
+async function loadInstallPrompt() {
+  vi.resetModules();
+  const { InstallPrompt } = await import("./InstallPrompt");
+  return InstallPrompt;
+}
+
+/// Fires the Chromium install event the store listens for, and hands back the
 /// spy standing in for the browser's install sheet.
 function fireBeforeInstallPrompt() {
   const prompt = vi.fn().mockResolvedValue(undefined);
-  const event = Object.assign(new Event("beforeinstallprompt"), { prompt });
-  window.dispatchEvent(event);
+  window.dispatchEvent(
+    Object.assign(new Event("beforeinstallprompt"), { prompt }),
+  );
   return prompt;
 }
 
@@ -102,18 +123,52 @@ describe("isIos", () => {
 });
 
 describe("InstallPrompt", () => {
-  it("says nothing until the browser says it can install", () => {
+  it("says nothing until the browser says it can install", async () => {
     givenBrowser();
+    const InstallPrompt = await loadInstallPrompt();
 
     const { container } = render(<InstallPrompt />);
 
-    // No beforeinstallprompt has fired, so there is no working Install button
-    // to offer — and a button that does nothing is worse than no card.
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("stays hidden when the app is already on the home screen", () => {
+  /**
+   * The regression this whole store exists for. Chromium fires
+   * `beforeinstallprompt` once per document load, at the window. A parent lands
+   * on `/`, signs in, and taps through to their team — a client-side
+   * navigation, so the event has already come and gone by the time this card
+   * first mounts. When the listener lived in this component, that meant the
+   * Install button never appeared in the one flow everybody actually uses.
+   */
+  it("offers Install for an event that fired before it ever mounted", async () => {
+    givenBrowser();
+    const InstallPrompt = await loadInstallPrompt();
+
+    const prompt = fireBeforeInstallPrompt();
+    render(<InstallPrompt />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^install$/i }),
+    );
+    expect(prompt).toHaveBeenCalled();
+  });
+
+  it("offers Install for an event that arrives while it is mounted", async () => {
+    givenBrowser();
+    const InstallPrompt = await loadInstallPrompt();
+
+    render(<InstallPrompt />);
+    const prompt = fireBeforeInstallPrompt();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^install$/i }),
+    );
+    expect(prompt).toHaveBeenCalled();
+  });
+
+  it("stays hidden when the app is already on the home screen", async () => {
     givenBrowser({ standalone: true });
+    const InstallPrompt = await loadInstallPrompt();
 
     const { container } = render(<InstallPrompt />);
     fireBeforeInstallPrompt();
@@ -121,16 +176,18 @@ describe("InstallPrompt", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("stays hidden on iOS when the app is already on the home screen", () => {
+  it("stays hidden on iOS when the app is already on the home screen", async () => {
     givenBrowser({ userAgent: IPHONE, standalone: true });
+    const InstallPrompt = await loadInstallPrompt();
 
     const { container } = render(<InstallPrompt />);
 
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("stays hidden once it has been dismissed", () => {
+  it("stays hidden once it has been dismissed", async () => {
     givenBrowser({ userAgent: IPHONE, dismissed: true });
+    const InstallPrompt = await loadInstallPrompt();
 
     const { container } = render(<InstallPrompt />);
 
@@ -139,8 +196,9 @@ describe("InstallPrompt", () => {
 
   // Safari exposes no install API whatsoever, so the Share-sheet steps are the
   // only thing that can be offered — and they are undiscoverable otherwise.
-  it("gives iOS the Share-sheet steps and no Install button", () => {
+  it("gives iOS the Share-sheet steps and no Install button", async () => {
     givenBrowser({ userAgent: IPHONE });
+    const InstallPrompt = await loadInstallPrompt();
 
     render(<InstallPrompt />);
 
@@ -151,20 +209,44 @@ describe("InstallPrompt", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("offers a real Install button once Chromium fires the event", async () => {
-    givenBrowser();
+  /**
+   * iOS fires no `appinstalled` and gives a Home Screen app its own storage
+   * container, so a parent who follows the steps leaves no trace the Safari tab
+   * can read. Counting the showings is the only thing standing between that and
+   * a card that reappears forever for the people who already complied.
+   */
+  it("counts each iOS showing and gives up after the third", async () => {
+    givenBrowser({ userAgent: IPHONE });
+    const InstallPrompt = await loadInstallPrompt();
 
     render(<InstallPrompt />);
-    const prompt = fireBeforeInstallPrompt();
+    expect(screen.getByText(/Share menu/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem(TIP_KEY)).toBe("1");
 
-    const button = await screen.findByRole("button", { name: /^install$/i });
-    await userEvent.click(button);
+    cleanup();
+    givenBrowser({ userAgent: IPHONE, iosTipShowings: 3 });
+    const { container } = render(<InstallPrompt />);
 
-    expect(prompt).toHaveBeenCalled();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  // The count is read once at mount. Reading it live would let the effect that
+  // increments it pull the card out from under someone still reading it.
+  it("does not vanish mid-visit when its own counter crosses the limit", async () => {
+    givenBrowser({ userAgent: IPHONE, iosTipShowings: 2 });
+    const InstallPrompt = await loadInstallPrompt();
+
+    render(<InstallPrompt />);
+    expect(window.localStorage.getItem(TIP_KEY)).toBe("3");
+    // Force a re-render; the card must still be here.
+    await userEvent.hover(screen.getByText(/Share menu/i));
+
+    expect(screen.getByText(/Share menu/i)).toBeInTheDocument();
   });
 
   it("puts the card away after the install sheet has been shown", async () => {
     givenBrowser();
+    const InstallPrompt = await loadInstallPrompt();
 
     const { container } = render(<InstallPrompt />);
     fireBeforeInstallPrompt();
@@ -179,18 +261,18 @@ describe("InstallPrompt", () => {
 
   it("remembers Not now so the card does not come back", async () => {
     givenBrowser({ userAgent: IPHONE });
+    const InstallPrompt = await loadInstallPrompt();
 
     const { container } = render(<InstallPrompt />);
     await userEvent.click(screen.getByRole("button", { name: /not now/i }));
 
     expect(container).toBeEmptyDOMElement();
-    expect(
-      window.localStorage.getItem("ybtm:install-prompt-dismissed"),
-    ).toBe("1");
+    expect(window.localStorage.getItem(DISMISSED_KEY)).toBe("1");
   });
 
   it("hides itself when the app is installed by another route", async () => {
     givenBrowser();
+    const InstallPrompt = await loadInstallPrompt();
 
     const { container } = render(<InstallPrompt />);
     fireBeforeInstallPrompt();

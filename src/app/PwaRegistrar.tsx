@@ -2,6 +2,15 @@
 
 import { useEffect } from "react";
 
+// Imported for its side effect, and this is the only place that guarantees it
+// happens. The module attaches the window listeners that catch Chromium's
+// `beforeinstallprompt`, which fires once per document load — leaving it to
+// `InstallPrompt` to import would attach them only on team home, by which time
+// a client-side navigation has already carried the page past the event.
+// PwaRegistrar sits in the root layout, so importing it here means every page
+// is listening from the moment its bundle runs.
+import "@/components/install-availability";
+
 /// Registers `public/sw.js`, and renders nothing.
 ///
 /// A service worker can only be registered from the client, so this exists as a

@@ -1,12 +1,16 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import {
+  clearInstallOffer,
+  getInstallOffer,
+  getInstallOfferOnServer,
+  getInstalled,
+  getInstalledOnServer,
+  subscribeToInstallAvailability,
+  type BeforeInstallPromptEvent,
+} from "@/components/install-availability";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -15,12 +19,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 /// the difference is not worth nagging about on every visit to the team page.
 const DISMISSED_KEY = "ybtm:install-prompt-dismissed";
 
-/// The Chromium-only event that lets a page offer its own install button.
-/// Not in the DOM lib, because it is not in any specification Safari or Firefox
-/// implements — which is the entire reason this component has two branches.
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-};
+/// How many times the iOS tip has been put in front of this browser.
+///
+/// Chromium tells us when an install succeeds; iOS tells us nothing. Safari
+/// fires no `appinstalled`, and a Home Screen app gets a separate storage
+/// container, so a parent who follows the Share-sheet steps leaves no trace
+/// that the Safari tab can ever read — `isInstalled()` there stays false
+/// forever. Without a cap the tip would therefore reappear on every single
+/// visit for exactly the people who already did what it asked.
+const IOS_TIP_SHOWINGS_KEY = "ybtm:install-tip-showings";
+
+/// Enough to catch someone who was in a hurry the first time, few enough that
+/// it stops being a fixture of the page.
+const IOS_TIP_MAX_SHOWINGS = 3;
+
+type Mode = "hidden" | "ios" | "install";
 
 /// iPhone and iPad, including iPadOS's desktop-class Safari, which reports a
 /// Macintosh user agent and is separated out by the touch-point count.
@@ -31,10 +44,7 @@ type BeforeInstallPromptEvent = Event & {
 /// is between reading the UA string and never telling an iPhone user how to
 /// install at all. Exported for its own test, because a bad regex here is
 /// invisible until it is someone's blank card.
-export function isIos(
-  userAgent: string,
-  maxTouchPoints: number = 0,
-): boolean {
+export function isIos(userAgent: string, maxTouchPoints: number = 0): boolean {
   if (/iPad|iPhone|iPod/.test(userAgent)) {
     return true;
   }
@@ -44,6 +54,10 @@ export function isIos(
 /// Already running from the home screen. `display-mode: standalone` is the
 /// standard answer; `navigator.standalone` is the non-standard one iOS shipped
 /// years earlier and still sets, and older iOS versions answer only to that.
+///
+/// Both only ever answer from *inside* an installed app. Neither can tell you
+/// from a browser tab that an installed copy exists elsewhere — see
+/// IOS_TIP_SHOWINGS_KEY.
 function isInstalled(): boolean {
   const standaloneDisplay =
     typeof window.matchMedia === "function" &&
@@ -57,7 +71,8 @@ function isInstalled(): boolean {
 
 /// Reading localStorage throws outright in a Safari private window, so every
 /// access is guarded. A browser that will not answer is treated as "not
-/// dismissed" — worst case the card appears again, which is the harmless side.
+/// dismissed" and "never shown" — worst case the card appears again, which is
+/// the harmless side of both questions.
 function wasDismissed(): boolean {
   try {
     return window.localStorage.getItem(DISMISSED_KEY) === "1";
@@ -71,6 +86,26 @@ function rememberDismissal(): void {
     window.localStorage.setItem(DISMISSED_KEY, "1");
   } catch {
     // A phone that cannot remember the dismissal still gets it for this visit.
+  }
+}
+
+function readIosTipShowings(): number {
+  try {
+    const raw = Number(window.localStorage.getItem(IOS_TIP_SHOWINGS_KEY));
+    return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function recordIosTipShowing(): void {
+  try {
+    window.localStorage.setItem(
+      IOS_TIP_SHOWINGS_KEY,
+      String(readIosTipShowings() + 1),
+    );
+  } catch {
+    // Uncounted is the same as unshown here, which errs toward showing it.
   }
 }
 
@@ -88,108 +123,118 @@ const subscribeToNothing = () => () => {};
 const hydratedOnClient = () => true;
 const hydratedOnServer = () => false;
 
+/// Which of the three things this component can be, given everything known.
+/// Pure and argument-driven so the precedence is legible in one place — and so
+/// the browser reads below stay behind the `hydrated` short-circuit.
+function resolveMode({
+  hydrated,
+  closed,
+  installedByEvent,
+  offer,
+  iosShowings,
+}: {
+  hydrated: boolean;
+  closed: boolean;
+  installedByEvent: boolean;
+  offer: BeforeInstallPromptEvent | null;
+  iosShowings: number;
+}): Mode {
+  if (!hydrated || closed || installedByEvent) {
+    return "hidden";
+  }
+  if (isInstalled() || wasDismissed()) {
+    return "hidden";
+  }
+  if (isIos(navigator.userAgent, navigator.maxTouchPoints)) {
+    return iosShowings < IOS_TIP_MAX_SHOWINGS ? "ios" : "hidden";
+  }
+  // No captured offer means this browser has not said it can install — a
+  // button that does nothing when tapped is worse than no button.
+  return offer ? "install" : "hidden";
+}
+
 /// Offers to put the app on the phone's home screen, which is where a parent
 /// standing at a field actually wants it — and, on iOS 16.4+, the only way Web
 /// Push could ever reach them if Decision 8 is revisited.
 ///
-/// It renders **nothing** unless it has something genuinely useful to say,
-/// which is most of the logic:
+/// It renders **nothing** unless it has something genuinely useful to say:
 ///
 /// - already installed, or previously dismissed → nothing, permanently
-/// - iOS → the Share-sheet instructions, because Safari offers no install API
-///   and the steps are genuinely undiscoverable
-/// - Chromium, once it has fired `beforeinstallprompt` → a real Install button
-/// - anything else (Firefox, a desktop that will not install, an iOS-less
-///   browser that never fires the event) → nothing, rather than a dead button
-///
-/// That last case is why the Chromium branch waits for the event instead of
-/// assuming: an Install button that does nothing when tapped is worse than no
-/// button, especially for the audience here.
+/// - iOS → the Share-sheet instructions, because Safari offers no install API,
+///   at most IOS_TIP_MAX_SHOWINGS times since iOS never reports success
+/// - Chromium, once `beforeinstallprompt` has been caught → a real Install
+///   button. The event is caught in `install-availability.ts` at the root
+///   layout, not here, because it fires once per document load and this
+///   component mounts a client-side navigation too late to hear it.
+/// - anything else (Firefox, a desktop that will not install) → nothing
 export function InstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null);
-  // Closed for this visit — by the person tapping Not now, or by the app being
-  // installed out from under the card. Distinct from the stored dismissal so
-  // the browser is never re-read to answer a question already answered here.
   const [closed, setClosed] = useState(false);
-
-  // The effect only ever subscribes; every state change below happens inside a
-  // callback, which is both what the React Compiler's lint asks for and an
-  // honest description of what this is — two browser events and a button.
-  useEffect(() => {
-    const onBeforeInstallPrompt = (event: Event) => {
-      // Chrome shows its own mini-infobar unless the event is cancelled; this
-      // hands the choice of when to ask over to the card below.
-      event.preventDefault();
-      setDeferredPrompt(event as BeforeInstallPromptEvent);
-    };
-
-    // Fired after an install completes by any route, including Chrome's own
-    // menu — without this the card would linger until the next navigation.
-    const onInstalled = () => {
-      setDeferredPrompt(null);
-      setClosed(true);
-    };
-
-    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
 
   const hydrated = useSyncExternalStore(
     subscribeToNothing,
     hydratedOnClient,
     hydratedOnServer,
   );
+  const offer = useSyncExternalStore(
+    subscribeToInstallAvailability,
+    getInstallOffer,
+    getInstallOfferOnServer,
+  );
+  const installedByEvent = useSyncExternalStore(
+    subscribeToInstallAvailability,
+    getInstalled,
+    getInstalledOnServer,
+  );
+
+  // Read once, at first render, and never updated. The effect below increments
+  // the stored count, so reading it live would hide the card out from under
+  // someone who is still reading it. A `useState` initializer is the way React
+  // allows a one-time read like this — a ref would have to be read during
+  // render, which the compiler's lint rejects outright — and the window guard
+  // is because this initializer also runs during the server render.
+  const [iosShowingsAtMount] = useState(() =>
+    typeof window === "undefined" ? 0 : readIosTipShowings(),
+  );
+
+  const mode = resolveMode({
+    hydrated,
+    closed,
+    installedByEvent,
+    offer,
+    iosShowings: iosShowingsAtMount,
+  });
+
+  const counted = useRef(false);
+  useEffect(() => {
+    if (mode !== "ios" || counted.current) {
+      return;
+    }
+    counted.current = true;
+    recordIosTipShowing();
+  }, [mode]);
 
   const dismiss = useCallback(() => {
     rememberDismissal();
-    setDeferredPrompt(null);
     setClosed(true);
   }, []);
 
   const install = useCallback(async () => {
-    if (!deferredPrompt) {
+    if (!offer) {
       return;
     }
 
     try {
-      await deferredPrompt.prompt();
+      await offer.prompt();
     } catch {
       // The browser declines to show the sheet twice for one event. Nothing to
       // report: either it is already installed or the moment has passed.
     }
 
-    // The captured event is single-use whatever the person chose, so the card
-    // goes either way. Declining is not remembered as a dismissal — `appinstalled`
-    // handles the accepted case, and a fresh event will arrive on a later visit.
-    setDeferredPrompt(null);
-    setClosed(true);
-  }, [deferredPrompt]);
-
-  if (!hydrated || closed) {
-    return null;
-  }
-
-  // Read at render rather than cached in state, for the reason above: state
-  // written during an effect is the pattern being avoided. All three are
-  // side-effect-free reads of values that do not change while the page is open.
-  if (isInstalled() || wasDismissed()) {
-    return null;
-  }
-
-  const mode: "ios" | "install" | "hidden" = isIos(
-    navigator.userAgent,
-    navigator.maxTouchPoints,
-  )
-    ? "ios"
-    : deferredPrompt
-      ? "install"
-      : "hidden";
+    // Single-use whatever the person chose, so the card goes either way.
+    // Declining is not remembered as a dismissal — `appinstalled` handles the
+    // accepted case, and a fresh event arrives on a later page load.
+    clearInstallOffer();
+  }, [offer]);
 
   if (mode === "hidden") {
     return null;
