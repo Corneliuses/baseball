@@ -13,6 +13,8 @@ const upsertGuardianPlayer = vi.fn();
 const deleteGuardianPlayer = vi.fn();
 const findUniqueGuardianPlayer = vi.fn();
 const updateUser = vi.fn();
+const findFirstUser = vi.fn();
+const createUser = vi.fn();
 const transaction = vi.fn();
 
 vi.mock("./db", () => ({
@@ -32,6 +34,8 @@ vi.mock("./db", () => ({
     user: {
       upsert: (...args: unknown[]) => upsertUser(...args),
       update: (...args: unknown[]) => updateUser(...args),
+      findFirst: (...args: unknown[]) => findFirstUser(...args),
+      create: (...args: unknown[]) => createUser(...args),
     },
     guardianPlayer: {
       upsert: (...args: unknown[]) => upsertGuardianPlayer(...args),
@@ -49,6 +53,7 @@ import {
   linkGuardian,
   listTeamInvitations,
   loadSignInContext,
+  resolveInvitedUser,
   setGuardianPhone,
   unlinkGuardian,
 } from "./invitations";
@@ -452,6 +457,68 @@ describe("setGuardianPhone", () => {
     findUniqueGuardianPlayer.mockResolvedValue(null);
 
     await expect(setGuardianPhone("player-1", "user-1", "555-1234")).rejects.toThrow();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveInvitedUser", () => {
+  it("creates a new user carrying the offered name", async () => {
+    findFirstUser.mockResolvedValue(null);
+    createUser.mockResolvedValue({ id: "user-2", email: "sam@example.com" });
+
+    const user = await resolveInvitedUser("Sam@Example.com", NOW, "Sam Rivera");
+
+    expect(createUser).toHaveBeenCalledWith({
+      data: {
+        email: "sam@example.com",
+        emailVerified: NOW,
+        name: "Sam Rivera",
+      },
+      select: { id: true, email: true },
+    });
+    expect(user).toEqual({ id: "user-2", email: "sam@example.com" });
+  });
+
+  it("fills a blank name on an existing user, alongside verification", async () => {
+    findFirstUser.mockResolvedValue({
+      id: "user-2",
+      email: "sam@example.com",
+      emailVerified: null,
+      name: null,
+    });
+    updateUser.mockResolvedValue({});
+
+    await resolveInvitedUser("sam@example.com", NOW, "Sam Rivera");
+
+    expect(updateUser).toHaveBeenCalledWith({
+      where: { id: "user-2" },
+      data: { emailVerified: NOW, name: "Sam Rivera" },
+    });
+  });
+
+  it("never overwrites a name the person already has", async () => {
+    findFirstUser.mockResolvedValue({
+      id: "user-2",
+      email: "sam@example.com",
+      emailVerified: NOW,
+      name: "Samantha Rivera",
+    });
+
+    await resolveInvitedUser("sam@example.com", NOW, "Sam");
+
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing for a verified user when no name is offered", async () => {
+    findFirstUser.mockResolvedValue({
+      id: "user-2",
+      email: "sam@example.com",
+      emailVerified: NOW,
+      name: null,
+    });
+
+    await resolveInvitedUser("sam@example.com", NOW);
+
     expect(updateUser).not.toHaveBeenCalled();
   });
 });

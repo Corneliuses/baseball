@@ -7,6 +7,7 @@ const updateEvent = vi.fn();
 const deleteEvent = vi.fn();
 const guardedRosteredPlayerIds = vi.fn();
 const upsertRsvp = vi.fn();
+const clearRsvp = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -23,6 +24,7 @@ vi.mock("@/lib/schedule", () => ({
 vi.mock("@/lib/rsvps", () => ({
   guardedRosteredPlayerIds: (...args: unknown[]) => guardedRosteredPlayerIds(...args),
   upsertRsvp: (...args: unknown[]) => upsertRsvp(...args),
+  clearRsvp: (...args: unknown[]) => clearRsvp(...args),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -86,7 +88,9 @@ beforeEach(() => {
   getEvent.mockResolvedValue({
     id: "event-1",
     type: "GAME",
-    startsAt: new Date("2026-08-15T23:00:00Z"),
+    // Far future: rsvpAction rejects past events, and these tests assert the
+    // happy path. The past-event case pins its own date.
+    startsAt: new Date("2100-08-15T23:00:00Z"),
     location: "Field 3",
     opponent: "Hawks",
     notes: null,
@@ -316,6 +320,35 @@ describe("rsvpAction", () => {
     const url = await redirectUrlOf(() => rsvpAction(rsvpForm));
 
     expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
+  });
+
+  it("deletes the row for a clear response, returning the family to no-response", async () => {
+    clearRsvp.mockResolvedValue(undefined);
+
+    const url = await redirectUrlOf(() =>
+      rsvpAction(form({ ...Object.fromEntries(rsvpForm), response: "clear" })),
+    );
+
+    expect(clearRsvp).toHaveBeenCalledWith("event-1", "player-1");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+    expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
+  });
+
+  it("refuses to RSVP an event whose day has passed, without writing", async () => {
+    getEvent.mockResolvedValue({
+      id: "event-1",
+      type: "GAME",
+      startsAt: new Date("2020-08-15T23:00:00Z"),
+      location: "Field 3",
+      opponent: "Hawks",
+      notes: null,
+    });
+
+    const url = await redirectUrlOf(() => rsvpAction(rsvpForm));
+
+    expect(url).toBe("/t/team-1/schedule/event-1?error=event-past");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+    expect(clearRsvp).not.toHaveBeenCalled();
   });
 
   it("rejects a response value outside the enum, without writing", async () => {

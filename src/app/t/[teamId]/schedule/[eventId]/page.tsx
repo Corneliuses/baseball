@@ -11,7 +11,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
-import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
+import {
+  formatEventDateTime,
+  instantToWallClock,
+  startOfDayInZone,
+} from "@/lib/calendar";
 import { mapsUrl } from "@/lib/maps";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -19,6 +23,7 @@ import { buildRsvpStateMap } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listEventRsvps } from "@/lib/rsvps";
 import { getEvent } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { getTeamById } from "@/lib/teams";
 
 import { deleteEventAction, rsvpAction, updateEventAction } from "../actions";
 
@@ -34,6 +39,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "invalid-notes": "Notes are too long.",
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
+  "event-past": "This event has already happened — RSVPs are closed.",
   access: "You no longer have access to make this change.",
 };
 
@@ -70,10 +76,11 @@ export default async function EventPage({
     notFound();
   }
 
-  const [rosterEntries, rsvpRows, guardedPlayerIds] = await Promise.all([
+  const [rosterEntries, rsvpRows, guardedPlayerIds, team] = await Promise.all([
     getRoster(teamId),
     listEventRsvps(teamId, eventId),
     guardedRosteredPlayerIds(teamId, userId),
+    getTeamById(teamId),
   ]);
   // Same order as the roster page — getRoster has no orderBy, so without this
   // the same team lists in a different (and unstable) order on each page.
@@ -83,7 +90,16 @@ export default async function EventPage({
     rsvpRows,
   );
 
-  const canEdit = role !== "PARENT";
+  // Both gates that silently swallowed writes now suppress the controls
+  // instead: an archived team rejects every mutation (edit and delete
+  // included), and RSVPs close once the event's day is over — the same
+  // start-of-today boundary the schedule's Upcoming/Past split uses, and the
+  // same check rsvpAction enforces server-side.
+  const archived = Boolean(team?.archivedAt);
+  const rsvpOpen =
+    !archived && event.startsAt >= startOfDayInZone(new Date());
+
+  const canEdit = role !== "PARENT" && !archived;
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
   const confirmingDelete = confirm === "delete";
   const heading =
@@ -147,7 +163,17 @@ export default async function EventPage({
             either way.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {archived ? (
+            <p className="text-sm text-muted-foreground">
+              This team is archived and read-only — RSVPs are closed.
+            </p>
+          ) : !rsvpOpen ? (
+            <p className="text-sm text-muted-foreground">
+              This event has already happened, so RSVPs are closed.
+            </p>
+          ) : null}
+
           {roster.length === 0 ? (
             <p className="text-sm text-muted-foreground">No players on the roster yet.</p>
           ) : (
@@ -157,7 +183,7 @@ export default async function EventPage({
                 // `no-response` is styled distinct from `declined` — it means
                 // the family hasn't answered, not that they said no. See rsvp.ts.
                 const badge = RSVP_STYLE[state];
-                const canRsvp = guardedPlayerIds.has(entry.player.id);
+                const canRsvp = rsvpOpen && guardedPlayerIds.has(entry.player.id);
 
                 return (
                   <li
@@ -198,6 +224,23 @@ export default async function EventPage({
                             Not going
                           </Button>
                         </form>
+                        {state !== "no-response" ? (
+                          // The way back to "No response" — without it, one
+                          // mis-tap into either button is permanent.
+                          <form action={rsvpAction}>
+                            <input type="hidden" name="teamId" value={teamId} />
+                            <input type="hidden" name="eventId" value={event.id} />
+                            <input
+                              type="hidden"
+                              name="playerId"
+                              value={entry.player.id}
+                            />
+                            <input type="hidden" name="response" value="clear" />
+                            <Button type="submit" size="sm" variant="ghost">
+                              Clear
+                            </Button>
+                          </form>
+                        ) : null}
                       </div>
                     ) : null}
                   </li>

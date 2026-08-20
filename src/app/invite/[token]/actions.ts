@@ -45,6 +45,12 @@ export async function acceptInvitationAction(formData: FormData) {
     throw new Error("Invalid invitation token");
   }
 
+  // Optional, and blank means "not now" — /profile edits it later. Truncated
+  // rather than rejected past the input's own maxLength, because a name is
+  // never a reason to fail an acceptance.
+  const rawName = String(formData.get("name") ?? "").trim();
+  const name = rawName === "" ? null : rawName.slice(0, 200);
+
   // Set only once everything below has succeeded, so any failure leaves the
   // parent on the invite page with an error rather than at a team URL they
   // have no session for.
@@ -68,7 +74,7 @@ export async function acceptInvitationAction(formData: FormData) {
       redirect(`/invite/${token}`);
     }
 
-    const user = await resolveInvitedUser(invitation.email, now);
+    const user = await resolveInvitedUser(invitation.email, now, name);
 
     // Order matters. This is the same idempotent write Auth.js runs from
     // `events.signIn`, and it goes first: if the session insert below fails,

@@ -113,19 +113,30 @@ export async function acceptInvitations(
 export async function resolveInvitedUser(
   email: string,
   now: Date = new Date(),
+  name: string | null = null,
 ): Promise<{ id: string; email: string }> {
   const address = normalizeEmail(email);
 
   const existing = await db.user.findFirst({
     where: { email: { equals: address, mode: "insensitive" } },
-    select: { id: true, email: true, emailVerified: true },
+    select: { id: true, email: true, emailVerified: true, name: true },
   });
 
   if (existing) {
+    // The name only ever fills a blank. An existing name was either typed by
+    // the person at /profile or seen and kept by them — a returning parent
+    // re-accepting an invitation must not overwrite it.
+    const data: { emailVerified?: Date; name?: string } = {};
     if (existing.emailVerified === null) {
+      data.emailVerified = now;
+    }
+    if (name !== null && existing.name === null) {
+      data.name = name;
+    }
+    if (Object.keys(data).length > 0) {
       await db.user.update({
         where: { id: existing.id },
-        data: { emailVerified: now },
+        data,
       });
     }
 
@@ -133,7 +144,7 @@ export async function resolveInvitedUser(
   }
 
   return db.user.create({
-    data: { email: address, emailVerified: now },
+    data: { email: address, emailVerified: now, name },
     select: { id: true, email: true },
   });
 }
