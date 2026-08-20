@@ -37,9 +37,10 @@ those are `User` columns — and the app's only sign-out, a server action wrappi
 owner-only returning-player picker at `roster/returning`, the coach-only bulk parent
 invite at `roster/invite`, the coach-only member directory, the coach-only roster entry
 detail at `roster/[entryId]`, the schedule at `schedule` / `schedule/[eventId]`, the
-read-only chart at `view`, and the two coach-only drag-and-drop chart editors — the
-batting order at `chart` and the positions diamond at
-`chart/positions`) plus `/t/new` for owner-gated team creation.
+read-only chart at `view`, the two coach-only drag-and-drop chart editors — the
+batting order at `chart` and the positions diamond at `chart/positions` — and team
+email messaging at `messages` (coach-only broadcast history) and `messages/new`
+(the compose form every role uses) plus `/t/new` for owner-gated team creation.
 
 **Contact details are staff-facing.** A parent never sees another family's phone or
 email: `/directory` and `roster/[entryId]` are both COACH+, and the team home page gives

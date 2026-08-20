@@ -58,6 +58,9 @@ function navItems(teamId: string, role: Role): TeamNavItem[] {
     { href: `${base}/schedule`, label: "Schedule" },
     { href: `${base}/view`, label: "Lineup" },
     { href: `${base}/roster`, label: "Roster" },
+    // Every role: coaches get the broadcast list, parents get the
+    // compose-to-coaches form (the page itself redirects them there).
+    { href: `${base}/messages`, label: "Messages" },
   ];
 
   if (role !== "PARENT") {

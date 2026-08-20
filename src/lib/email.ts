@@ -13,6 +13,10 @@ export type SendEmailInput = {
   to: string;
   subject: string;
   react: ReactElement;
+  /// The human whose message this is. Everything goes out from EMAIL_FROM
+  /// (the verified domain), so without this a recipient's reply mails a
+  /// void — set it and the reply becomes ordinary person-to-person email.
+  replyTo?: string;
 };
 
 export type SendEmailResult = { ok: true } | { ok: false; reason: string };
@@ -26,6 +30,7 @@ export async function sendEmail({
   to,
   subject,
   react,
+  replyTo,
 }: SendEmailInput): Promise<SendEmailResult> {
   const apiKey = requireEnv("RESEND_API_KEY");
   const from = requireEnv("EMAIL_FROM");
@@ -38,7 +43,13 @@ export async function sendEmail({
 
   try {
     const resend = new Resend(apiKey);
-    const { error } = await resend.emails.send({ from, to, subject, react });
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      subject,
+      react,
+      ...(replyTo ? { replyTo } : {}),
+    });
 
     if (error) {
       console.error("Failed to send email:", error.message);
