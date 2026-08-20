@@ -90,6 +90,71 @@ describe("Roster entry page", () => {
     expect(markup).toContain("555-1234");
   });
 
+  it("asks for confirmation before removing a player", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    getRosterEntry.mockResolvedValue(BASE_ENTRY);
+
+    const { default: RosterEntryPage } = await import("./page");
+    const markup = renderToStaticMarkup(
+      await RosterEntryPage({
+        params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+
+    expect(markup).toContain("confirm=remove");
+    expect(markup).not.toContain("Yes, remove them");
+  });
+
+  it("names the player in the removal confirm step", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    getRosterEntry.mockResolvedValue(BASE_ENTRY);
+
+    const { default: RosterEntryPage } = await import("./page");
+    const markup = renderToStaticMarkup(
+      await RosterEntryPage({
+        params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
+        searchParams: Promise.resolve({ confirm: "remove" }),
+      }),
+    );
+
+    expect(markup).toContain("Yes, remove them");
+    expect(markup).toContain("Remove Ada from this roster?");
+  });
+
+  it("asks for per-guardian confirmation before unlinking", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    getRosterEntry.mockResolvedValue(ENTRY_WITH_GUARDIAN);
+
+    const { default: RosterEntryPage } = await import("./page");
+    const markup = renderToStaticMarkup(
+      await RosterEntryPage({
+        params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+
+    // & renders as &amp; in static markup.
+    expect(markup).toContain("confirm=unlink&amp;guardian=user-9");
+    expect(markup).not.toContain("Yes, unlink");
+  });
+
+  it("confirms an unlink on the named guardian's row only", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    getRosterEntry.mockResolvedValue(ENTRY_WITH_GUARDIAN);
+
+    const { default: RosterEntryPage } = await import("./page");
+    const markup = renderToStaticMarkup(
+      await RosterEntryPage({
+        params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
+        searchParams: Promise.resolve({ confirm: "unlink", guardian: "user-9" }),
+      }),
+    );
+
+    expect(markup).toContain("Yes, unlink");
+    expect(markup).toContain("Unlink Sam from Ada?");
+  });
+
   // The route is coach-and-above like /directory: the page is the roster
   // admin surface and carries every linked guardian's contact details, so a
   // parent gets a 404 — and the guardian data is never even fetched.

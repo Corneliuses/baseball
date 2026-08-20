@@ -294,3 +294,20 @@ describe("EventPage attendance", () => {
     expect(guardedRosteredPlayerIds).toHaveBeenCalledWith("team-1", "user-1");
   });
 });
+
+describe("EventPage location", () => {
+  it("links the location to a map", async () => {
+    const html = await render();
+
+    expect(html).toContain("https://maps.google.com/?q=Field%203");
+  });
+
+  it("shows a quiet placeholder when no location is set", async () => {
+    getEvent.mockResolvedValue({ ...game, location: null });
+
+    const html = await render();
+
+    expect(html).toContain("No location set.");
+    expect(html).not.toContain("maps.google.com");
+  });
+});

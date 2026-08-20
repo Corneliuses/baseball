@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -63,10 +64,16 @@ export default async function RosterEntryPage({
   searchParams,
 }: {
   params: Promise<{ teamId: string; entryId: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; invited?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    saved?: string;
+    invited?: string;
+    confirm?: string;
+    guardian?: string;
+  }>;
 }) {
   const { teamId, entryId } = await params;
-  const { error, saved, invited } = await searchParams;
+  const { error, saved, invited, confirm, guardian } = await searchParams;
 
   try {
     await requireTeamAccess(teamId, { intent: "read", minRole: "COACH" });
@@ -83,6 +90,10 @@ export default async function RosterEntryPage({
   }
 
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const confirmingRemoval = confirm === "remove";
+  // Unlinking confirms per guardian: ?confirm=unlink&guardian=<id> shows the
+  // step on that row only, so the other rows keep their one-tap buttons.
+  const unlinkingGuardianId = confirm === "unlink" ? (guardian ?? null) : null;
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
@@ -206,16 +217,41 @@ export default async function RosterEntryPage({
                           </Button>
                         </form>
                       ) : null}
-                      <form action={unlinkGuardianAction}>
-                        <input type="hidden" name="teamId" value={teamId} />
-                        <input type="hidden" name="entryId" value={entryId} />
-                        <input type="hidden" name="userId" value={guardian.id} />
-                        <Button type="submit" variant="outline" size="sm">
-                          Unlink
+                      {unlinkingGuardianId !== guardian.id ? (
+                        <Button asChild variant="outline" size="sm">
+                          <Link
+                            href={`/t/${teamId}/roster/${entryId}?confirm=unlink&guardian=${guardian.id}`}
+                          >
+                            Unlink
+                          </Link>
                         </Button>
-                      </form>
+                      ) : null}
                     </div>
                   </div>
+                  {unlinkingGuardianId === guardian.id ? (
+                    <div className="space-y-3 border-t border-border pt-3">
+                      <p role="alert" className="text-sm text-destructive">
+                        Unlink {guardian.name ?? guardian.email} from{" "}
+                        {entry.player.name}? They keep their team access, but
+                        can no longer RSVP for this player.
+                      </p>
+                      <div className="flex gap-2">
+                        <form action={unlinkGuardianAction}>
+                          <input type="hidden" name="teamId" value={teamId} />
+                          <input type="hidden" name="entryId" value={entryId} />
+                          <input type="hidden" name="userId" value={guardian.id} />
+                          <Button type="submit" variant="destructive" size="sm">
+                            Yes, unlink
+                          </Button>
+                        </form>
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/t/${teamId}/roster/${entryId}`}>
+                            Cancel
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                   <form
                     action={setGuardianPhoneAction}
                     className="flex items-end gap-2 border-t border-border pt-3"
@@ -281,13 +317,35 @@ export default async function RosterEntryPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={removeRosterEntryAction}>
-            <input type="hidden" name="teamId" value={teamId} />
-            <input type="hidden" name="entryId" value={entryId} />
-            <Button type="submit" variant="destructive">
-              Remove player
+          {/* Confirms like event deletion — removal also drops the entry's
+              jersey number, batting slot, and position, none of which can be
+              recovered by re-adding the player. */}
+          {confirmingRemoval ? (
+            <div className="space-y-3">
+              <p role="alert" className="text-sm text-destructive">
+                Remove {entry.player.name} from this roster? Their jersey
+                number, batting slot, and position on this team go with them.
+              </p>
+              <div className="flex gap-2">
+                <form action={removeRosterEntryAction}>
+                  <input type="hidden" name="teamId" value={teamId} />
+                  <input type="hidden" name="entryId" value={entryId} />
+                  <Button type="submit" variant="destructive">
+                    Yes, remove them
+                  </Button>
+                </form>
+                <Button asChild variant="outline">
+                  <Link href={`/t/${teamId}/roster/${entryId}`}>Cancel</Link>
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button asChild variant="destructive">
+              <Link href={`/t/${teamId}/roster/${entryId}?confirm=remove`}>
+                Remove player
+              </Link>
             </Button>
-          </form>
+          )}
         </CardContent>
       </Card>
     </div>

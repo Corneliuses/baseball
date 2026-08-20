@@ -31,10 +31,10 @@ export default async function TeamSettingsPage({
   searchParams,
 }: {
   params: Promise<{ teamId: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; confirm?: string }>;
 }) {
   const { teamId } = await params;
-  const { error, saved } = await searchParams;
+  const { error, saved, confirm } = await searchParams;
 
   try {
     await requireTeamAccess(teamId, { intent: "read", minRole: "OWNER" });
@@ -51,6 +51,7 @@ export default async function TeamSettingsPage({
   }
 
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const confirmingArchive = confirm === "archive" && !team.archivedAt;
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
@@ -141,12 +142,39 @@ export default async function TeamSettingsPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={team.archivedAt ? unarchiveTeamAction : archiveTeamAction}>
-            <input type="hidden" name="teamId" value={teamId} />
-            <Button type="submit" variant={team.archivedAt ? "default" : "destructive"}>
-              {team.archivedAt ? "Unarchive team" : "Archive team"}
+          {/* Archiving locks out every write for every role, so it confirms
+              like event deletion does. Unarchiving undoes exactly that and
+              needs no ceremony. */}
+          {team.archivedAt ? (
+            <form action={unarchiveTeamAction}>
+              <input type="hidden" name="teamId" value={teamId} />
+              <Button type="submit">Unarchive team</Button>
+            </form>
+          ) : confirmingArchive ? (
+            <div className="space-y-3">
+              <p role="alert" className="text-sm text-destructive">
+                Archive this team? It becomes read-only for everyone — you
+                included — until it&rsquo;s unarchived.
+              </p>
+              <div className="flex gap-2">
+                <form action={archiveTeamAction}>
+                  <input type="hidden" name="teamId" value={teamId} />
+                  <Button type="submit" variant="destructive">
+                    Yes, archive it
+                  </Button>
+                </form>
+                <Button asChild variant="outline">
+                  <Link href={`/t/${teamId}/settings`}>Cancel</Link>
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button asChild variant="destructive">
+              <Link href={`/t/${teamId}/settings?confirm=archive`}>
+                Archive team
+              </Link>
             </Button>
-          </form>
+          )}
         </CardContent>
       </Card>
     </div>
