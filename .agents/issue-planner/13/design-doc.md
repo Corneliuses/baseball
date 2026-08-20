@@ -64,7 +64,7 @@ submitted form claims.
 ### UI
 
 - `/t/[teamId]/messages` (`page.tsx`) — COACH+: broadcast history plus a "New message"
-  link; PARENT: redirect to `/messages/new`.
+  link; PARENT: redirect to `/t/[teamId]/messages/new`.
 - `/t/[teamId]/messages/new` (`page.tsx`) — compose form. COACH+ picks the audience
   (all parents, or one parent from a server-rendered select of PARENT members); PARENT
   sees a fixed "All coaches" audience. Declares `export const maxDuration = 60` — the
@@ -112,9 +112,10 @@ teams reject every send (issue requirement) — including the non-persisting one
 precisely the contact-details-are-staff-facing rule the directory enforces. BCC avoids
 that but makes per-recipient failure invisible. The paced loop is already proven in
 `roster/invite/actions.ts` against Resend's 2 req/s limit: ~25 parents × 600ms ≈ 15s,
-well inside the page's `maxDuration = 60`. A `MAX_RECIPIENTS = 50` guard (50 × 600ms =
-30s) keeps the loop bounded the way `MAX_ROWS` does, and the same coupling warning from
-AGENTS.md applies: raise any of the three numbers only together.
+well inside the page's `maxDuration = 60`. A `MAX_RECIPIENTS = 30` guard (30 × 600ms =
+18s pacing floor — real Resend latency on top, not absorbed by it) keeps the loop
+bounded the way `MAX_ROWS` does, matching its cap and margin exactly; the same coupling
+warning from AGENTS.md applies: raise any of the three numbers only together.
 
 ### Decision 4: `Reply-To` is the sender's account email
 
@@ -181,7 +182,7 @@ record of the 20 that went out. The result banner reports `sent`/`failed` counts
 |---|---|---|
 | Unverified sending domain → silent spam-foldering | High | Operational, not code: `EMAIL_FROM` warning already in `.env.example`; #9's validation weekend confirmed invitations arrive |
 | Resend 429s mid-broadcast | Med | 600ms pacing (proven in bulk invite); failures counted and reported, row already persisted |
-| Batch outliving the action timeout | Med | `maxDuration = 60` on the compose page + `MAX_RECIPIENTS = 50` cap (30s of pacing max) |
+| Batch outliving the action timeout | Med | `maxDuration = 60` on the compose page + `MAX_RECIPIENTS = 30` cap (18s pacing floor, matching the invite batch's margin) |
 | Forged POST targeting a non-member or a coach as "individual parent" | High | `resolveRecipients` accepts only a PARENT membership on this `teamId`; tested |
 | Parent addresses leaking to other parents | High | Per-recipient sends; Reply-To only ever exposes the sender's own address |
 | Team with no parents / no coaches yet | Low | `no-recipients` error before any write or send |

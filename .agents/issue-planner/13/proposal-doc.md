@@ -22,7 +22,7 @@ replies continue as ordinary email.
 - Coach → all parents broadcast; coach → individual parent; parent → all coaches
 - Pure recipient-resolution function with the no-parent-to-parent invariant tested
 - `TeamMessageEmail` React Email template + pure props builder, sent via Resend
-- Coach-only broadcast history at `/t/[teamId]/messages`; compose at `/messages/new`
+- Coach-only broadcast history at `/t/[teamId]/messages`; compose at `/t/[teamId]/messages/new`
 - `Reply-To` support in the shared `sendEmail` wrapper
 - Messages tab in `TeamNav` for all roles
 

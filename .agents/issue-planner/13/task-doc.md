@@ -38,7 +38,7 @@
       1. Parse `teamId`, `audience`, optional `targetUserId`, `subject`, `body`
       2. `requireTeamAccess(teamId, { intent: "write", minRole: audience === "ALL_COACHES" ? "PARENT" : "COACH" })`
       3. `listTeamMembers(teamId)` → `resolveRecipients(...)`; redirect `?error=...` on failure
-      4. `MAX_RECIPIENTS = 50` guard; `MIN_SEND_INTERVAL_MS = 600` pacing constant
+      4. `MAX_RECIPIENTS = 30` guard; `MIN_SEND_INTERVAL_MS = 600` pacing constant
          (document the coupling with `maxDuration`, as `roster/invite/actions.ts` does)
       5. Broadcast only: `createMessage(...)` before the loop
       6. Paced per-recipient `sendEmail` loop with `replyTo` = sender's email, counting
