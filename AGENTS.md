@@ -221,6 +221,22 @@ production — the dev command can prompt, generate new migrations, and reset th
   `formatEventDateTime`, `dayKey`, `buildMonthGrid`, etc.).
 - **`.env.example` is gitignore-exempt** via an explicit `!.env.example` negation, since
   the Next.js scaffold ignores `.env*`. Keep that negation if you touch `.gitignore`.
+- **Declaring `metadata.icons` at all suppresses the file-convention
+  `<link rel="apple-touch-icon">`.** `src/app/apple-icon.png` exists and Next serves it as
+  a route either way, but the link tag is only emitted when no `icons` block is present —
+  the `icon` entries merge with the file convention, the apple one does not. So
+  `src/app/layout.tsx` declares `icons.apple` explicitly. Dropping that key breaks nothing
+  visible: the build passes, every page renders, and only an actual iPhone shows it, by
+  putting a screenshot of the page on the home screen instead of the crest.
+  `layout.test.tsx` pins the declaration and `manifest.test.ts` pins the file it points at.
+- **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting` plus
+  `clients.claim` and no `fetch` handler — Decision 9, and the reason there is no Workbox
+  build step. Adding a `fetch` handler is not a small change: every page under `/t/[teamId]`
+  is a different family's roster, so a cache keyed on URL alone would serve one signed-in
+  parent's data to the next person on a shared phone. It is also where the `push` handler
+  lands if Decision 8 is revisited. The manifest's two colours are frozen hex copied from
+  the **light** theme (a manifest cannot express a media query); `manifest.test.ts` redoes
+  the HSL-to-hex conversion from `globals.css` and fails if either token moves.
 - **`RosterEntry`'s unique indexes surface as Prisma `P2002`, not a friendly error, unless
   translated.** `src/lib/roster-rules.ts`'s `rosterWriteFailure` duck-types the error rather
   than importing `PrismaClientKnownRequestError` (the generated client is gitignored, so its

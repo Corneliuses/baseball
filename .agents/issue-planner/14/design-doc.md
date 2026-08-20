@@ -129,7 +129,24 @@ computed at implementation and noted in a comment beside the token each derives 
 drift test is unaffected — but the derivation comment keeps a future token change findable
 by grep.
 
-### Decision 5: `Cache-Control: no-cache` header for `/sw.js`
+### Decision 5 (found during implementation): declare `icons.apple` explicitly
+
+Not anticipated in planning. `src/app/apple-icon.png` follows Next's file convention and
+its route *is* generated, but the `<link rel="apple-touch-icon">` tag was **not** emitted,
+because `src/app/layout.tsx` already declares a `metadata.icons` block. Verified against
+three production builds: with the `icons` block removed the link appears; with the block
+present and no `apple` key it silently does not. The `icon` entries merge with the file
+convention, the apple one does not.
+
+**Decision:** keep the file at `src/app/apple-icon.png` *and* declare
+`icons.apple` explicitly in the layout.
+**Rationale:** either mechanism alone covers the icon if the other is later removed, so
+the redundancy is a safety net rather than duplication. The failure mode this avoids is
+the worst kind for this project — invisible in CI, invisible on desktop, and visible only
+as a screenshot of the page where the crest should be on a parent's iPhone.
+`layout.test.tsx` pins the declaration; `manifest.test.ts` pins the file.
+
+### Decision 6: `Cache-Control: no-cache` header for `/sw.js`
 
 Add a `headers()` entry to `next.config.ts` for `/sw.js` per the Next PWA guide (§8), so a
 future service worker update (the push handler) is picked up promptly rather than pinned

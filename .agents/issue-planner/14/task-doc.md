@@ -7,63 +7,79 @@
 
 ## Phase 1: Manifest & Icons
 
-- [ ] Generate the icon set from `public/favicon.svg` with a one-off script (e.g.
-      `pnpm dlx` + sharp/resvg — no dependency added to `package.json`):
+- [x] Generate the icon set from `public/favicon.svg` with a one-off script
+      (sharp, already present transitively — nothing added to `package.json`):
       `public/icon-192.png`, `public/icon-512.png` (transparent, purpose `any`),
-      `public/icon-maskable-512.png` (crest at ~80% safe zone on solid `#2F6A3A`),
-      `src/app/apple-icon.png` (180×180, solid background — iOS composites
-      transparency onto black)
-- [ ] Add `src/app/manifest.ts` returning `MetadataRoute.Manifest`: name
-      "Youth Baseball Team Manager", short_name (fits under a home-screen icon —
-      "Team Manager"), `start_url: "/"`, `display: "standalone"`,
+      `public/icon-maskable-512.png` (crest at 80% safe zone on a cream
+      `#FAF4E5` ground), `src/app/apple-icon.png` (180×180, crest at 86% on the
+      same ground — iOS composites transparency onto black)
+- [x] Add `src/app/manifest.ts` returning `MetadataRoute.Manifest`: name
+      "Youth Baseball Team Manager", short_name "Team Manager",
+      `start_url: "/"`, `scope: "/"`, `id: "/"`, `display: "standalone"`,
       `background_color` / `theme_color` as exact hex of the light-theme
       `--background` / `--primary` tokens with derivation comments, icons array
-      referencing the four files above (maskable entry with `purpose: "maskable"`)
-- [ ] Write unit tests in `src/app/manifest.test.ts` — field assertions plus an
-      existence check on every icon `src`
+      (maskable entry with `purpose: "maskable"`)
+- [x] Write unit tests in `src/app/manifest.test.ts` — field assertions, an
+      existence check on every icon `src`, and an HSL-to-hex reconversion from
+      `globals.css` so the frozen colours cannot drift from their tokens
+- [x] **Unplanned:** declare `icons.apple` in `src/app/layout.tsx`. The existing
+      `metadata.icons` block was suppressing the file-convention
+      apple-touch-icon link outright — see Decision 5 in `design-doc.md`
 
 ## Phase 2: Service Worker & Registration
 
-- [ ] Write `public/sw.js` by hand: `install` → `skipWaiting()`, `activate` →
+- [x] Write `public/sw.js` by hand: `install` → `skipWaiting()`, `activate` →
       `clients.claim()`; **no fetch handler, no caches**; comment block naming this
       the mount point for the post-MVP push handler (Decision 8) and pointing at
       Decision 9 for why nothing is cached
-- [ ] Add `src/app/PwaRegistrar.tsx` (`"use client"`, renders null): feature-detect,
+- [x] Add `src/app/PwaRegistrar.tsx` (`"use client"`, renders null): feature-detect,
       register `/sw.js` with `{ updateViaCache: "none" }`, catch + `console.error`
       on failure
-- [ ] Render `<PwaRegistrar />` inside `body` in `src/app/layout.tsx`
-- [ ] Add `headers()` to `next.config.ts`: `/sw.js` → `Cache-Control: no-cache,
+- [x] Render `<PwaRegistrar />` inside `body` in `src/app/layout.tsx`
+- [x] Add `headers()` to `next.config.ts`: `/sw.js` → `Cache-Control: no-cache,
       no-store, must-revalidate`
-- [ ] Write `src/app/PwaRegistrar.test.tsx` (mock `navigator.serviceWorker`)
+- [x] Write `src/app/PwaRegistrar.test.tsx` (mock `navigator.serviceWorker`)
 
 ## Phase 3: Install Affordance
 
-- [ ] Add `src/components/InstallPrompt.tsx` (`"use client"`): null when
+- [x] Add `src/components/InstallPrompt.tsx` (`"use client"`): null when
       `display-mode: standalone` matches, when previously dismissed
       (`localStorage` key), or when neither platform path applies; iOS (UA
-      detection) → quiet `Card` with Share → "Add to Home Screen" instructions;
-      Chromium → capture `beforeinstallprompt`, show Install button calling
-      `prompt()`; dismiss button persists to `localStorage`. Quiet styling —
-      not the screen's banana accent
-- [ ] Render it on the team home page `src/app/t/[teamId]/page.tsx`
-- [ ] Write `src/components/InstallPrompt.test.tsx` — standalone → null,
+      detection, including iPadOS's Macintosh UA) → quiet `Card` with Share →
+      "Add to Home Screen" instructions; Chromium → capture
+      `beforeinstallprompt`, show Install button calling `prompt()`; dismiss
+      persists to `localStorage`; `appinstalled` hides it. Quiet styling — not
+      the screen's banana accent
+- [x] Render it on the team home page `src/app/t/[teamId]/page.tsx`, below the
+      coach contact card rather than above it
+- [x] Write `src/components/InstallPrompt.test.tsx` — standalone → null,
       dismissed → null, iOS → instructions, captured event → button,
-      dismiss → persists
+      dismiss → persists, `appinstalled` → hides
+
+  **Deviation:** the effect cannot set state synchronously — the React Compiler
+  lint rule `react-hooks/set-state-in-effect` rejects it. The component uses
+  `useSyncExternalStore` for the hydration boundary and reads the platform facts
+  at render, so every state write happens in a callback.
 
 ## Phase 4: Verification
 
-- [ ] Confirm `src/app/layout.tsx` still exports `robots: { index: false,
-      follow: false }` and add the regression assertion to an existing test file
+- [x] Confirm `src/app/layout.tsx` still exports `robots: { index: false,
+      follow: false }`; pinned in the new `src/app/layout.test.tsx`
+- [x] Verified against a production server (`next start`): `/manifest.webmanifest`
+      (200, `application/manifest+json`), `/sw.js` (200, `Cache-Control: no-cache,
+      no-store, must-revalidate`), all three icons and `/apple-icon.png` (200),
+      every one of them **without a session**; `/t/team-1` still 307s to
+      `/signin`; the rendered `<head>` carries the manifest link, the
+      apple-touch-icon link, and `noindex, nofollow`
 - [ ] Manual (operator, real phones): install on iOS Safari and Android Chrome;
-      check icon, name, standalone display; confirm `/manifest.webmanifest`,
-      `/sw.js`, and icons load without a session
+      check icon, name, standalone display
 
 ## Pre-Commit Gate
 
 Commands from `AGENTS.md` §Commands:
 
-- [ ] `pnpm check` (lint → typecheck → test) ✅
-- [ ] `pnpm exec next build` ✅ (documented substitute for `pnpm build`, which
+- [x] `pnpm check` (lint → typecheck → test) ✅ — 1013 tests, 78 files
+- [x] `pnpm exec next build` ✅ (documented substitute for `pnpm build`, which
       needs `DATABASE_URL` for the migrate step)
 
 ## Files Modified / Created
@@ -79,7 +95,9 @@ Commands from `AGENTS.md` §Commands:
 | `public/sw.js` | **New** — minimal hand-written service worker |
 | `src/app/PwaRegistrar.tsx` | **New** — client-side SW registration, renders null |
 | `src/app/PwaRegistrar.test.tsx` | **New** — registration tests |
-| `src/app/layout.tsx` | Render `<PwaRegistrar />` |
+| `src/app/layout.tsx` | Render `<PwaRegistrar />`; declare `icons.apple`; note why noindex stays |
+| `src/app/layout.test.tsx` | **New** — pins noindex and the apple-icon declaration |
+| `AGENTS.md` | Two gotchas: the apple-icon suppression, and why `sw.js` caches nothing |
 | `next.config.ts` | `headers()` — no-cache for `/sw.js` |
 | `src/components/InstallPrompt.tsx` | **New** — add-to-home-screen affordance |
 | `src/components/InstallPrompt.test.tsx` | **New** — affordance tests |
