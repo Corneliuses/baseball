@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { buildChartView } from "@/lib/chart-view";
 import { formatEventDateTime } from "@/lib/calendar";
+import { mapsUrl } from "@/lib/maps";
 import { getChart } from "@/lib/roster";
 import { buildRsvpStateMap } from "@/lib/rsvp";
 import { listEventRsvps } from "@/lib/rsvps";
@@ -94,11 +95,25 @@ export default async function ViewPage({
               {formatEventDateTime(game.startsAt)}
             </CardDescription>
           </CardHeader>
-          {game.location ? (
-            <CardContent>
-              <p className="text-sm text-foreground">{game.location}</p>
-            </CardContent>
-          ) : null}
+          <CardContent className="space-y-3">
+            {game.location ? (
+              <p className="text-sm text-foreground">
+                <a
+                  href={mapsUrl(game.location)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2 hover:text-primary"
+                >
+                  {game.location}
+                </a>
+              </p>
+            ) : null}
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/t/${teamId}/schedule/${game.id}`}>
+                Game details &amp; RSVP
+              </Link>
+            </Button>
+          </CardContent>
         </Card>
       ) : (
         <Card>

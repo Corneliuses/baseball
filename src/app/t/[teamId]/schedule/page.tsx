@@ -24,6 +24,7 @@ import {
   WEEKDAY_LABELS,
   type CalendarMonth,
 } from "@/lib/calendar";
+import { mapsUrl } from "@/lib/maps";
 import {
   listEventsInMonthGrid,
   listPastEvents,
@@ -398,7 +399,18 @@ function PracticeCard({
             </span>
           </Link>
           {event.location ? (
-            <p className="mt-1 text-sm text-muted-foreground">{event.location}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {/* Unlike the game ticket, the location here sits outside the
+                  event link, so it can be a map link without nesting anchors. */}
+              <a
+                href={mapsUrl(event.location)}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-primary"
+              >
+                {event.location}
+              </a>
+            </p>
           ) : null}
         </CardContent>
       </Card>

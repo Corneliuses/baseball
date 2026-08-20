@@ -412,3 +412,27 @@ describe("ViewPage chart rendering", () => {
     expect(html).not.toContain("RSVP is just for planning");
   });
 });
+
+describe("ViewPage next-game card", () => {
+  it("links to the game's event page, where RSVP lives", async () => {
+    const html = await render();
+
+    expect(html).toContain("/t/team-1/schedule/event-1");
+    expect(html).toContain("Game details");
+  });
+
+  it("links the location to a map", async () => {
+    const html = await render();
+
+    expect(html).toContain("https://maps.google.com/?q=Field%203");
+  });
+
+  it("offers neither when there is no upcoming game", async () => {
+    nextGame.mockResolvedValue(null);
+
+    const html = await render();
+
+    expect(html).not.toContain("Game details");
+    expect(html).not.toContain("maps.google.com");
+  });
+});

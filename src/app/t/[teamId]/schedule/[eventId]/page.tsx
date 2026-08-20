@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
+import { mapsUrl } from "@/lib/maps";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
 import { buildRsvpStateMap } from "@/lib/rsvp";
@@ -105,7 +106,18 @@ export default async function EventPage({
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {event.location ? (
-            <p className="text-foreground">{event.location}</p>
+            <p className="text-foreground">
+              {/* Coach email and phone are already mailto:/tel: links; the
+                  location a parent has to drive to deserves the same. */}
+              <a
+                href={mapsUrl(event.location)}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-primary"
+              >
+                {event.location}
+              </a>
+            </p>
           ) : (
             <p className="text-muted-foreground">No location set.</p>
           )}

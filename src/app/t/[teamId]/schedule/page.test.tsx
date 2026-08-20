@@ -259,3 +259,13 @@ describe("SchedulePage feedback", () => {
     expect(await render({ added: "1" })).toContain("Event added.");
   });
 });
+
+describe("SchedulePage practice locations", () => {
+  it("links a practice's location to a map in the list view", async () => {
+    listUpcomingEvents.mockResolvedValue([practice]);
+
+    const html = await render({ view: "list" });
+
+    expect(html).toContain("https://maps.google.com/?q=Field%201");
+  });
+});
