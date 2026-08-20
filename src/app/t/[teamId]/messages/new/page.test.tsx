@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import NewMessagePage, { maxDuration } from "./page";
 
 const MEMBERS = [
   {
@@ -46,7 +47,6 @@ const MEMBERS = [
 ];
 
 async function renderPage(searchParams: Record<string, string> = {}) {
-  const { default: NewMessagePage } = await import("./page");
   const result = await NewMessagePage({
     params: Promise.resolve({ teamId: "team-1" }),
     searchParams: Promise.resolve(searchParams),
@@ -62,9 +62,7 @@ beforeEach(() => {
 
 describe("New message page", () => {
   it("declares the maxDuration that governs the paced send loop", async () => {
-    const page = await import("./page");
-
-    expect(page.maxDuration).toBe(60);
+    expect(maxDuration).toBe(60);
   });
 
   it("404s a caller with no membership", async () => {

@@ -23,9 +23,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import MessagesPage from "./page";
 
 async function renderPage() {
-  const { default: MessagesPage } = await import("./page");
   const result = await MessagesPage({
     params: Promise.resolve({ teamId: "team-1" }),
   });

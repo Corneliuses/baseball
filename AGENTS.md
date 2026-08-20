@@ -146,6 +146,14 @@ Practices have RSVPs but no chart. Later games are ignored.
   requires them for pages and layouts.
 - **Path alias `@/` → `src/`.** Use it for every non-relative import.
 - **Co-locate tests**: `readiness.test.ts` sits next to `readiness.ts`.
+- **Import the module under test statically, not with `await import()` inside a test.**
+  Module loading is lazy, so a dynamic import bills the whole module graph to whichever
+  test happens to run first — the page suites were spending 0.8–1.8s in one trivial
+  assertion and 0–5ms in every other test in the file, and on a loaded runner that first
+  test blew past Vitest's 5s default and turned `pnpm check` red at random. A static import
+  moves the cost into the collection phase, which no timeout governs. Use the dynamic form
+  only when a test genuinely needs fresh module state (with `vi.resetModules`); `vi.mock`
+  is hoisted above imports, so static imports do not weaken mocking.
 - **Keep domain logic pure and DB-free** so it tests without a database. Data loading
   belongs in a thin wrapper; the decision belongs in a pure function. Both existing
   modules in `src/lib/` follow this and are the pattern to copy.

@@ -26,6 +26,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import SchedulePage from "./page";
 
 const game = {
   id: "event-1",
@@ -50,7 +51,6 @@ async function render(
   searchParams: Record<string, string> = {},
   teamId = "team-1",
 ) {
-  const { default: SchedulePage } = await import("./page");
   return renderToStaticMarkup(
     await SchedulePage({
       params: Promise.resolve({ teamId }),
