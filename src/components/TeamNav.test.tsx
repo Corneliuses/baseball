@@ -36,6 +36,7 @@ describe("TeamNav role gating", () => {
       "/t/team-1/schedule",
       "/t/team-1/view",
       "/t/team-1/roster",
+      "/t/team-1/messages",
       "/profile",
     ]) {
       expect(html).toContain(`href="${href}"`);
@@ -59,6 +60,14 @@ describe("TeamNav role gating", () => {
     const html = render("OWNER");
 
     expect(html).toContain('href="/t/team-1/settings"');
+  });
+
+  // Messages is the one tab parents and coaches share beyond the read
+  // surfaces: parents need the path to reach the coaching staff.
+  it("shows Messages to every role", () => {
+    for (const role of ["PARENT", "COACH", "OWNER"] as const) {
+      expect(render(role)).toContain('href="/t/team-1/messages"');
+    }
   });
 });
 
@@ -84,6 +93,7 @@ describe("TeamNav active tab", () => {
       ["/t/team-1/roster/entry-9", "/t/team-1/roster"],
       ["/t/team-1/roster/returning", "/t/team-1/roster"],
       ["/t/team-1/schedule/event-4", "/t/team-1/schedule"],
+      ["/t/team-1/messages/new", "/t/team-1/messages"],
     ] as const) {
       expect(linkFor(render("OWNER", pathname), tab)).toContain("aria-current");
     }
