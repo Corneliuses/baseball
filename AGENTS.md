@@ -19,6 +19,7 @@ being revised, not to reflect code.
 
 ```
 prisma/            # schema.prisma — the domain model, heavily commented
+public/            # Static assets: the crest, the PWA icon set, and sw.js (see Gotchas)
 src/app/           # Next.js App Router pages and layouts
 src/lib/           # Domain logic. Pure, DB-free modules live here with co-located tests
 src/emails/        # React Email templates plus their pure props builders
