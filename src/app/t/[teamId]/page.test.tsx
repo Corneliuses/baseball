@@ -4,9 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 const requireTeamAccess = vi.fn();
 const getTeamById = vi.fn();
 const listCoachContacts = vi.fn();
-const nextEvent = vi.fn();
+const nextEvents = vi.fn();
 const guardedRosteredPlayerIds = vi.fn();
-const listEventRsvps = vi.fn();
+const listRsvpsForEvents = vi.fn();
 const getChart = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
@@ -23,12 +23,12 @@ vi.mock("@/lib/memberships", () => ({
 }));
 
 vi.mock("@/lib/schedule", () => ({
-  nextEvent: (...args: unknown[]) => nextEvent(...args),
+  nextEvents: (...args: unknown[]) => nextEvents(...args),
 }));
 
 vi.mock("@/lib/rsvps", () => ({
   guardedRosteredPlayerIds: (...args: unknown[]) => guardedRosteredPlayerIds(...args),
-  listEventRsvps: (...args: unknown[]) => listEventRsvps(...args),
+  listRsvpsForEvents: (...args: unknown[]) => listRsvpsForEvents(...args),
 }));
 
 vi.mock("@/lib/roster", () => ({
@@ -68,6 +68,15 @@ const PRACTICE = {
   notes: "Bring a bat",
 };
 
+const LATER_GAME = {
+  id: "event-3",
+  type: "GAME" as const,
+  startsAt: new Date("2026-08-22T23:00:00Z"),
+  location: "Field 1",
+  opponent: "Bears",
+  notes: null,
+};
+
 const REESE = {
   entryId: "entry-1",
   playerId: "player-1",
@@ -99,9 +108,9 @@ beforeEach(() => {
   vi.setSystemTime(BEFORE_BOTH);
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
   listCoachContacts.mockResolvedValue([]);
-  nextEvent.mockResolvedValue(null);
+  nextEvents.mockResolvedValue([]);
   guardedRosteredPlayerIds.mockResolvedValue(new Set());
-  listEventRsvps.mockResolvedValue([]);
+  listRsvpsForEvents.mockResolvedValue([]);
   getChart.mockResolvedValue([]);
   getTeamById.mockResolvedValue({
     id: "team-1",
@@ -150,11 +159,11 @@ describe("TeamHomePage", () => {
 
 describe("TeamHomePage next event", () => {
   it("shows the next game with its time, place and a link to the event", async () => {
-    nextEvent.mockResolvedValue(GAME);
+    nextEvents.mockResolvedValue([GAME]);
 
     const html = await render();
 
-    expect(nextEvent).toHaveBeenCalledWith("team-1", BEFORE_BOTH);
+    expect(nextEvents).toHaveBeenCalledWith("team-1", 3, BEFORE_BOTH);
     expect(html).toContain("Game vs Hawks");
     expect(html).toContain("Aug 15");
     expect(html).toContain("6:00");
@@ -165,7 +174,7 @@ describe("TeamHomePage next event", () => {
   // Unlike readiness (#12), which is checking a chart a practice doesn't have.
   // A parent still has to drive to the practice.
   it("shows a practice too, with its notes", async () => {
-    nextEvent.mockResolvedValue(PRACTICE);
+    nextEvents.mockResolvedValue([PRACTICE]);
 
     const html = await render();
 
@@ -175,7 +184,7 @@ describe("TeamHomePage next event", () => {
   });
 
   it("links the location to a map", async () => {
-    nextEvent.mockResolvedValue(GAME);
+    nextEvents.mockResolvedValue([GAME]);
 
     const html = await render();
 
@@ -189,8 +198,30 @@ describe("TeamHomePage next event", () => {
     expect(html).not.toContain("Going");
   });
 
+  it("shows all three upcoming events, each with its own details link", async () => {
+    nextEvents.mockResolvedValue([PRACTICE, GAME, LATER_GAME]);
+
+    const html = await render();
+
+    expect(html).toContain("Practice");
+    expect(html).toContain("Game vs Hawks");
+    expect(html).toContain("Game vs Bears");
+    expect(html).toContain('href="/t/team-1/schedule/event-1"');
+    expect(html).toContain('href="/t/team-1/schedule/event-2"');
+    expect(html).toContain('href="/t/team-1/schedule/event-3"');
+  });
+
+  it("shows however many there are when the team has fewer than three", async () => {
+    nextEvents.mockResolvedValue([PRACTICE, GAME]);
+
+    const html = await render();
+
+    expect(html).toContain("Game vs Hawks");
+    expect(html).not.toContain("Bears");
+  });
+
   it("shows the card to a coach as well as a parent", async () => {
-    nextEvent.mockResolvedValue(GAME);
+    nextEvents.mockResolvedValue([GAME]);
     requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
 
     const html = await render();
@@ -202,7 +233,7 @@ describe("TeamHomePage next event", () => {
 describe("TeamHomePage your players", () => {
   beforeEach(() => {
     requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
-    nextEvent.mockResolvedValue(GAME);
+    nextEvents.mockResolvedValue([GAME]);
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1"]));
     getChart.mockResolvedValue([REESE]);
   });
@@ -330,14 +361,14 @@ describe("TeamHomePage your players", () => {
     expect(html).not.toContain("Your player");
     expect(html).not.toContain("Going");
     expect(getChart).not.toHaveBeenCalled();
-    expect(listEventRsvps).not.toHaveBeenCalled();
+    expect(listRsvpsForEvents).not.toHaveBeenCalled();
   });
 });
 
 describe("TeamHomePage one-tap RSVP", () => {
   beforeEach(() => {
     requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
-    nextEvent.mockResolvedValue(GAME);
+    nextEvents.mockResolvedValue([GAME]);
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1"]));
     getChart.mockResolvedValue([REESE]);
   });
@@ -345,7 +376,7 @@ describe("TeamHomePage one-tap RSVP", () => {
   it("posts both responses for the next event, marked as coming from home", async () => {
     const html = await render();
 
-    expect(listEventRsvps).toHaveBeenCalledWith("team-1", "event-1");
+    expect(listRsvpsForEvents).toHaveBeenCalledWith("team-1", ["event-1"]);
     expect(html).toContain("Going");
     expect(html).toContain("Not going");
     expect(html).toContain('name="from" value="home"');
@@ -359,7 +390,9 @@ describe("TeamHomePage one-tap RSVP", () => {
   // whatever the answer is, so asserting that string alone would pass against
   // a page that ignored the RSVP entirely.
   it("shows the current answer, so a tap is a change and not a guess", async () => {
-    listEventRsvps.mockResolvedValue([{ playerId: "player-1", attending: true }]);
+    listRsvpsForEvents.mockResolvedValue([
+      { eventId: "event-1", playerId: "player-1", attending: true },
+    ]);
 
     const html = await render();
 
@@ -371,7 +404,9 @@ describe("TeamHomePage one-tap RSVP", () => {
   });
 
   it("marks the declined answer instead when the family said no", async () => {
-    listEventRsvps.mockResolvedValue([{ playerId: "player-1", attending: false }]);
+    listRsvpsForEvents.mockResolvedValue([
+      { eventId: "event-1", playerId: "player-1", attending: false },
+    ]);
 
     const html = await render();
 
@@ -409,13 +444,16 @@ describe("TeamHomePage one-tap RSVP", () => {
   });
 
   it("renders no buttons when there is no event to answer for", async () => {
-    nextEvent.mockResolvedValue(null);
+    nextEvents.mockResolvedValue([]);
 
     const html = await render();
 
     expect(html).toContain("Bats 3rd · SS");
+    expect(html).toContain("Nothing scheduled yet");
     expect(html).not.toContain('name="from" value="home"');
-    expect(listEventRsvps).not.toHaveBeenCalled();
+    // Asked for nothing rather than skipped: listRsvpsForEvents short-circuits
+    // on an empty id list, so there is no query either way.
+    expect(listRsvpsForEvents).toHaveBeenCalledWith("team-1", []);
   });
 
   // GAME_GRACE_MS keeps an event on the card for three hours after it starts,
@@ -434,7 +472,9 @@ describe("TeamHomePage one-tap RSVP", () => {
 
   it("still shows the answer already given for an event in progress", async () => {
     vi.setSystemTime(new Date(GAME.startsAt.getTime() + 40 * 60 * 1000));
-    listEventRsvps.mockResolvedValue([{ playerId: "player-1", attending: true }]);
+    listRsvpsForEvents.mockResolvedValue([
+      { eventId: "event-1", playerId: "player-1", attending: true },
+    ]);
 
     const html = await render();
 
@@ -447,6 +487,77 @@ describe("TeamHomePage one-tap RSVP", () => {
     const html = await render();
 
     expect(html).toContain('name="from" value="home"');
+  });
+
+  it("offers buttons for every upcoming event, each posting its own id", async () => {
+    nextEvents.mockResolvedValue([PRACTICE, GAME, LATER_GAME]);
+
+    const html = await render();
+
+    expect(listRsvpsForEvents).toHaveBeenCalledWith("team-1", [
+      "event-2",
+      "event-1",
+      "event-3",
+    ]);
+    for (const id of ["event-1", "event-2", "event-3"]) {
+      expect(html).toContain(`name="eventId" value="${id}"`);
+    }
+    // Three events, one kid, two buttons each.
+    expect(html.match(/name="from" value="home"/g)).toHaveLength(6);
+  });
+
+  // One read serves all three cards, so the rows have to be bucketed by event.
+  // Sharing one state map across them would show the same answer on all three.
+  it("keeps each event's answer to that event", async () => {
+    nextEvents.mockResolvedValue([PRACTICE, GAME, LATER_GAME]);
+    listRsvpsForEvents.mockResolvedValue([
+      { eventId: "event-2", playerId: "player-1", attending: true },
+      { eventId: "event-1", playerId: "player-1", attending: false },
+    ]);
+
+    const html = await render();
+
+    // Going for the practice, Not going for the Hawks game, unanswered for the
+    // Bears game — three different states on one page.
+    expect(html).toContain("bg-primary");
+    expect(html).toContain("bg-destructive");
+    expect(html).toContain("No response");
+  });
+
+  it("answers for each kid separately when a parent has two", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1", "player-3"]));
+    getChart.mockResolvedValue([
+      REESE,
+      { ...REESE, entryId: "entry-3", playerId: "player-3", playerName: "Sam", jerseyNumber: 4 },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain('name="playerId" value="player-1"');
+    expect(html).toContain('name="playerId" value="player-3"');
+    // One event, two kids, two buttons each.
+    expect(html.match(/name="from" value="home"/g)).toHaveLength(4);
+  });
+
+  // The doubleheader, now actually solved rather than only made safe: the game
+  // in progress loses its buttons while the noon game keeps them, so the parent
+  // answers for the right one without leaving the page.
+  it("drops the buttons on an event in progress but keeps them on the later one", async () => {
+    const morning = { ...GAME, id: "morning", opponent: "Hawks" };
+    const noon = {
+      ...GAME,
+      id: "noon",
+      opponent: "Bears",
+      startsAt: new Date(GAME.startsAt.getTime() + 3 * 60 * 60 * 1000),
+    };
+    nextEvents.mockResolvedValue([morning, noon]);
+    vi.setSystemTime(new Date(GAME.startsAt.getTime() + 40 * 60 * 1000));
+
+    const html = await render();
+
+    expect(html).toContain("Game vs Hawks");
+    expect(html).not.toContain('name="eventId" value="morning"');
+    expect(html).toContain('name="eventId" value="noon"');
   });
 
   it("reports what the action refused, in the parent's own words", async () => {

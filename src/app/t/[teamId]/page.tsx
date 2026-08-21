@@ -23,9 +23,9 @@ import { sortDirectory } from "@/lib/directory-rules";
 import { mapsUrl } from "@/lib/maps";
 import { listCoachContacts } from "@/lib/memberships";
 import { getChart } from "@/lib/roster";
-import { buildRsvpStateMap } from "@/lib/rsvp";
-import { guardedRosteredPlayerIds, listEventRsvps } from "@/lib/rsvps";
-import { nextEvent, type ScheduleEvent } from "@/lib/schedule";
+import { buildRsvpStateMapsByEvent } from "@/lib/rsvp";
+import { guardedRosteredPlayerIds, listRsvpsForEvents } from "@/lib/rsvps";
+import { nextEvents, type ScheduleEvent } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -37,6 +37,7 @@ import { rsvpAction } from "./schedule/actions";
 /// owed the same sentence — plus `event-gone`, which only this page can
 /// produce: from the event page a deleted event bounces to the schedule, where
 /// its absence explains itself.
+///
 /// Null prototype, matching /profile: the key comes straight from the ?error=
 /// query param, and on a plain object ?error=constructor would resolve an
 /// Object.prototype member — truthy, so the fallback never fires — into a
@@ -47,6 +48,11 @@ const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null)
   "event-gone": "That event was just taken off the schedule.",
   access: "You no longer have access to make this change.",
 });
+
+/// How many events the page shows, each answerable. Three covers the week a
+/// parent is actually planning without turning team home into the schedule —
+/// which is still one tap away, and is where the rest of the season lives.
+const UPCOMING_LIMIT = 3;
 
 function eventHeading(event: ScheduleEvent): string {
   if (event.type !== "GAME") return "Practice";
@@ -63,10 +69,16 @@ function eventHeading(event: ScheduleEvent): string {
 /// the page the invitation email lands everyone on, rather than two taps away
 /// behind the schedule.
 ///
+/// Laid out so all three are answered in one screenful: the chart line first
+/// because it is one line per kid and never changes between events, then the
+/// upcoming events, each carrying its own RSVP buttons. Grouping the buttons
+/// under the event rather than under the child is what keeps three events from
+/// printing every event's name and date once per kid.
+///
 /// What renders is keyed on **guardianship, not role**: a coach who is also a
 /// parent RSVPs their own kid from here exactly as they can from the event
-/// page, and a member guarding nobody on this team simply gets no such
-/// section. The next-event card is informational and shows for everyone.
+/// page, and a member guarding nobody on this team simply gets no buttons and
+/// no summary. The event cards are informational and show for everyone.
 export default async function TeamHomePage({
   params,
   searchParams,
@@ -93,27 +105,35 @@ export default async function TeamHomePage({
     notFound();
   }
 
-  // Deliberately NOT wrapped in try/catch — `nextEvent`'s contract is that a
+  // Deliberately NOT wrapped in try/catch — `nextEvents`' contract is that a
   // database outage propagates rather than rendering the same "nothing on the
   // schedule" empty state a team between seasons would show. Same argument for
   // getChart below. A parent standing at a field being told there is no
   // practice is the failure this page exists to prevent.
-  // One clock for the whole render: `nextEvent` applies the grace window
-  // against it, and the RSVP gate below measures the same event against the
-  // same instant. Two `new Date()` calls could straddle a start time.
+  //
+  // One clock for the whole render: `nextEvents` applies the grace window
+  // against it, and the per-event RSVP gate below measures the same events
+  // against the same instant. Two `new Date()` calls could straddle a start.
   const now = new Date();
-  const [event, guardedPlayerIds] = await Promise.all([
-    nextEvent(teamId, now),
+  const [upcoming, guardedPlayerIds] = await Promise.all([
+    nextEvents(teamId, UPCOMING_LIMIT, now),
     guardedRosteredPlayerIds(teamId, userId),
   ]);
 
   // Only the viewer's own kids: `guardedRosteredPlayerIds` intersects global
   // guardianship with *this* team's roster, so nothing here is another
   // family's data. No guarded kids means neither query runs at all.
+  //
+  // One read across all three events rather than one per card: asking the same
+  // question three times over separately fetched rows is how two cards end up
+  // disagreeing about the same family.
   const [chartEntries, rsvpRows] = guardedPlayerIds.size
     ? await Promise.all([
         getChart(teamId),
-        event ? listEventRsvps(teamId, event.id) : Promise.resolve([]),
+        listRsvpsForEvents(
+          teamId,
+          upcoming.map((event) => event.id),
+        ),
       ])
     : [[] as ChartViewEntry[], []];
 
@@ -123,7 +143,8 @@ export default async function TeamHomePage({
   const myKids = chartEntries
     .filter((entry) => guardedPlayerIds.has(entry.playerId))
     .sort(byJerseyThenName);
-  const rsvpStates = buildRsvpStateMap(
+  const rsvpStatesByEvent = buildRsvpStateMapsByEvent(
+    upcoming.map((event) => event.id),
     myKids.map((entry) => entry.playerId),
     rsvpRows,
   );
@@ -136,20 +157,25 @@ export default async function TeamHomePage({
   const hasChart = hasChartSet(chartEntries);
 
   // Archived teams reject every write regardless of role, so the buttons are
-  // hidden rather than shown and refused — AC 4. The summary stays: last
-  // season's chart is still worth reading. `rsvpAction` remains the real
-  // boundary for the load-then-archive race, and its refusal lands back here
-  // with the copy above.
+  // hidden rather than shown and refused — AC 4. The summaries and any answer
+  // already given stay: last season is still worth reading. `rsvpAction`
+  // remains the real boundary for the load-then-archive race, and its refusal
+  // lands back here with the copy above.
+  const teamIsWritable = team.archivedAt === null;
+
+  // The start time is the other gate, and it is asked per event. `nextEvents`
+  // keeps returning one for GAME_GRACE_MS after it begins — right, for a card
+  // whose job is "you are standing at this one" — but these buttons make that
+  // same id the target of a *write*. On a doubleheader morning, "Not going" at
+  // 11am would otherwise decline the 9am game already played. Attendance at an
+  // event that has started is a fact, not a plan.
   //
-  // The start time is the other gate, and it is this page's alone. `nextEvent`
-  // keeps showing an event for GAME_GRACE_MS after it begins — right, for a
-  // card whose job is "you are standing at this one" — but here that same id is
-  // the target of a *write*. During a doubleheader, "Not going" at 11am would
-  // otherwise decline the 9am game that has already been played. Attendance at
-  // an event that has started is a fact, not a plan; the schedule is where a
-  // parent answers for the next one.
-  const started = event !== null && event.startsAt.getTime() <= now.getTime();
-  const canRsvp = event !== null && team.archivedAt === null && !started;
+  // Now that every upcoming event carries its own buttons this is the
+  // doubleheader actually solved rather than merely made safe: the game in
+  // progress loses its buttons while the noon game keeps them, so the parent
+  // answers for the right one without leaving the page.
+  const answerable = (event: ScheduleEvent) =>
+    teamIsWritable && event.startsAt.getTime() > now.getTime();
 
   // Parents only: the coaching staff's contact card. /directory is
   // coach-and-above, and its recorded escape hatch — "a parent who needs to
@@ -190,40 +216,182 @@ export default async function TeamHomePage({
         </p>
       ) : null}
 
-      {/* When and where. Games *and* practices, unlike readiness (#12): that
-          page checks a chart, and a practice has none, but a parent still has
-          to drive to one. */}
-      {event ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{eventHeading(event)}</CardTitle>
-            <CardDescription>{formatEventDateTime(event.startsAt)}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {event.location ? (
-              <p className="text-foreground">
-                {/* The location a parent has to drive to is a link, same as the
-                    coach's phone number — see the event page. */}
-                <a
-                  href={mapsUrl(event.location)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline underline-offset-2 hover:text-primary"
-                >
-                  {event.location}
-                </a>
-              </p>
-            ) : (
-              <p className="text-muted-foreground">No location set.</p>
-            )}
-            {event.notes ? (
-              <p className="whitespace-pre-line text-muted-foreground">{event.notes}</p>
-            ) : null}
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/t/${teamId}/schedule/${event.id}`}>Event details</Link>
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Is my kid playing. One line each, above the events, so a parent with
+          one kid gets all three answers without scrolling. */}
+      {myKids.length > 0 ? (
+        <ul className="space-y-1">
+          {myKids.map((entry) => (
+            <li key={entry.entryId} className="text-sm">
+              <span className="font-medium text-foreground">{entry.playerName}</span>
+              {entry.jerseyNumber !== null ? (
+                <span className="text-muted-foreground"> · #{entry.jerseyNumber}</span>
+              ) : null}
+              <span className="text-muted-foreground">
+                {" · "}
+                {hasChart
+                  ? chartRole(entry, team.allPlay, { benchLabel: "Bench" })
+                  : "No chart set yet"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {/* When and where, and the answer, for each of the next few. Games *and*
+          practices, unlike readiness (#12): that page checks a chart, and a
+          practice has none, but a parent still has to drive to one. */}
+      {upcoming.length > 0 ? (
+        <ul className="space-y-4">
+          {upcoming.map((event) => {
+            const states = rsvpStatesByEvent.get(event.id);
+            const canAnswer = answerable(event);
+
+            return (
+              <li key={event.id}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{eventHeading(event)}</CardTitle>
+                    <CardDescription>
+                      {formatEventDateTime(event.startsAt)}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {event.location ? (
+                      <p className="text-foreground">
+                        {/* The location a parent has to drive to is a link,
+                            same as the coach's phone number — see the event
+                            page. */}
+                        <a
+                          href={mapsUrl(event.location)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2 hover:text-primary"
+                        >
+                          {event.location}
+                        </a>
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground">No location set.</p>
+                    )}
+                    {event.notes ? (
+                      <p className="whitespace-pre-line text-muted-foreground">
+                        {event.notes}
+                      </p>
+                    ) : null}
+
+                    {myKids.length > 0 ? (
+                      <ul className="space-y-2">
+                        {myKids.map((entry) => {
+                          const state = states?.get(entry.playerId) ?? "no-response";
+                          // `no-response` is styled distinct from `declined` —
+                          // it means the family hasn't answered, not that they
+                          // said no. See rsvp.ts.
+                          const badge = RSVP_STYLE[state];
+
+                          return (
+                            <li
+                              key={entry.entryId}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-foreground">
+                                  {entry.playerName}
+                                </p>
+                                <p className={`text-xs ${badge.tagClassName}`}>
+                                  {badge.label}
+                                </p>
+                              </div>
+                              {canAnswer ? (
+                                <div className="flex shrink-0 gap-2">
+                                  <form action={rsvpAction}>
+                                    <input
+                                      type="hidden"
+                                      name="teamId"
+                                      value={teamId}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="eventId"
+                                      value={event.id}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="playerId"
+                                      value={entry.playerId}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="response"
+                                      value="attending"
+                                    />
+                                    {/* Sends the action's redirect back here
+                                        rather than to the event page — the
+                                        whole point of one-tap. An enum, never
+                                        a URL; see actions.ts. */}
+                                    <input type="hidden" name="from" value="home" />
+                                    <Button
+                                      type="submit"
+                                      size="sm"
+                                      variant={
+                                        state === "attending" ? "default" : "outline"
+                                      }
+                                      aria-label={`${entry.playerName} is going to ${eventHeading(event)}`}
+                                    >
+                                      Going
+                                    </Button>
+                                  </form>
+                                  <form action={rsvpAction}>
+                                    <input
+                                      type="hidden"
+                                      name="teamId"
+                                      value={teamId}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="eventId"
+                                      value={event.id}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="playerId"
+                                      value={entry.playerId}
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="response"
+                                      value="declined"
+                                    />
+                                    <input type="hidden" name="from" value="home" />
+                                    <Button
+                                      type="submit"
+                                      size="sm"
+                                      variant={
+                                        state === "declined" ? "destructive" : "outline"
+                                      }
+                                      aria-label={`${entry.playerName} is not going to ${eventHeading(event)}`}
+                                    >
+                                      Not going
+                                    </Button>
+                                  </form>
+                                </div>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : null}
+
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/t/${teamId}/schedule/${event.id}`}>
+                        Event details
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
       ) : (
         <Card>
           <CardHeader>
@@ -235,101 +403,6 @@ export default async function TeamHomePage({
           </CardHeader>
         </Card>
       )}
-
-      {/* Is my kid playing, and can I answer for them without leaving. Renders
-          for anyone guarding a rostered kid and for nobody else. */}
-      {myKids.length > 0 ? (
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-foreground">
-            {myKids.length === 1 ? "Your player" : "Your players"}
-          </h3>
-          <ul className="space-y-2">
-            {myKids.map((entry) => {
-              const state = rsvpStates.get(entry.playerId) ?? "no-response";
-              const badge = RSVP_STYLE[state];
-              // "Bench" rather than nothing, unlike the readiness page: a line
-              // reading "Reese · #12" and then stopping looks like a page that
-              // failed to load, not like an answer. On an allPlay team this is
-              // never reached — everyone outside the infield is OF.
-              const chartLine = chartRole(entry, team.allPlay, {
-                benchLabel: "Bench",
-              });
-
-              return (
-                <li key={entry.entryId}>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">
-                        {entry.playerName}
-                        {entry.jerseyNumber !== null ? (
-                          <span className="text-sm font-normal text-muted-foreground">
-                            {" "}
-                            · #{entry.jerseyNumber}
-                          </span>
-                        ) : null}
-                      </CardTitle>
-                      <CardDescription>
-                        {hasChart ? chartLine : "No chart set yet"}
-                      </CardDescription>
-                    </CardHeader>
-                    {event ? (
-                      <CardContent className="flex items-center justify-between gap-4">
-                        {/* `no-response` is styled distinct from `declined` —
-                            it means the family hasn't answered, not that they
-                            said no. See rsvp.ts. */}
-                        <p className={`text-xs ${badge.tagClassName}`}>{badge.label}</p>
-                        {canRsvp ? (
-                          <div className="flex shrink-0 gap-2">
-                            <form action={rsvpAction}>
-                              <input type="hidden" name="teamId" value={teamId} />
-                              <input type="hidden" name="eventId" value={event.id} />
-                              <input
-                                type="hidden"
-                                name="playerId"
-                                value={entry.playerId}
-                              />
-                              <input type="hidden" name="response" value="attending" />
-                              {/* Sends the action's redirect back here rather
-                                  than to the event page — the whole point of
-                                  one-tap. An enum, never a URL; see actions.ts. */}
-                              <input type="hidden" name="from" value="home" />
-                              <Button
-                                type="submit"
-                                size="sm"
-                                variant={state === "attending" ? "default" : "outline"}
-                              >
-                                Going
-                              </Button>
-                            </form>
-                            <form action={rsvpAction}>
-                              <input type="hidden" name="teamId" value={teamId} />
-                              <input type="hidden" name="eventId" value={event.id} />
-                              <input
-                                type="hidden"
-                                name="playerId"
-                                value={entry.playerId}
-                              />
-                              <input type="hidden" name="response" value="declined" />
-                              <input type="hidden" name="from" value="home" />
-                              <Button
-                                type="submit"
-                                size="sm"
-                                variant={state === "declined" ? "destructive" : "outline"}
-                              >
-                                Not going
-                              </Button>
-                            </form>
-                          </div>
-                        ) : null}
-                      </CardContent>
-                    ) : null}
-                  </Card>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
 
       {/* Navigation used to live here as a wall of outline buttons; it is now
           the persistent TeamNav in the /t/[teamId] layout, on every team view.

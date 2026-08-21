@@ -403,19 +403,35 @@ export function selectNextEvent<T extends EventCandidate>(
   events: readonly T[],
   now: Date,
 ): T | null {
-  const cutoff = now.getTime() - GAME_GRACE_MS;
-  let soonest: T | null = null;
+  return selectNextEvents(events, now, 1)[0] ?? null;
+}
 
-  for (const event of events) {
-    if (event.startsAt.getTime() <= cutoff) {
-      continue;
-    }
-    if (soonest === null || event.startsAt.getTime() < soonest.startsAt.getTime()) {
-      soonest = event;
-    }
+/**
+ * The soonest `limit` events that have not yet finished, soonest first.
+ *
+ * The general form of `selectNextEvent`, which is now the `limit: 1` case —
+ * one definition of the grace window and of "soonest", so a page showing three
+ * events and a page showing one can never disagree about which is next.
+ *
+ * Sorts rather than trusting the caller's order: the pure function has to hold
+ * on its own, the same reason `nextGame` does not pass `take: 1` to Postgres.
+ * A `limit` of zero or less returns nothing.
+ */
+export function selectNextEvents<T extends EventCandidate>(
+  events: readonly T[],
+  now: Date,
+  limit: number,
+): T[] {
+  if (limit <= 0) {
+    return [];
   }
 
-  return soonest;
+  const cutoff = now.getTime() - GAME_GRACE_MS;
+
+  return events
+    .filter((event) => event.startsAt.getTime() > cutoff)
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .slice(0, limit);
 }
 
 /**

@@ -33,6 +33,43 @@ export function deriveRsvpState(row: { attending: boolean } | undefined): RsvpSt
  * excluded: this answers "where does this roster stand", not "what rows
  * exist".
  */
+/// A row carrying which event it belongs to — what a read across several
+/// events at once has to return, since `playerId` alone no longer identifies it.
+export type EventRsvpRow = RsvpRow & { eventId: string };
+
+/**
+ * One state map per event, keyed by event id.
+ *
+ * Team home (#48) asks the same question of three events at once, and asking
+ * it three times over separately fetched rows is how two of them end up
+ * disagreeing about the same family. Every id in `eventIds` gets a map and
+ * every player in `playerIds` gets an entry in it, so a lookup never misses —
+ * an event nobody has answered for is a map of "no-response", not an absent key
+ * the caller has to remember to default.
+ */
+export function buildRsvpStateMapsByEvent(
+  eventIds: readonly string[],
+  playerIds: readonly string[],
+  rows: readonly EventRsvpRow[],
+): Map<string, Map<string, RsvpState>> {
+  const rowsByEventId = new Map<string, EventRsvpRow[]>();
+  for (const row of rows) {
+    const bucket = rowsByEventId.get(row.eventId);
+    if (bucket) {
+      bucket.push(row);
+    } else {
+      rowsByEventId.set(row.eventId, [row]);
+    }
+  }
+
+  return new Map(
+    eventIds.map((eventId) => [
+      eventId,
+      buildRsvpStateMap(playerIds, rowsByEventId.get(eventId) ?? []),
+    ]),
+  );
+}
+
 export function buildRsvpStateMap(
   playerIds: readonly string[],
   rows: readonly RsvpRow[],

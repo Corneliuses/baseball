@@ -2,7 +2,7 @@ import { EventType } from "@/generated/prisma/enums";
 import {
   GAME_GRACE_MS,
   monthGridRange,
-  selectNextEvent,
+  selectNextEvents,
   selectNextGame,
   startOfDayInZone,
   type CalendarMonth,
@@ -186,21 +186,25 @@ export async function nextGame(
 }
 
 /**
- * The team's next event — **games and practices alike**.
+ * The team's next few events, soonest first — **games and practices alike**.
  *
  * The informational twin of `nextGame`, for team home (#48): a parent asking
- * "where do I need to be next" is as often driving to a practice as to a game.
- * Readiness (#12) and the view page (#8) must keep using `nextGame`, because a
- * practice has no chart to check against attendance.
+ * "where do I need to be next" is as often driving to a practice as to a game,
+ * and wants to see what is after that without opening the schedule. Readiness
+ * (#12) and the view page (#8) must keep using `nextGame`, because a practice
+ * has no chart to check against attendance.
  *
  * Structured exactly like `nextGame` — same double filter (SQL for the work,
- * `selectNextEvent` for the definition), same absent `take: 1` and for the same
- * reason, same refusal to swallow a database error.
+ * `selectNextEvents` for the definition), same absent `take: 1` and for the
+ * same reason, same refusal to swallow a database error. The `limit` is applied
+ * by the pure function only: the query is bounded by the grace window, and a
+ * season's worth of events is small enough that fetching them is free.
  */
-export async function nextEvent(
+export async function nextEvents(
   teamId: string,
+  limit: number,
   now: Date = new Date(),
-): Promise<ScheduleEvent | null> {
+): Promise<ScheduleEvent[]> {
   const candidates = await db.event.findMany({
     where: {
       teamId,
@@ -210,7 +214,7 @@ export async function nextEvent(
     orderBy: { startsAt: "asc" },
   });
 
-  return selectNextEvent(candidates, now);
+  return selectNextEvents(candidates, now, limit);
 }
 
 // ---------------------------------------------------------------------------

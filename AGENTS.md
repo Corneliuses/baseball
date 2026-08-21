@@ -34,8 +34,8 @@ docs/design/       # The design plan and its SVG mockups — kept in step with t
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher),
 `/profile` (the signed-in person's own name and phone — global, not team-scoped, since
 those are `User` columns — and the app's only sign-out, a server action wrapping Auth.js
-`signOut`), and `/t/[teamId]/` (team home — the parent dashboard: next event, one-tap
-RSVP for each kid the viewer guards, and that kid's chart line — settings, roster,
+`signOut`), and `/t/[teamId]/` (team home — the parent dashboard: each kid's chart line
+and the next three events, every one of them answerable in one tap — settings, roster,
 members, the owner-only returning-player picker at `roster/returning`, the coach-only
 bulk parent invite at `roster/invite`, the coach-only member directory, the coach-only
 roster entry detail at `roster/[entryId]`, the schedule at `schedule` /
@@ -327,7 +327,8 @@ production — the dev command can prompt, generate new migrations, and reset th
   that same id the target of a *write*: its one-tap RSVP posts the selected event's id. On
   a doubleheader morning, "Not going" at 11am would decline the 9am game already played,
   so the buttons are gated on `startsAt > now` while the card itself keeps the grace
-  window. Anything else that writes against a grace-window selection needs the same gate.
+  window — asked per event, so the game in progress loses its buttons while the noon game
+  keeps them. Anything else that writes against a grace-window selection needs the gate.
 - **"Bench" is a claim about a player in neither column, and three pages have to agree.**
   A kid batting third with no fielding spot is *in the order* — the view page's bench list
   filters on `battingOrder === null` and says so, and `chartRole`'s `benchLabel` applies

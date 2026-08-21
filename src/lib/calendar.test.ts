@@ -16,6 +16,7 @@ import {
   parseViewParam,
   resolveTimeZone,
   selectNextEvent,
+  selectNextEvents,
   selectNextGame,
   startOfDayInZone,
   wallClockToInstant,
@@ -501,5 +502,61 @@ describe("selectNextEvent", () => {
 
     expect(selectNextEvent(events, now)?.id).toBe("PRACTICE-1");
     expect(selectNextGame(events, now)?.id).toBe("GAME-24");
+  });
+});
+
+describe("selectNextEvents", () => {
+  const now = iso("2026-08-01T18:00:00Z");
+  const at = (offsetHours: number, type: GameCandidate["type"] = "GAME") => ({
+    id: `${type}-${offsetHours}`,
+    type,
+    startsAt: new Date(now.getTime() + offsetHours * 60 * 60 * 1000),
+  });
+
+  it("returns the soonest events in order, whatever order they arrive in", () => {
+    const events = [at(72), at(24, "PRACTICE"), at(120), at(48)];
+
+    expect(selectNextEvents(events, now, 3).map((event) => event.id)).toEqual([
+      "PRACTICE-24",
+      "GAME-48",
+      "GAME-72",
+    ]);
+  });
+
+  it("returns fewer than the limit rather than padding", () => {
+    expect(selectNextEvents([at(24)], now, 3)).toHaveLength(1);
+    expect(selectNextEvents([], now, 3)).toEqual([]);
+  });
+
+  it("drops finished events before counting toward the limit", () => {
+    // Only two survive the grace window, so a limit of three yields two — the
+    // stale pair must not fill the list and push a real event off it.
+    const events = [at(-48), at(-24), at(24), at(48)];
+
+    expect(selectNextEvents(events, now, 3).map((event) => event.id)).toEqual([
+      "GAME-24",
+      "GAME-48",
+    ]);
+  });
+
+  it("returns nothing for a limit of zero or less", () => {
+    expect(selectNextEvents([at(24)], now, 0)).toEqual([]);
+    expect(selectNextEvents([at(24)], now, -1)).toEqual([]);
+  });
+
+  it("does not mutate the caller's array", () => {
+    const events = [at(72), at(24)];
+
+    selectNextEvents(events, now, 3);
+
+    expect(events.map((event) => event.id)).toEqual(["GAME-72", "GAME-24"]);
+  });
+
+  // selectNextEvent is the limit-1 case, so the two cannot disagree about
+  // which event is next.
+  it("agrees with selectNextEvent on the first entry", () => {
+    const events = [at(72), at(24, "PRACTICE"), at(48)];
+
+    expect(selectNextEvents(events, now, 3)[0]).toBe(selectNextEvent(events, now));
   });
 });
