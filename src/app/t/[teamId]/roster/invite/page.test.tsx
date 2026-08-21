@@ -21,6 +21,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import BulkInvitePage from "./page";
 
 function entry(
   id: string,
@@ -37,7 +38,6 @@ function entry(
 }
 
 async function renderPage(searchParams: Record<string, string> = {}) {
-  const { default: BulkInvitePage } = await import("./page");
   const result = await BulkInvitePage({
     params: Promise.resolve({ teamId: "team-1" }),
     searchParams: Promise.resolve(searchParams),

@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import RosterEntryPage from "./page";
 
 const BASE_ENTRY = {
   id: "entry-1",
@@ -51,7 +52,6 @@ describe("Roster entry page", () => {
     requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "user-1" });
     getRosterEntry.mockResolvedValue(BASE_ENTRY);
 
-    const { default: RosterEntryPage } = await import("./page");
     expect(typeof RosterEntryPage).toBe("function");
   });
 
@@ -59,7 +59,6 @@ describe("Roster entry page", () => {
     requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
     getRosterEntry.mockResolvedValue(BASE_ENTRY);
 
-    const { default: RosterEntryPage } = await import("./page");
     const result = await RosterEntryPage({
       params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
       searchParams: Promise.resolve({}),
@@ -73,7 +72,6 @@ describe("Roster entry page", () => {
     requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
     getRosterEntry.mockResolvedValue(ENTRY_WITH_GUARDIAN);
 
-    const { default: RosterEntryPage } = await import("./page");
     const markup = renderToStaticMarkup(
       await RosterEntryPage({
         params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
@@ -94,7 +92,6 @@ describe("Roster entry page", () => {
     requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
     getRosterEntry.mockResolvedValue(BASE_ENTRY);
 
-    const { default: RosterEntryPage } = await import("./page");
     const markup = renderToStaticMarkup(
       await RosterEntryPage({
         params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
@@ -110,7 +107,6 @@ describe("Roster entry page", () => {
     requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
     getRosterEntry.mockResolvedValue(BASE_ENTRY);
 
-    const { default: RosterEntryPage } = await import("./page");
     const markup = renderToStaticMarkup(
       await RosterEntryPage({
         params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
@@ -126,7 +122,6 @@ describe("Roster entry page", () => {
     requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
     getRosterEntry.mockResolvedValue(ENTRY_WITH_GUARDIAN);
 
-    const { default: RosterEntryPage } = await import("./page");
     const markup = renderToStaticMarkup(
       await RosterEntryPage({
         params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
@@ -143,7 +138,6 @@ describe("Roster entry page", () => {
     requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
     getRosterEntry.mockResolvedValue(ENTRY_WITH_GUARDIAN);
 
-    const { default: RosterEntryPage } = await import("./page");
     const markup = renderToStaticMarkup(
       await RosterEntryPage({
         params: Promise.resolve({ teamId: "team-1", entryId: "entry-1" }),
@@ -162,8 +156,6 @@ describe("Roster entry page", () => {
     requireTeamAccess.mockRejectedValue(
       new TeamAccessError("Requires COACH", "insufficient-role"),
     );
-
-    const { default: RosterEntryPage } = await import("./page");
 
     await expect(
       RosterEntryPage({

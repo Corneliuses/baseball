@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { InstallPrompt } from "@/components/InstallPrompt";
 import {
   Card,
   CardContent,
@@ -108,6 +109,15 @@ export default async function TeamHomePage({
           </ul>
         </div>
       )}
+
+      {/* Last on the page, and on team home rather than in a layout. This is
+          where the invitation email lands everyone and where parents come back
+          to, so the offer is made once somewhere they already visit instead of
+          following them onto every screen — and it sits below the coaching
+          staff's contact card, which is the thing a parent actually came for.
+          It renders nothing when the app is already installed, when it has been
+          dismissed, or when the browser cannot install at all. */}
+      <InstallPrompt />
     </div>
   );
 }

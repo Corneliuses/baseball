@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import RosterPage from "./page";
 
 const requireTeamAccess = vi.fn();
 const getRoster = vi.fn();
@@ -22,7 +23,6 @@ describe("Roster page", () => {
     requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "user-1" });
     getRoster.mockResolvedValue([]);
 
-    const { default: RosterPage } = await import("./page");
     expect(typeof RosterPage).toBe("function");
   });
 
@@ -33,7 +33,6 @@ describe("Roster page", () => {
       { id: "entry-1", jerseyNumber: 9, player: { name: "Ada" } },
     ]);
 
-    const { default: RosterPage } = await import("./page");
     const result = await RosterPage({
       params: Promise.resolve({ teamId: "team-1" }),
       searchParams: Promise.resolve({}),
@@ -47,7 +46,6 @@ describe("Roster page", () => {
     requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
     getRoster.mockResolvedValue([]);
 
-    const { default: RosterPage } = await import("./page");
     const result = await RosterPage({
       params: Promise.resolve({ teamId: "team-1" }),
       searchParams: Promise.resolve({}),
@@ -60,7 +58,6 @@ describe("Roster page", () => {
     requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
     getRoster.mockResolvedValue([]);
 
-    const { default: RosterPage } = await import("./page");
     const result = await RosterPage({
       params: Promise.resolve({ teamId: "team-1" }),
       searchParams: Promise.resolve({}),

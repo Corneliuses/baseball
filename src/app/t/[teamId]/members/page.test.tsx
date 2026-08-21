@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import MembersPage from "./page";
 
 const requireTeamAccess = vi.fn();
 const listTeamMembers = vi.fn();
@@ -35,7 +36,6 @@ afterEach(() => {
 
 describe("Members page", () => {
   it("should export a default function", async () => {
-    const { default: MembersPage } = await import("./page");
     expect(typeof MembersPage).toBe("function");
   });
 
@@ -67,7 +67,6 @@ describe("Members page", () => {
       },
     ]);
 
-    const { default: MembersPage } = await import("./page");
     const result = await MembersPage({
       params: Promise.resolve({ teamId: "team-1" }),
       searchParams: Promise.resolve({}),
@@ -85,7 +84,6 @@ describe("Members page", () => {
       { userId: "user-2", role: "COACH", name: "Alex", email: "alex@example.com", phone: null },
     ]);
 
-    const { default: MembersPage } = await import("./page");
     const result = await MembersPage({
       params: Promise.resolve({ teamId: "team-1" }),
       searchParams: Promise.resolve({}),

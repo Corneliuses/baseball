@@ -35,6 +35,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import ReadinessPage from "./page";
 
 const game = {
   id: "event-1",
@@ -66,7 +67,6 @@ const fullChart = [
 ];
 
 async function render(teamId = "team-1") {
-  const { default: ReadinessPage } = await import("./page");
   return renderToStaticMarkup(
     await ReadinessPage({ params: Promise.resolve({ teamId }) }),
   );

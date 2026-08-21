@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import ReturningPlayersPage from "./page";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -29,7 +30,6 @@ beforeEach(() => {
 
 describe("ReturningPlayersPage", () => {
   it("should export a default function", async () => {
-    const { default: ReturningPlayersPage } = await import("./page");
     expect(typeof ReturningPlayersPage).toBe("function");
   });
 
@@ -37,8 +37,6 @@ describe("ReturningPlayersPage", () => {
     requireTeamAccess.mockRejectedValue(
       new TeamAccessError("nope", "insufficient-role"),
     );
-
-    const { default: ReturningPlayersPage } = await import("./page");
 
     await expect(
       ReturningPlayersPage({
@@ -49,8 +47,6 @@ describe("ReturningPlayersPage", () => {
   });
 
   it("renders an empty state when there are no candidates", async () => {
-    const { default: ReturningPlayersPage } = await import("./page");
-
     const html = renderToStaticMarkup(
       await ReturningPlayersPage({
         params: Promise.resolve({ teamId: "team-1" }),
@@ -71,8 +67,6 @@ describe("ReturningPlayersPage", () => {
         guardianCount: 2,
       },
     ]);
-
-    const { default: ReturningPlayersPage } = await import("./page");
 
     const html = renderToStaticMarkup(
       await ReturningPlayersPage({
