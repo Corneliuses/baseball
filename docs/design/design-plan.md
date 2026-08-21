@@ -166,8 +166,10 @@ All inside the existing viewBox — `DIAMOND_GEOMETRY.width = 400`,
    `FIELD_ART.fenceRadius = 408`, `FIELD_ART.fenceWidth = 5`. The fence's colour is the
    caller's choice, via `FieldArt`'s `fence` prop, because it is the loudest thing the
    field art paints and therefore the screen's banana to spend: the **positions editor**
-   draws it Banana Yellow, and the **lineup view** draws it chalk, having moved that
-   budget onto the reader's own child (§7). Both sit far enough out that the deepest
+   draws it Banana Yellow, and the **lineup view** draws it chalk *for a reader who has a
+   kid on the team*, having moved that budget onto the child (§7) — and keeps it yellow for
+   everyone else, since §2 asks for exactly one banana and zero is as much a deviation as
+   two. Both sit far enough out that the deepest
    outfielder — CENTER_FIELD at y=75, so a marker edge at y=55 — stands on grass rather
    than straddling the track, which `diamond-geometry.test.ts` pins.
 4. **Infield dirt** — `M200,444 L316,318 Q200,90 84,318 Z` (a diamond with an arced back
@@ -241,7 +243,9 @@ renders even with no game on the schedule (it's standing, not per-game); only th
 tags and legend are per-game and come off when there's nothing to respond to.
 
 This is the one page that knows who is reading it, and **this screen's banana is the
-reader's own kid** — not the fence, which draws in chalk here to pay for it. A guarded
+reader's own kid** — the fence drops to chalk to pay for it. The budget follows the child,
+so a reader with none on this team keeps the yellow fence and a page identical to the one
+they saw before. A guarded
 player's diamond marker gets a Banana Yellow halo at `DIAMOND_GEOMETRY.haloRadius = 25`
 and one `animate-step-up`; their batting and bench rows get a banana border, bold name and
 a `Your player` chip. Colour is never the only carrier: the chip is text, and the diamond's

@@ -37,7 +37,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { FIELD_ART } from "@/components/diamond-geometry";
+import { DIAMOND_GEOMETRY, FIELD_ART } from "@/components/diamond-geometry";
 import {
   GUARDED_STYLE,
   YOUR_PLAYER_SR_SUFFIX,
@@ -490,7 +490,9 @@ describe("ViewPage guarded-player highlight", () => {
 
     const html = await render();
 
-    expect(html).toContain(GUARDED_STYLE.haloClassName);
+    expect(html).toContain(
+      `r="${DIAMOND_GEOMETRY.haloRadius}" class="${GUARDED_STYLE.haloClassName}"`,
+    );
   });
 
   it("draws exactly one halo when the reader guards one of two players", async () => {
@@ -498,7 +500,9 @@ describe("ViewPage guarded-player highlight", () => {
 
     const html = await render();
 
-    expect(html.split(GUARDED_STYLE.haloClassName)).toHaveLength(2);
+    expect(
+      html.split(`r="${DIAMOND_GEOMETRY.haloRadius}"`),
+    ).toHaveLength(2);
   });
 
   it("halos both when a reader has two kids on the team", async () => {
@@ -508,7 +512,9 @@ describe("ViewPage guarded-player highlight", () => {
 
     const html = await render();
 
-    expect(html.split(GUARDED_STYLE.haloClassName)).toHaveLength(3);
+    expect(
+      html.split(`r="${DIAMOND_GEOMETRY.haloRadius}"`),
+    ).toHaveLength(3);
   });
 
   it("steps the guarded marker up once, and nobody else", async () => {
@@ -568,18 +574,44 @@ describe("ViewPage guarded-player highlight", () => {
     // coach with no kid on the team must see the page they saw before #49.
     const html = await render();
 
-    expect(html).not.toContain(GUARDED_STYLE.haloClassName);
+    // By radius, not by class alone: the halo and the fence are both
+    // `fill-none stroke-banana`, and for this reader the fence is banana —
+    // that is the point of the case. Only the radius tells the ring on a kid
+    // apart from the wall around the park.
+    expect(html).not.toContain(
+      `r="${DIAMOND_GEOMETRY.haloRadius}" class="${GUARDED_STYLE.haloClassName}"`,
+    );
     expect(html).not.toContain(GUARDED_STYLE.rowClassName);
     expect(html).not.toContain(YOUR_PLAYER_TEXT);
     expect(html).not.toContain(YOUR_PLAYER_SR_SUFFIX);
     expect(html).not.toContain("animate-step-up");
+    // Including the field itself: handing this reader a chalk fence would be a
+    // visible change to a page that is supposed to be untouched for them, and
+    // would leave them looking at a screen with no banana at all.
+    expect(html).toContain(
+      `r="${FIELD_ART.fenceRadius}" class="fill-none stroke-banana"`,
+    );
   });
 
-  it("draws the fence in chalk, having spent the banana on the kid", async () => {
+  it("keeps the banana on the fence when there is no kid to move it to", async () => {
+    // design-plan.md §2 asks for *exactly* one banana per screen, which cuts
+    // both ways: zero is as much a deviation as two. The budget follows the
+    // child, and where there is no child it stays on the wall.
+    const html = await render();
+    const diamondHtml = html.slice(
+      html.indexOf("Positions"),
+      html.indexOf("Batting order"),
+    );
+
+    expect(diamondHtml.split("stroke-banana")).toHaveLength(2);
+  });
+
+  it("draws the fence in chalk once the banana has moved to the kid", async () => {
     // design-plan.md §2 allows exactly one banana per screen, and #49 moved
-    // /view's from the wall to the reader's child. Pinned on the fence circle
-    // itself rather than on "no banana in the diamond" — the halo is banana,
-    // and that is the whole point.
+    // /view's from the wall to the reader's child — but only for a reader who
+    // has one here; see the no-guard case above. Pinned on the fence circle
+    // itself rather than on "no banana in the diamond", since the halo is
+    // banana and that is the whole point.
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
 
     const html = await render();

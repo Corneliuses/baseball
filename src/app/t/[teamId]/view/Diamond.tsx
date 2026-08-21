@@ -197,12 +197,16 @@ export function Diamond({
         {/* The painted field sits under every marker — FieldArt draws the
             chalk basepaths that the bare polygon used to be.
 
-            `fence="chalk"` is where this page pays for the guarded-player halo:
-            design-plan.md §2 allows exactly one banana per screen, and on the
+            The fence is where this page pays for the guarded-player halo, and
+            it pays only when there is a halo to pay for. design-plan.md §2 asks
+            for *exactly* one banana per screen, which cuts both ways: on the
             page whose whole job is "where is my kid" that banana belongs to the
-            kid, not to the outfield wall. The positions editor still spends
-            its own on the fence. */}
-        <FieldArt fence="chalk" />
+            kid rather than the outfield wall, but a reader with no kid on this
+            team has no halo, and handing back the fence too would leave them
+            looking at a screen with none at all. So the budget follows the
+            child, and where there is no child to follow it stays on the wall —
+            which is also what keeps that reader's page unchanged (#49 AC5). */}
+        <FieldArt fence={guardedPlayerIds.size > 0 ? "chalk" : "banana"} />
 
         {allPlay ? <NoCatcherMarker /> : null}
 

@@ -106,14 +106,25 @@ function buildDiamondNames(
     };
   });
 
+  // Counted case-insensitively, displayed exactly as entered. Nothing
+  // normalizes a player's name on the way in — `playerSchema` in the roster
+  // actions only trims it — so "Ava Castellanos" and "ava Rodriguez" are both
+  // storable, and a case-sensitive count would call them distinct and render
+  // two unlabelled markers reading "Ava" and "ava". That is the exact
+  // ambiguity this function exists to remove.
+  //
+  // The display side keeps `part.first` untouched: silently recapitalizing a
+  // coach's roster on the diamond would be its own small bug, and the two
+  // markers differ by their initials either way.
   const counts = new Map<string, number>();
   for (const part of parts) {
-    counts.set(part.first, (counts.get(part.first) ?? 0) + 1);
+    const key = part.first.toLocaleLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
   return new Map(
     parts.map((part) => {
-      const shared = (counts.get(part.first) ?? 0) > 1;
+      const shared = (counts.get(part.first.toLocaleLowerCase()) ?? 0) > 1;
       return [
         part.playerId,
         shared && part.last ? `${part.first} ${part.last[0]}.` : part.first,

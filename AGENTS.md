@@ -220,9 +220,13 @@ production — the dev command can prompt, generate new migrations, and reset th
 - **The two diamonds paint different fences, and that is the banana budget.** design-plan.md
   §2 allows exactly one Banana Yellow element per screen. `FieldArt` takes a `fence` prop
   because the wall is the loudest thing it paints: the positions editor spends its banana
-  there, and `/view` spends its own on the guarded-player halo instead, so it asks for
-  `fence="chalk"`. Adding a second yellow thing to either screen is the regression —
-  `guarded-style.ts` and `FieldArt.test.tsx` are where that budget is written down.
+  there, and `/view` spends its own on the guarded-player halo instead — but only for a
+  reader who has a kid on that team, so `fence` is conditional there, not a constant. §2
+  asks for *exactly* one, and a reader with no kid and a chalk fence would see zero, which
+  is as much a deviation as two. Note the halo and the fence share the class
+  `fill-none stroke-banana`, so a test telling them apart has to key on the radius.
+  `guarded-style.ts`, `FieldArt.test.tsx` and the no-guard case in the view page's suite
+  are where that budget is written down.
 - **A CSS `transform` overrides an SVG `transform` attribute.** The view page's markers
   position themselves with `<g transform="translate(x y)">`, so `animate-step-up` goes on an
   *inner* `<g>`. Put it on the positioning element and every guarded marker renders at the

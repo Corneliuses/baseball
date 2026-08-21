@@ -379,6 +379,35 @@ describe("buildChartView diamond names", () => {
     expect(names.get("ava-2")).toBe("Ava R.");
   });
 
+  it("counts a first name as shared regardless of how it was capitalized", () => {
+    // Nothing normalizes a name on the way in — playerSchema only trims — so
+    // a coach can type "ava" for one kid and "Ava" for another. A
+    // case-sensitive count called those distinct and left two unlabelled
+    // markers reading "Ava" and "ava".
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-r", "ava Rodriguez"],
+      ]),
+    );
+
+    expect(names.get("ava-c")).toBe("Ava C.");
+    expect(names.get("ava-r")).toBe("ava R.");
+  });
+
+  it("displays the name as the coach typed it, never recapitalized", () => {
+    // The count folds case; the label must not. Rewriting "ava" to "Ava" on
+    // the diamond would be a silent edit of the roster the coach entered.
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-r", "ava Rodriguez"],
+      ]),
+    );
+
+    expect(names.get("ava-r")?.startsWith("ava")).toBe(true);
+  });
+
   it("keeps two players sharing a first name AND a last initial identical", () => {
     // The accepted limitation, pinned so it stays a decision rather than
     // becoming a surprise: a full surname overruns a 64px-spaced marker. The
