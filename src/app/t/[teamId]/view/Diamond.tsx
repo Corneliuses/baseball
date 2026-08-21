@@ -2,6 +2,7 @@ import {
   DIAMOND_GEOMETRY,
   POSITION_COORDS,
   outfieldZoneCoords,
+  zoneHaloRadius,
 } from "@/components/diamond-geometry";
 import { FieldArt } from "@/components/FieldArt";
 import {
@@ -43,6 +44,7 @@ function Marker({
   player,
   showRsvp,
   isGuarded = false,
+  haloRadius = DIAMOND_GEOMETRY.haloRadius,
 }: {
   x: number;
   y: number;
@@ -53,6 +55,11 @@ function Marker({
   /// point (#49). Purely a property of who is reading, never of the roster
   /// spot, so nothing here is stored.
   isGuarded?: boolean;
+  /// The ring's radius, or null when the board is too crowded for one to fit.
+  /// Fixed positions always get `DIAMOND_GEOMETRY.haloRadius`; the outfield
+  /// zone's shrinks with the count (`zoneHaloRadius`), because that zone packs
+  /// its markers closer as the roster grows.
+  haloRadius?: number | null;
 }) {
   const style = player ? RSVP_STYLE[player.rsvpState] : null;
 
@@ -63,14 +70,14 @@ function Marker({
     // would drop every guarded marker at the origin.
     <g transform={`translate(${x} ${y})`}>
       <g className={isGuarded ? "animate-step-up" : undefined}>
-        {isGuarded ? (
+        {isGuarded && haloRadius !== null ? (
           // Behind the marker, so the opaque fill covers its inner edge and it
           // reads as a ring rather than a second circle. This is /view's one
           // banana — FieldArt draws a chalk fence here to pay for it.
           <circle
-            r={DIAMOND_GEOMETRY.haloRadius}
+            r={haloRadius}
             className={GUARDED_STYLE.haloClassName}
-            strokeWidth={GUARDED_STYLE.haloStrokeWidth}
+            strokeWidth={DIAMOND_GEOMETRY.haloStrokeWidth}
           />
         ) : null}
 
@@ -182,6 +189,9 @@ export function Diamond({
   const drawn = allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS;
   const zone = allPlay ? outfield : [];
   const zoneCoords = outfieldZoneCoords(zone.length);
+  // One radius for the whole zone: it is a function of how many markers share
+  // those two rows, not of which marker is guarded.
+  const zoneHalo = zoneHaloRadius(zone.length);
 
   return (
     <>
@@ -235,6 +245,7 @@ export function Diamond({
             player={player}
             showRsvp={showRsvp}
             isGuarded={guardedPlayerIds.has(player.playerId)}
+            haloRadius={zoneHalo}
           />
         ))}
       </svg>

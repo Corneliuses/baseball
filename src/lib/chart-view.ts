@@ -1,4 +1,5 @@
 import { Position } from "@/generated/prisma/enums";
+import { buildDiamondNames } from "@/lib/diamond-names";
 import { fieldedPositions } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
@@ -76,63 +77,6 @@ function byJerseyThenName(a: ChartViewPlayer, b: ChartViewPlayer): number {
   return a.jerseyNumber - b.jerseyNumber;
 }
 
-/// The name each player wears on the diamond, keyed by `playerId`.
-///
-/// First names collide constantly on a youth roster — two Avas on one team is
-/// ordinary — and a marker showing "Ava" twice is worse than useless to the
-/// parent of one of them. Any first name held by more than one rostered player
-/// gets a last initial, on **every** player holding it, so the two markers
-/// differ rather than one being singled out.
-///
-/// Two players sharing a first name *and* a last initial keep the same label.
-/// That is deliberate, not an oversight: a full surname overruns a marker
-/// sitting 64px from its neighbour, which is the whole reason only first names
-/// are drawn. Their full names are still in the batting order, the bench and
-/// the `sr-only` mirror, and on the view page the guarded-player halo
-/// distinguishes the one a given reader actually came to find.
-function buildDiamondNames(
-  entries: readonly ChartViewEntry[],
-): Map<string, string> {
-  // Tokenized once and reused: `split` on every player twice — once to count,
-  // once to label — is the kind of thing that reads as free and isn't.
-  const parts = entries.map((entry) => {
-    const tokens = entry.playerName.trim().split(/\s+/).filter(Boolean);
-    return {
-      playerId: entry.playerId,
-      // Falls back to the whole string for a name that is all whitespace, so
-      // this can never emit an empty marker label.
-      first: tokens[0] ?? entry.playerName,
-      last: tokens.length > 1 ? tokens[tokens.length - 1] : null,
-    };
-  });
-
-  // Counted case-insensitively, displayed exactly as entered. Nothing
-  // normalizes a player's name on the way in — `playerSchema` in the roster
-  // actions only trims it — so "Ava Castellanos" and "ava Rodriguez" are both
-  // storable, and a case-sensitive count would call them distinct and render
-  // two unlabelled markers reading "Ava" and "ava". That is the exact
-  // ambiguity this function exists to remove.
-  //
-  // The display side keeps `part.first` untouched: silently recapitalizing a
-  // coach's roster on the diamond would be its own small bug, and the two
-  // markers differ by their initials either way.
-  const counts = new Map<string, number>();
-  for (const part of parts) {
-    const key = part.first.toLocaleLowerCase();
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  return new Map(
-    parts.map((part) => {
-      const shared = (counts.get(part.first.toLocaleLowerCase()) ?? 0) > 1;
-      return [
-        part.playerId,
-        shared && part.last ? `${part.first} ${part.last[0]}.` : part.first,
-      ];
-    }),
-  );
-}
-
 /**
  * @param allPlay Which spots this team actually fields. The read-side twin of
  * `buildPositionsDraft`'s parameter of the same name, and it does the same job:
@@ -152,7 +96,9 @@ export function buildChartView(
   rsvpStates: ReadonlyMap<string, RsvpState>,
   allPlay: boolean,
 ): ChartView {
-  const diamondNames = buildDiamondNames(entries);
+  const diamondNames = buildDiamondNames(
+    entries.map((entry) => ({ id: entry.playerId, playerName: entry.playerName })),
+  );
   const players = entries.map((entry) => ({
     ...entry,
     rsvpState: rsvpStates.get(entry.playerId) ?? "no-response",

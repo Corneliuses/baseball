@@ -247,10 +247,13 @@ reader's own kid** — the fence drops to chalk to pay for it. The budget follow
 so a reader with none on this team keeps the yellow fence and a page identical to the one
 they saw before. A guarded
 player's diamond marker gets a Banana Yellow halo at `DIAMOND_GEOMETRY.haloRadius = 25`
-and one `animate-step-up`; their batting and bench rows get a banana border, bold name and
+and one `animate-step-up` — shrinking, and eventually dropped, in a crowded allPlay outfield
+where a constant ring would reach the next kid's marker (`zoneHaloRadius`); the bold name
+and the screen-reader text carry it there; their batting and bench rows get a banana border, bold name and
 a `Your player` chip. Colour is never the only carrier: the chip is text, and the diamond's
 `sr-only` mirror appends `(your player)` in words. Markers carry first names only, so any
-first name two rostered players share gets a last initial — on **both**, never one. A
+first name two rostered players share gets a last initial — on **both**, never one, and on
+**both boards**: the viewer and the positions editor share `buildDiamondNames`. A
 viewer guarding nobody sees the page exactly as it was.
 
 The **bench** is its own card, below the diamond, holding only the players this page would

@@ -5,8 +5,8 @@ import {
   FIELD_ART,
   POSITION_COORDS,
   outfieldZoneCoords,
+  zoneHaloRadius,
 } from "@/components/diamond-geometry";
-import { GUARDED_STYLE } from "@/components/guarded-style";
 import {
   ALL_PLAY_INFIELD_POSITIONS,
   ALL_POSITIONS,
@@ -15,6 +15,14 @@ import {
 
 /// Big enough to cover any youth roster, and then some.
 const ZONE_SIZES = Array.from({ length: 12 }, (_, index) => index + 1);
+
+/// Past what any youth roster holds, deliberately. The halo assertions below
+/// used ZONE_SIZES and passed — because 12 is the last count at which a
+/// constant 25px ring still fits. At 13 two siblings' rings merged and at 15 a
+/// ring overlapped the next kid's marker, and nothing failed. A bound that
+/// stops exactly where the failure starts is worse than no bound: it reads as
+/// coverage.
+const CROWDED_ZONE_SIZES = Array.from({ length: 24 }, (_, index) => index + 1);
 
 function apart(
   a: { x: number; y: number },
@@ -32,7 +40,7 @@ const { width, height, markerRadius, haloRadius, tagOffset } = DIAMOND_GEOMETRY;
 
 /// How far the guarded-player halo actually reaches from a marker's centre:
 /// a stroke straddles its radius, so half of it sits outside.
-const haloReach = haloRadius + GUARDED_STYLE.haloStrokeWidth / 2;
+const haloReach = haloRadius + DIAMOND_GEOMETRY.haloStrokeWidth / 2;
 
 describe("diamond geometry", () => {
   it("places all nine positions", () => {
@@ -173,15 +181,77 @@ describe("guarded-player halo geometry", () => {
     }
   });
 
-  it("never touches a halo in the outfield zone", () => {
-    for (const size of ZONE_SIZES) {
+  it("never touches a halo in the outfield zone, at any zone size", () => {
+    for (const size of CROWDED_ZONE_SIZES) {
+      const radius = zoneHaloRadius(size);
+      if (radius === null) continue;
+      const reach = radius + DIAMOND_GEOMETRY.haloStrokeWidth / 2;
+
       for (const zoneCoord of outfieldZoneCoords(size)) {
         for (const position of ALL_PLAY_INFIELD_POSITIONS) {
           expect(apart(zoneCoord, POSITION_COORDS[position])).toBeGreaterThan(
-            haloReach * 2,
+            reach + markerRadius,
           );
         }
       }
+    }
+  });
+
+  it("never merges two halos inside the outfield zone", () => {
+    // The gap the old suite never looked at: it compared zone markers to
+    // infield ones and to each other at *marker* distance, but never two zone
+    // halos. Two guarded siblings both in the outfield is an ordinary board.
+    for (const size of CROWDED_ZONE_SIZES) {
+      const radius = zoneHaloRadius(size);
+      if (radius === null) continue;
+      const reach = radius + DIAMOND_GEOMETRY.haloStrokeWidth / 2;
+      const coords = outfieldZoneCoords(size);
+
+      for (let i = 0; i < coords.length; i += 1) {
+        for (let j = i + 1; j < coords.length; j += 1) {
+          expect(apart(coords[i], coords[j])).toBeGreaterThan(reach * 2);
+        }
+      }
+    }
+  });
+
+  it("never paints a zone halo over a neighbouring marker", () => {
+    // The failure that actually lies to a parent: at 15 in the zone a constant
+    // ring reached the *next* kid's circle, so the highlight appeared to point
+    // at the wrong child.
+    for (const size of CROWDED_ZONE_SIZES) {
+      const radius = zoneHaloRadius(size);
+      if (radius === null) continue;
+      const reach = radius + DIAMOND_GEOMETRY.haloStrokeWidth / 2;
+      const coords = outfieldZoneCoords(size);
+
+      for (let i = 0; i < coords.length; i += 1) {
+        for (let j = 0; j < coords.length; j += 1) {
+          if (i === j) continue;
+          expect(apart(coords[i], coords[j])).toBeGreaterThan(
+            reach + markerRadius,
+          );
+        }
+      }
+    }
+  });
+
+  it("drops the ring rather than shrinking it into a border", () => {
+    // Below a few pixels of clear air the circle stops reading as a halo. The
+    // marker keeps its bold name, its step-up and its sr-only "(your player)".
+    for (const size of CROWDED_ZONE_SIZES) {
+      const radius = zoneHaloRadius(size);
+      if (radius === null) continue;
+      expect(radius).toBeGreaterThanOrEqual(markerRadius + 3);
+      expect(radius).toBeLessThanOrEqual(haloRadius);
+    }
+  });
+
+  it("still gives an ordinary-sized zone the full ring", () => {
+    // The adaptive radius must not quietly shrink the common case: a youth
+    // outfield is a handful of kids, and those boards looked right.
+    for (const size of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      expect(zoneHaloRadius(size)).toBe(haloRadius);
     }
   });
 

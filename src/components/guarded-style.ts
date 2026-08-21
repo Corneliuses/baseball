@@ -25,11 +25,11 @@ export const YOUR_PLAYER_TEXT = "Your player";
 export const YOUR_PLAYER_SR_SUFFIX = "(your player)";
 
 export const GUARDED_STYLE = {
-  /// The ring drawn *behind* a guarded player's marker on the diamond, at
-  /// `DIAMOND_GEOMETRY.haloRadius`. Unfilled: the marker's own opaque fill sits
+  /// The ring drawn *behind* a guarded player's marker on the diamond. Its
+  /// radius and stroke are geometry and live in `DIAMOND_GEOMETRY`, since the
+  /// clearance tests and `zoneHaloRadius` do arithmetic on them. Unfilled: the marker's own opaque fill sits
   /// on top of it, and a filled halo would read as a second, larger circle.
   haloClassName: "fill-none stroke-banana",
-  haloStrokeWidth: 3,
   /// The guarded player's name on the field. Bold rather than recoloured —
   /// `RSVP_STYLE.markerNameClassName` already owns this text's colour, and
   /// overriding it would erase the declined/going distinction for exactly the
