@@ -217,6 +217,17 @@ production — the dev command can prompt, generate new migrations, and reset th
   `prisma-client-api` were kept (from `github:prisma/skills`, MIT). **If anyone re-runs
   `prisma init`, remove the rest again.** `prisma-cli/SKILL.md` was edited locally to drop
   a dangling reference to the uninstalled `prisma-compute` skill.
+- **The two diamonds paint different fences, and that is the banana budget.** design-plan.md
+  §2 allows exactly one Banana Yellow element per screen. `FieldArt` takes a `fence` prop
+  because the wall is the loudest thing it paints: the positions editor spends its banana
+  there, and `/view` spends its own on the guarded-player halo instead, so it asks for
+  `fence="chalk"`. Adding a second yellow thing to either screen is the regression —
+  `guarded-style.ts` and `FieldArt.test.tsx` are where that budget is written down.
+- **A CSS `transform` overrides an SVG `transform` attribute.** The view page's markers
+  position themselves with `<g transform="translate(x y)">`, so `animate-step-up` goes on an
+  *inner* `<g>`. Put it on the positioning element and every guarded marker renders at the
+  origin — silently, with no error and no failing snapshot. Same trap applies to anything
+  else animating an SVG child later.
 - **Motion and `@dnd-kit` must never animate the same element.** dnd-kit positions drags
   by writing `transform`, and Motion's `layout` prop animates `transform` too — together
   the item lags or snaps back. dnd-kit owns everything during a drag; Motion owns page

@@ -153,7 +153,12 @@ describe("design-plan.md utility claims", () => {
   /// declared with Tailwind 4's `@utility`, so its absence means the plan is
   /// describing something that was renamed or never built — the shape the
   /// `<rect>`-pill drift took.
-  const utilities = ["bg-pinstripe", "text-halo", "animate-rise"];
+  const utilities = [
+    "bg-pinstripe",
+    "text-halo",
+    "animate-rise",
+    "animate-step-up",
+  ];
 
   it.each(utilities)("%s is declared in globals.css and named in the plan", (name) => {
     expect(globalsCss).toContain(`@utility ${name}`);
