@@ -4,7 +4,7 @@ import { DIAMOND_POLYGON, FIELD_ART } from "@/components/diamond-geometry";
 
 /**
  * The painted ballfield (design-plan.md §6): grass wedge with mowed stripes,
- * warning track, banana-yellow fence, dirt infield with a grass diamond inside
+ * warning track, outfield fence, dirt infield with a grass diamond inside
  * the basepaths, chalk lines, bases, home plate, and the mound.
  *
  * Rendered by BOTH diamonds — the view page's and the drag editor's — inside
@@ -17,10 +17,25 @@ import { DIAMOND_POLYGON, FIELD_ART } from "@/components/diamond-geometry";
  * `--chalk`, …), so dark mode renders the same field as a night game with no
  * extra code here.
  *
+ * The fence is the one exception, and the `fence` prop is why: it is the
+ * loudest thing this component paints, so it is the caller's banana to spend
+ * (design-plan.md §2 — exactly one big yellow element per screen). The
+ * positions editor keeps it yellow. The view page draws it in chalk and spends
+ * its banana on the reader's own child instead (#49), because on the page whose
+ * whole job is "where is my kid" the wall is not the thing that matters most.
+ *
  * Decoration only: parents get the real content from the markers and the
  * sr-only list, both owned by the callers — nothing here may grow a label.
  */
-export function FieldArt() {
+export function FieldArt({
+  fence = "banana",
+}: {
+  /// Which colour the outfield wall gets — i.e. whether this component spends
+  /// the screen's one banana. Defaults to `"banana"`, the historical
+  /// behaviour, so a caller that does not think about it renders what it
+  /// always did.
+  fence?: "banana" | "chalk";
+} = {}) {
   // Both diamonds can never be on one page today, but the clip ids must still
   // be unique per render tree — useId works in server and client components.
   // Two clips, nested, because the park is the *intersection* of fair
@@ -71,7 +86,11 @@ export function FieldArt() {
             cx={FIELD_ART.homeCircle.x}
             cy={FIELD_ART.homeCircle.y}
             r={FIELD_ART.fenceRadius}
-            className="fill-none stroke-banana"
+            className={
+              fence === "banana"
+                ? "fill-none stroke-banana"
+                : "fill-none stroke-chalk"
+            }
             strokeWidth={FIELD_ART.fenceWidth}
           />
         </g>

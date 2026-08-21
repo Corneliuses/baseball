@@ -8,6 +8,10 @@ import {
   NO_CATCHER_TEXT,
   NoCatcherMarker,
 } from "@/components/NoCatcherMarker";
+import {
+  GUARDED_STYLE,
+  YOUR_PLAYER_SR_SUFFIX,
+} from "@/components/guarded-style";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import type { Position } from "@/generated/prisma/enums";
 import type { ChartViewPlayer } from "@/lib/chart-view";
@@ -22,17 +26,11 @@ import {
 /// client JS, crisp on any phone. Coordinates come from
 /// `@/components/diamond-geometry`, shared with the drag editor (#11).
 
+const EMPTY_GUARDED: ReadonlySet<string> = new Set();
+
 const MARKER_RADIUS = DIAMOND_GEOMETRY.markerRadius;
 const NAME_OFFSET = DIAMOND_GEOMETRY.nameOffset;
 const TAG_OFFSET = DIAMOND_GEOMETRY.tagOffset;
-
-/// Only the first name goes on the diamond. Markers sit as little as 60px
-/// apart, so a full name overruns its neighbour; the batting order list
-/// alongside carries the full name. Falls back to the whole string for a
-/// single-token name.
-function shortName(name: string): string {
-  return name.trim().split(/\s+/)[0] || name;
-}
 
 /// One circle on the grass: an abbreviation inside, the player's first name
 /// under it, their RSVP state under that. Takes coordinates and a label rather
@@ -44,66 +42,110 @@ function Marker({
   label,
   player,
   showRsvp,
+  isGuarded = false,
 }: {
   x: number;
   y: number;
   label: string;
   player: ChartViewPlayer | undefined;
   showRsvp: boolean;
+  /// True when the viewer is one of this player's guardians — the page's whole
+  /// point (#49). Purely a property of who is reading, never of the roster
+  /// spot, so nothing here is stored.
+  isGuarded?: boolean;
 }) {
   const style = player ? RSVP_STYLE[player.rsvpState] : null;
 
   return (
+    // The outer <g> owns the positioning transform and must keep owning it:
+    // a CSS transform overrides an SVG transform attribute, so the reveal
+    // animation goes on the inner <g> below. Putting `animate-step-up` here
+    // would drop every guarded marker at the origin.
     <g transform={`translate(${x} ${y})`}>
-      <circle
-        r={MARKER_RADIUS}
-        className={
-          // Markers now sit on grass and dirt, so every circle carries an
-          // opaque card fill — a tinted or transparent fill reads as a hole
-          // in the field instead of a badge on it.
-          style ? style.markerClassName : "fill-card/80 stroke-muted-foreground"
-        }
-        strokeWidth={style ? style.markerStrokeWidth : 1.5}
-        strokeDasharray={player ? undefined : "4 3"}
-      />
+      <g className={isGuarded ? "animate-step-up" : undefined}>
+        {isGuarded ? (
+          // Behind the marker, so the opaque fill covers its inner edge and it
+          // reads as a ring rather than a second circle. This is /view's one
+          // banana — FieldArt draws a chalk fence here to pay for it.
+          <circle
+            r={DIAMOND_GEOMETRY.haloRadius}
+            className={GUARDED_STYLE.haloClassName}
+            strokeWidth={GUARDED_STYLE.haloStrokeWidth}
+          />
+        ) : null}
 
-      {/* Position abbreviation sits inside the marker — POSITION_LABELS is the
-          only source for these, per AGENTS.md. */}
-      <text
-        textAnchor="middle"
-        dy={4}
-        className="fill-foreground text-[11px] font-bold"
-      >
-        {label}
-      </text>
+        <circle
+          r={MARKER_RADIUS}
+          className={
+            // Markers now sit on grass and dirt, so every circle carries an
+            // opaque card fill — a tinted or transparent fill reads as a hole
+            // in the field instead of a badge on it.
+            style ? style.markerClassName : "fill-card/80 stroke-muted-foreground"
+          }
+          strokeWidth={style ? style.markerStrokeWidth : 1.5}
+          strokeDasharray={player ? undefined : "4 3"}
+        />
 
-      {/* text-halo paints a background-colored stroke behind the glyphs so
-          names and tags stay readable on the grass (design-plan.md §6). */}
-      <text
-        y={NAME_OFFSET}
-        textAnchor="middle"
-        fill="currentColor"
-        className={
-          style
-            ? `text-halo text-[11px] font-medium ${style.markerNameClassName}`
-            : "text-halo fill-muted-foreground text-[11px] italic"
-        }
-      >
-        {player ? shortName(player.playerName) : "Open"}
-      </text>
-
-      {style && showRsvp ? (
+        {/* Position abbreviation sits inside the marker — POSITION_LABELS is the
+            only source for these, per AGENTS.md. */}
         <text
-          y={TAG_OFFSET}
+          textAnchor="middle"
+          dy={4}
+          className="fill-foreground text-[11px] font-bold"
+        >
+          {label}
+        </text>
+
+        {/* text-halo paints a background-colored stroke behind the glyphs so
+            names and tags stay readable on the grass (design-plan.md §6). */}
+        <text
+          y={NAME_OFFSET}
           textAnchor="middle"
           fill="currentColor"
-          className={`text-halo text-[9px] font-semibold ${style.tagClassName}`}
+          className={
+            style
+              ? `text-halo text-[11px] ${
+                  isGuarded
+                    ? GUARDED_STYLE.markerNameClassName
+                    : "font-medium"
+                } ${style.markerNameClassName}`
+              : "text-halo fill-muted-foreground text-[11px] italic"
+          }
         >
-          {style.label}
+          {player ? player.diamondName : "Open"}
         </text>
-      ) : null}
+
+        {style && showRsvp ? (
+          <text
+            y={TAG_OFFSET}
+            textAnchor="middle"
+            fill="currentColor"
+            className={`text-halo text-[9px] font-semibold ${style.tagClassName}`}
+          >
+            {style.label}
+          </text>
+        ) : null}
+      </g>
     </g>
   );
+}
+
+/// One player as a screen reader hears them: name, RSVP state when there is a
+/// game to respond to, and — for the reader's own child — the plain-text
+/// counterpart of the halo. The full name, not `diamondName`: the abbreviation
+/// exists only because a marker is 40px wide, and a screen reader has no such
+/// constraint.
+function announce(
+  player: ChartViewPlayer,
+  showRsvp: boolean,
+  guardedPlayerIds: ReadonlySet<string>,
+): string {
+  const state = showRsvp ? `, ${RSVP_STYLE[player.rsvpState].label}` : "";
+  const guarded = guardedPlayerIds.has(player.playerId)
+    ? ` ${YOUR_PLAYER_SR_SUFFIX}`
+    : "";
+
+  return `${player.playerName}${state}${guarded}`;
 }
 
 export function Diamond({
@@ -111,6 +153,7 @@ export function Diamond({
   allPlay,
   outfield = [],
   showRsvp = true,
+  guardedPlayerIds = EMPTY_GUARDED,
 }: {
   /// Seated players, keyed by position. Only ever holds spots this team
   /// fields — `buildChartView` pools the rest, including an allPlay team's
@@ -125,6 +168,11 @@ export function Diamond({
   /// draws, but the per-player RSVP tags come off — "No response" against no
   /// game would read as a team-wide silence rather than a bye week.
   showRsvp?: boolean;
+  /// The players this viewer is a guardian of, already intersected with this
+  /// team's roster upstream (`guardedRosteredPlayerIds`). Empty for a coach
+  /// with no kid on the team, which is what makes their diamond identical to
+  /// the one they saw before #49.
+  guardedPlayerIds?: ReadonlySet<string>;
 }) {
   // An allPlay team fields neither a catcher nor three named outfielders: the
   // coach pitches, and the outfield is one zone holding everyone the infield
@@ -147,21 +195,29 @@ export function Diamond({
         className="mx-auto w-full max-w-sm"
       >
         {/* The painted field sits under every marker — FieldArt draws the
-            chalk basepaths that the bare polygon used to be. */}
-        <FieldArt />
+            chalk basepaths that the bare polygon used to be.
+
+            `fence="chalk"` is where this page pays for the guarded-player halo:
+            design-plan.md §2 allows exactly one banana per screen, and on the
+            page whose whole job is "where is my kid" that banana belongs to the
+            kid, not to the outfield wall. The positions editor still spends
+            its own on the fence. */}
+        <FieldArt fence="chalk" />
 
         {allPlay ? <NoCatcherMarker /> : null}
 
         {drawn.map((position) => {
           const { x, y } = POSITION_COORDS[position];
+          const player = byPosition.get(position);
           return (
             <Marker
               key={position}
               x={x}
               y={y}
               label={POSITION_LABELS[position]}
-              player={byPosition.get(position)}
+              player={player}
               showRsvp={showRsvp}
+              isGuarded={player ? guardedPlayerIds.has(player.playerId) : false}
             />
           );
         })}
@@ -174,10 +230,14 @@ export function Diamond({
             label={OUTFIELD_ZONE_LABEL}
             player={player}
             showRsvp={showRsvp}
+            isGuarded={guardedPlayerIds.has(player.playerId)}
           />
         ))}
       </svg>
 
+      {/* The halo is decoration; this is where the same fact exists as words.
+          A screen reader gets no benefit from a yellow ring, and design-plan.md
+          §10's rule is that state is always colour *plus* a label. */}
       <ul className="sr-only">
         {allPlay ? <li>{NO_CATCHER_TEXT}</li> : null}
         {drawn.map((position) => {
@@ -185,11 +245,7 @@ export function Diamond({
           return (
             <li key={position}>
               {POSITION_LABELS[position]}:{" "}
-              {player
-                ? showRsvp
-                  ? `${player.playerName}, ${RSVP_STYLE[player.rsvpState].label}`
-                  : player.playerName
-                : "Open"}
+              {player ? announce(player, showRsvp, guardedPlayerIds) : "Open"}
             </li>
           );
         })}
@@ -197,11 +253,7 @@ export function Diamond({
           <li>
             Outfield:{" "}
             {zone
-              .map((player) =>
-                showRsvp
-                  ? `${player.playerName}, ${RSVP_STYLE[player.rsvpState].label}`
-                  : player.playerName,
-              )
+              .map((player) => announce(player, showRsvp, guardedPlayerIds))
               .join("; ")}
           </li>
         ) : null}

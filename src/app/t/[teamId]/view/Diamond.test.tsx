@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 
 import {
   DIAMOND_GEOMETRY,
+  FIELD_ART,
   POSITION_COORDS,
   outfieldZoneCoords,
 } from "@/components/diamond-geometry";
+import { GUARDED_STYLE } from "@/components/guarded-style";
 import {
   ALL_PLAY_INFIELD_POSITIONS,
   ALL_POSITIONS,
@@ -26,7 +28,11 @@ function apart(
 /// on top of each other still render — neither throws, and neither shows up
 /// in a snapshot of the markup. The catcher's name was clipped exactly this
 /// way before these tests existed.
-const { width, height, markerRadius, tagOffset } = DIAMOND_GEOMETRY;
+const { width, height, markerRadius, haloRadius, tagOffset } = DIAMOND_GEOMETRY;
+
+/// How far the guarded-player halo actually reaches from a marker's centre:
+/// a stroke straddles its radius, so half of it sits outside.
+const haloReach = haloRadius + GUARDED_STYLE.haloStrokeWidth / 2;
 
 describe("diamond geometry", () => {
   it("places all nine positions", () => {
@@ -117,5 +123,89 @@ describe("diamond geometry", () => {
         (a, b) => a.x - b.x,
       ),
     );
+  });
+});
+
+
+/// The halo (#49) is the first thing this diamond draws *outside* a marker's
+/// own radius, which makes it the first thing that can silently collide with
+/// something. All three of these failures render without error: a halo past the
+/// viewBox is clipped, a halo over its neighbour just looks like a smudge on a
+/// green field, and a halo on the tan warning track loses the contrast that
+/// makes it findable at all — which is the entire feature.
+describe("guarded-player halo geometry", () => {
+  it("draws outside the marker it rings, not under it", () => {
+    expect(haloRadius).toBeGreaterThan(markerRadius);
+  });
+
+  it("stays inside the viewBox on every side, for every position", () => {
+    for (const position of ALL_POSITIONS) {
+      const { x, y } = POSITION_COORDS[position];
+      expect(y - haloReach).toBeGreaterThanOrEqual(0);
+      expect(x - haloReach).toBeGreaterThanOrEqual(0);
+      expect(x + haloReach).toBeLessThanOrEqual(width);
+      expect(y + haloReach).toBeLessThanOrEqual(height);
+    }
+  });
+
+  it("never touches a neighbouring marker", () => {
+    // The binding pair is SHORTSTOP/SECOND_BASE at 64px. A halo on one must
+    // stop short of the other's circle, or the ring reads as belonging to
+    // both kids.
+    for (let i = 0; i < ALL_POSITIONS.length; i++) {
+      for (let j = i + 1; j < ALL_POSITIONS.length; j++) {
+        const a = POSITION_COORDS[ALL_POSITIONS[i]];
+        const b = POSITION_COORDS[ALL_POSITIONS[j]];
+        expect(apart(a, b)).toBeGreaterThan(haloReach + markerRadius);
+      }
+    }
+  });
+
+  it("never touches a neighbouring halo", () => {
+    // Two guarded kids on one team is ordinary — siblings — so two halos can
+    // be drawn at once.
+    for (let i = 0; i < ALL_POSITIONS.length; i++) {
+      for (let j = i + 1; j < ALL_POSITIONS.length; j++) {
+        const a = POSITION_COORDS[ALL_POSITIONS[i]];
+        const b = POSITION_COORDS[ALL_POSITIONS[j]];
+        expect(apart(a, b)).toBeGreaterThan(haloReach * 2);
+      }
+    }
+  });
+
+  it("never touches a halo in the outfield zone", () => {
+    for (const size of ZONE_SIZES) {
+      for (const zoneCoord of outfieldZoneCoords(size)) {
+        for (const position of ALL_PLAY_INFIELD_POSITIONS) {
+          expect(apart(zoneCoord, POSITION_COORDS[position])).toBeGreaterThan(
+            haloReach * 2,
+          );
+        }
+      }
+    }
+  });
+
+  it("keeps every halo on the grass, clear of the warning track", () => {
+    // CENTER_FIELD is the deep one: 345px from the home circle against a track
+    // whose inner edge is at 374. A yellow ring on tan is the contrast this
+    // feature is made of, and losing it is invisible in any markup assertion.
+    const trackInnerEdge = FIELD_ART.trackRadius - FIELD_ART.trackWidth / 2;
+    const home = { x: FIELD_ART.homeCircle.x, y: FIELD_ART.homeCircle.y };
+
+    for (const position of ALL_POSITIONS) {
+      const reach = apart(POSITION_COORDS[position], home) + haloReach;
+      expect(reach).toBeLessThan(trackInnerEdge);
+    }
+  });
+
+  it("keeps every outfield-zone halo on the grass too", () => {
+    const trackInnerEdge = FIELD_ART.trackRadius - FIELD_ART.trackWidth / 2;
+    const home = { x: FIELD_ART.homeCircle.x, y: FIELD_ART.homeCircle.y };
+
+    for (const size of ZONE_SIZES) {
+      for (const zoneCoord of outfieldZoneCoords(size)) {
+        expect(apart(zoneCoord, home) + haloReach).toBeLessThan(trackInnerEdge);
+      }
+    }
   });
 });

@@ -193,6 +193,41 @@
   }
 }
 
+/* The one-time "stepping up" on the view page's guarded marker (#49): the
+   reader's own kid rises to the plate once, on load, and settles.
+
+   Translate-only, for two reasons rather than one. The first is `animate-rise`'s:
+   no opacity, so the raw HTML is legible before and without any animation. The
+   second is geometry — the marker carries a banana halo whose radius already
+   sits 2.5px inside the warning track (see DIAMOND_GEOMETRY.haloRadius), and a
+   scale would push that ring onto the track at the animation's peak.
+
+   Applied to an *inner* <g>, never the one carrying `transform="translate(x y)"`:
+   a CSS transform overrides an SVG transform attribute, so animating that
+   element teleports the marker to the origin.
+
+   CSS rather than Motion so the diamond stays a server component — and never
+   attach it to anything dnd-kit drags. */
+@utility animate-step-up {
+  animation: step-up 0.45s ease-out both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes step-up {
+  from {
+    transform: translateY(6px);
+  }
+  60% {
+    transform: translateY(-2px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
