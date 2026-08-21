@@ -15,6 +15,7 @@ import {
   parseMonthParam,
   parseViewParam,
   resolveTimeZone,
+  selectNextEvent,
   selectNextGame,
   startOfDayInZone,
   wallClockToInstant,
@@ -426,5 +427,79 @@ describe("selectNextGame", () => {
   it("returns null for no upcoming games and for an empty list", () => {
     expect(selectNextGame([at(-48)], now)).toBeNull();
     expect(selectNextGame([], now)).toBeNull();
+  });
+});
+
+describe("selectNextEvent", () => {
+  const now = iso("2026-08-01T18:00:00Z");
+  const at = (offsetHours: number, type: GameCandidate["type"] = "GAME") => ({
+    id: `${type}-${offsetHours}`,
+    type,
+    startsAt: new Date(now.getTime() + offsetHours * 60 * 60 * 1000),
+  });
+
+  it("returns the soonest upcoming event", () => {
+    expect(selectNextEvent([at(72), at(24), at(48)], now)?.id).toBe("GAME-24");
+  });
+
+  // The whole reason this function exists next to selectNextGame: team home is
+  // informational, so the practice on Tuesday is what a parent needs to see
+  // even though Saturday's game is the one readiness cares about.
+  it("returns a practice that is sooner than the next game", () => {
+    const result = selectNextEvent([at(1, "PRACTICE"), at(24)], now);
+
+    expect(result?.type).toBe("PRACTICE");
+    expect(result?.id).toBe("PRACTICE-1");
+  });
+
+  it("returns a practice when there are no games at all", () => {
+    expect(selectNextEvent([at(1, "PRACTICE"), at(48, "PRACTICE")], now)?.id).toBe(
+      "PRACTICE-1",
+    );
+  });
+
+  it("still returns an event that started forty minutes ago", () => {
+    const inProgress = {
+      id: "in-progress",
+      type: "PRACTICE" as const,
+      startsAt: new Date(now.getTime() - 40 * 60 * 1000),
+    };
+
+    expect(selectNextEvent([inProgress, at(168)], now)?.id).toBe("in-progress");
+  });
+
+  it("keeps an event through the whole grace window", () => {
+    const justInside = {
+      id: "edge",
+      type: "PRACTICE" as const,
+      startsAt: new Date(now.getTime() - GAME_GRACE_MS + 1000),
+    };
+
+    expect(selectNextEvent([justInside], now)?.id).toBe("edge");
+  });
+
+  it("drops an event once the grace window has passed", () => {
+    const justOutside = {
+      id: "stale",
+      type: "PRACTICE" as const,
+      startsAt: new Date(now.getTime() - GAME_GRACE_MS),
+    };
+
+    expect(selectNextEvent([justOutside], now)).toBeNull();
+  });
+
+  it("returns null for no upcoming events and for an empty list", () => {
+    expect(selectNextEvent([at(-48, "PRACTICE")], now)).toBeNull();
+    expect(selectNextEvent([], now)).toBeNull();
+  });
+
+  // selectNextGame delegates its grace window here, so the games-only rule is
+  // the only thing left that separates the two. Pinned from both sides: this
+  // suite proves practices are kept, and selectNextGame's proves they are not.
+  it("differs from selectNextGame only in the type filter", () => {
+    const events = [at(1, "PRACTICE"), at(24)];
+
+    expect(selectNextEvent(events, now)?.id).toBe("PRACTICE-1");
+    expect(selectNextGame(events, now)?.id).toBe("GAME-24");
   });
 });

@@ -38,6 +38,8 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+import { revalidatePath } from "next/cache";
+
 import { TeamAccessError } from "@/lib/team-access";
 import {
   createEventAction,
@@ -358,5 +360,95 @@ describe("rsvpAction", () => {
     const data = form({ teamId: "team-1", eventId: "event-1", response: "attending" });
 
     await expect(rsvpAction(data)).rejects.toThrow("Invalid player ID");
+  });
+});
+
+/// #48 posts the same action from team home, where the whole point is that the
+/// parent never leaves the page. `from` moves the redirect target and nothing
+/// else — every check above still runs, which is why these cases assert the
+/// refusals land at home too rather than only the happy path.
+describe("rsvpAction posted from team home", () => {
+  const homeForm = form({
+    teamId: "team-1",
+    eventId: "event-1",
+    playerId: "player-1",
+    response: "attending",
+    from: "home",
+  });
+
+  it("runs the identical authorization checks", async () => {
+    await redirectUrlOf(() => rsvpAction(homeForm));
+
+    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", { intent: "write" });
+    expect(getEvent).toHaveBeenCalledWith("team-1", "event-1");
+    expect(guardedRosteredPlayerIds).toHaveBeenCalledWith("team-1", "user-1");
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true);
+  });
+
+  it("redirects back to team home on success", async () => {
+    const url = await redirectUrlOf(() => rsvpAction(homeForm));
+
+    expect(url).toBe("/t/team-1?saved=1");
+  });
+
+  it("revalidates team home as well as the event page", async () => {
+    await redirectUrlOf(() => rsvpAction(homeForm));
+
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/t/[teamId]", "page");
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith(
+      "/t/[teamId]/schedule/[eventId]",
+      "page",
+    );
+  });
+
+  it("keeps a bad response value at home rather than stranding the parent", async () => {
+    const url = await redirectUrlOf(() =>
+      rsvpAction(form({ ...Object.fromEntries(homeForm), response: "maybe" })),
+    );
+
+    expect(url).toBe("/t/team-1?error=invalid-rsvp");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  it("keeps a not-your-player refusal at home", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["someone-elses-kid"]));
+
+    const url = await redirectUrlOf(() => rsvpAction(homeForm));
+
+    expect(url).toBe("/t/team-1?error=not-your-player");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  // The archived case AC 4 is about: the buttons are hidden at render, so
+  // reaching here means the team was archived between load and tap. The copy
+  // has to land where the parent is standing.
+  it("keeps an archived-team refusal at home", async () => {
+    requireTeamAccess.mockRejectedValue(new TeamAccessError("archived", "archived"));
+
+    const url = await redirectUrlOf(() => rsvpAction(homeForm));
+
+    expect(url).toBe("/t/team-1?error=access");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  it("says so at home when the event was deleted under the parent", async () => {
+    getEvent.mockResolvedValue(null);
+
+    const url = await redirectUrlOf(() => rsvpAction(homeForm));
+
+    expect(url).toBe("/t/team-1?error=event-gone");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  // `from` is an enum, so nothing a form can carry turns it into a redirect
+  // target of the caller's choosing — anything unrecognised is the event page.
+  it("ignores an unrecognised from value instead of trusting it", async () => {
+    const url = await redirectUrlOf(() =>
+      rsvpAction(
+        form({ ...Object.fromEntries(homeForm), from: "https://evil.example.com" }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
   });
 });

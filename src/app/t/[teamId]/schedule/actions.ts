@@ -224,6 +224,40 @@ export async function deleteEventAction(formData: FormData) {
 const rsvpResponseSchema = z.enum(["attending", "declined"]);
 
 /**
+ * Where to send the parent back to once the RSVP is in.
+ *
+ * An **enum, never a URL**. Both surfaces that RSVP — the event page and team
+ * home (#48) — post to this one action, and the only thing they disagree about
+ * is where the parent was standing. A `returnTo` URL field would say the same
+ * thing while handing anyone who can craft a form an open redirect out of a
+ * signed-in POST; an enum cannot express a destination this file did not
+ * already write down.
+ *
+ * Absent or unrecognised means the event page, which is what every form posted
+ * before team home existed.
+ */
+const rsvpOriginSchema = z.enum(["home"]);
+type RsvpOrigin = "home" | "event";
+
+function parseRsvpOrigin(formData: FormData): RsvpOrigin {
+  return rsvpOriginSchema.safeParse(formData.get("from")).success ? "home" : "event";
+}
+
+/// The page the parent is standing on, with `query` appended. Only the
+/// redirect target varies by origin — every authorization check below is
+/// identical either way.
+function rsvpReturnUrl(
+  origin: RsvpOrigin,
+  teamId: string,
+  eventId: string,
+  query: string,
+): string {
+  return origin === "home"
+    ? `/t/${teamId}${query}`
+    : `/t/${teamId}/schedule/${eventId}${query}`;
+}
+
+/**
  * Prove the caller may write to this team, that the event they named is on
  * it, AND that they guard the player they are RSVPing for.
  *
@@ -236,17 +270,28 @@ const rsvpResponseSchema = z.enum(["attending", "declined"]);
  * let a parent RSVP a kid who only plays on another team onto this one's
  * event.
  */
-async function requireGuardedEvent(teamId: string, eventId: string, playerId: string) {
+async function requireGuardedEvent(
+  teamId: string,
+  eventId: string,
+  playerId: string,
+  origin: RsvpOrigin,
+) {
   const { userId } = await requireTeamAccess(teamId, { intent: "write" });
 
   const event = await getEvent(teamId, eventId);
   if (!event) {
-    redirect(`/t/${teamId}/schedule`);
+    // The event was deleted between render and tap. From the event page that
+    // bounces to the schedule, where its absence is the explanation. From team
+    // home there is no such page to land on, so say it instead of returning a
+    // silently unchanged dashboard the parent will tap again.
+    redirect(
+      origin === "home" ? `/t/${teamId}?error=event-gone` : `/t/${teamId}/schedule`,
+    );
   }
 
   const guardedPlayerIds = await guardedRosteredPlayerIds(teamId, userId);
   if (!guardedPlayerIds.has(playerId)) {
-    redirect(`/t/${teamId}/schedule/${eventId}?error=not-your-player`);
+    redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-your-player"));
   }
 
   return event;
@@ -255,29 +300,38 @@ async function requireGuardedEvent(teamId: string, eventId: string, playerId: st
 /// RSVP is reporting, never a gate — open to every role (PARENT+), unlike
 /// the COACH+ mutations above. Archived teams still reject the write, same
 /// as every other mutation on this team.
+///
+/// Posted from two places: the event page's attendance list and team home's
+/// one-tap buttons (#48). `from` decides only where the parent lands — the
+/// checks in `requireGuardedEvent` run identically for both.
 export async function rsvpAction(formData: FormData) {
   const teamId = extractTeamId(formData);
   const eventId = extractEventId(formData);
   const playerId = extractPlayerId(formData);
+  const origin = parseRsvpOrigin(formData);
 
   const parsedResponse = rsvpResponseSchema.safeParse(formData.get("response"));
   if (!parsedResponse.success) {
-    redirect(`/t/${teamId}/schedule/${eventId}?error=invalid-rsvp`);
+    redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=invalid-rsvp"));
   }
 
   try {
     // Write against the id `getEvent` resolved, not the raw form field — same
     // convention as the roster actions deriving playerId from getRosterEntry.
-    const event = await requireGuardedEvent(teamId, eventId, playerId);
+    const event = await requireGuardedEvent(teamId, eventId, playerId, origin);
     await upsertRsvp(event.id, playerId, parsedResponse.data === "attending");
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
-      redirect(`/t/${teamId}/schedule/${eventId}?error=access`);
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=access"));
     }
     throw error;
   }
 
+  // Both pages regardless of origin: one RSVP changes the attendance list on
+  // the event page *and* the state shown beside the kid's name on team home,
+  // so revalidating only the page that was posted from leaves the other stale.
   revalidatePath("/t/[teamId]/schedule/[eventId]", "page");
-  redirect(`/t/${teamId}/schedule/${eventId}?saved=1`);
+  revalidatePath("/t/[teamId]", "page");
+  redirect(rsvpReturnUrl(origin, teamId, eventId, "?saved=1"));
 }
