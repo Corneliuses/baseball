@@ -260,3 +260,202 @@ describe("buildChartView", () => {
     expect(view.byPosition.size).toBe(0);
   });
 });
+
+describe("buildChartView diamond names", () => {
+  /// Markers sit as little as 60px apart, so only a first name fits — which
+  /// makes two Avas indistinguishable on the one page whose whole job is
+  /// "find my kid" (#49).
+  const chartOf = (names: [string, string][]): ChartViewEntry[] =>
+    names.map(([playerId, playerName], index) => ({
+      entryId: `re-${playerId}`,
+      playerId,
+      playerName,
+      jerseyNumber: index + 1,
+      battingOrder: index + 1,
+      position: null,
+    }));
+
+  const namesById = (entries: ChartViewEntry[], allPlay = false) => {
+    const view = buildChartView(entries, noRsvps, allPlay);
+    return new Map(
+      [...view.lineup, ...view.unassigned].map((p) => [p.playerId, p.diamondName]),
+    );
+  };
+
+  it("uses the first name alone when nobody shares it", () => {
+    const names = namesById(
+      chartOf([
+        ["ava", "Ava Castellanos"],
+        ["ben", "Ben Ortiz"],
+      ]),
+    );
+
+    expect(names.get("ava")).toBe("Ava");
+    expect(names.get("ben")).toBe("Ben");
+  });
+
+  it("gives a last initial to BOTH players sharing a first name", () => {
+    // Both, not just the later one: singling one out would tell a parent the
+    // unlabelled "Ava" is definitively theirs, which is exactly backwards.
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-r", "Ava Rodriguez"],
+      ]),
+    );
+
+    expect(names.get("ava-c")).toBe("Ava C.");
+    expect(names.get("ava-r")).toBe("Ava R.");
+  });
+
+  it("disambiguates a three-way collision", () => {
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-r", "Ava Rodriguez"],
+        ["ava-w", "Ava Whitfield"],
+      ]),
+    );
+
+    expect([...names.values()].sort()).toEqual(["Ava C.", "Ava R.", "Ava W."]);
+  });
+
+  it("leaves everyone else alone when only one pair collides", () => {
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-r", "Ava Rodriguez"],
+        ["ben", "Ben Ortiz"],
+      ]),
+    );
+
+    expect(names.get("ben")).toBe("Ben");
+  });
+
+  it("counts a benched player against a seated one", () => {
+    // The bench list draws names too (#49 AC6), and even if it didn't, a coach
+    // reading "Ava" on the diamond next to "Ava" on the bench has the same
+    // problem. Collisions are counted across every entry, not just the seated.
+    const entries: ChartViewEntry[] = [
+      {
+        entryId: "re-seated",
+        playerId: "seated",
+        playerName: "Ava Castellanos",
+        jerseyNumber: 7,
+        battingOrder: 1,
+        position: "SHORTSTOP",
+      },
+      {
+        entryId: "re-benched",
+        playerId: "benched",
+        playerName: "Ava Rodriguez",
+        jerseyNumber: 8,
+        battingOrder: null,
+        position: null,
+      },
+    ];
+
+    const view = buildChartView(entries, noRsvps, false);
+
+    expect(view.byPosition.get("SHORTSTOP")?.diamondName).toBe("Ava C.");
+    expect(view.unassigned[0].diamondName).toBe("Ava R.");
+  });
+
+  it("falls back to the whole string for a single-token name", () => {
+    const names = namesById(chartOf([["cy", "Cy"]]));
+
+    expect(names.get("cy")).toBe("Cy");
+  });
+
+  it("leaves a colliding single-token name unadorned rather than inventing an initial", () => {
+    const names = namesById(
+      chartOf([
+        ["ava-1", "Ava"],
+        ["ava-2", "Ava Rodriguez"],
+      ]),
+    );
+
+    expect(names.get("ava-1")).toBe("Ava");
+    expect(names.get("ava-2")).toBe("Ava R.");
+  });
+
+  it("counts a first name as shared regardless of how it was capitalized", () => {
+    // Nothing normalizes a name on the way in — playerSchema only trims — so
+    // a coach can type "ava" for one kid and "Ava" for another. A
+    // case-sensitive count called those distinct and left two unlabelled
+    // markers reading "Ava" and "ava".
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-r", "ava Rodriguez"],
+      ]),
+    );
+
+    expect(names.get("ava-c")).toBe("Ava C.");
+    expect(names.get("ava-r")).toBe("ava R.");
+  });
+
+  it("displays the name as the coach typed it, never recapitalized", () => {
+    // The count folds case; the label must not. Rewriting "ava" to "Ava" on
+    // the diamond would be a silent edit of the roster the coach entered.
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-r", "ava Rodriguez"],
+      ]),
+    );
+
+    expect(names.get("ava-r")?.startsWith("ava")).toBe(true);
+  });
+
+  it("keeps two players sharing a first name AND a last initial identical", () => {
+    // The accepted limitation, pinned so it stays a decision rather than
+    // becoming a surprise: a full surname overruns a 64px-spaced marker. The
+    // full names survive in every list, and on /view the guarded halo is what
+    // separates these two for the reader who cares.
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-cr", "Ava Cruz"],
+      ]),
+    );
+
+    expect(names.get("ava-c")).toBe("Ava C.");
+    expect(names.get("ava-cr")).toBe("Ava C.");
+  });
+
+  it("uses the last token, not the second, for a three-part name", () => {
+    const names = namesById(
+      chartOf([
+        ["ava-c", "Ava Marie Castellanos"],
+        ["ava-r", "Ava Rodriguez"],
+      ]),
+    );
+
+    expect(names.get("ava-c")).toBe("Ava C.");
+  });
+
+  it("tolerates ragged whitespace without emitting a blank label", () => {
+    const names = namesById(chartOf([["ava", "  Ava   Castellanos  "]]));
+
+    expect(names.get("ava")).toBe("Ava");
+  });
+
+  it("never touches playerName", () => {
+    // diamondName is the abbreviation; lists and the sr-only mirror still need
+    // the whole name, and overwriting it here would silently shorten both.
+    const view = buildChartView(
+      chartOf([
+        ["ava-c", "Ava Castellanos"],
+        ["ava-r", "Ava Rodriguez"],
+      ]),
+      noRsvps,
+      false,
+    );
+
+    expect(view.lineup.map((p) => p.playerName)).toEqual([
+      "Ava Castellanos",
+      "Ava Rodriguez",
+    ]);
+  });
+});

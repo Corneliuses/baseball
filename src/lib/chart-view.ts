@@ -1,4 +1,5 @@
 import { Position } from "@/generated/prisma/enums";
+import { buildDiamondNames } from "@/lib/diamond-names";
 import { fieldedPositions } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
@@ -29,6 +30,19 @@ export type ChartViewEntry = {
 
 export type ChartViewPlayer = ChartViewEntry & {
   rsvpState: RsvpState;
+  /// The player's name *on the field* — what a diamond marker draws under the
+  /// position abbreviation. The first name alone, or `First L.` when another
+  /// rostered player shares that first name.
+  ///
+  /// Derived here rather than in the component because it is a fact about the
+  /// whole roster, not about one player: whether "Ava" is ambiguous depends on
+  /// who else is on the chart, and `buildChartView` is the only place that
+  /// already holds every player at once.
+  ///
+  /// `playerName` is untouched and stays the full name. Lists, the bench and
+  /// the diamond's `sr-only` mirror all use that one — the abbreviation exists
+  /// only because markers sit as little as 60px apart on the field.
+  diamondName: string;
 };
 
 export type ChartView = {
@@ -82,9 +96,15 @@ export function buildChartView(
   rsvpStates: ReadonlyMap<string, RsvpState>,
   allPlay: boolean,
 ): ChartView {
+  const diamondNames = buildDiamondNames(
+    entries.map((entry) => ({ id: entry.playerId, playerName: entry.playerName })),
+  );
   const players = entries.map((entry) => ({
     ...entry,
     rsvpState: rsvpStates.get(entry.playerId) ?? "no-response",
+    // Computed across every entry, not just the seated ones: a bench player
+    // named Ava makes the shortstop named Ava ambiguous just the same.
+    diamondName: diamondNames.get(entry.playerId) ?? entry.playerName,
   }));
 
   const lineup = players

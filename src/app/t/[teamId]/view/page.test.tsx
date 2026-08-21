@@ -5,6 +5,7 @@ const requireTeamAccess = vi.fn();
 const nextGame = vi.fn();
 const getChart = vi.fn();
 const listEventRsvps = vi.fn();
+const guardedRosteredPlayerIds = vi.fn();
 const getTeamById = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
@@ -22,6 +23,8 @@ vi.mock("@/lib/roster", () => ({
 
 vi.mock("@/lib/rsvps", () => ({
   listEventRsvps: (...args: unknown[]) => listEventRsvps(...args),
+  guardedRosteredPlayerIds: (...args: unknown[]) =>
+    guardedRosteredPlayerIds(...args),
 }));
 
 vi.mock("@/lib/teams", () => ({
@@ -34,6 +37,12 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+import { DIAMOND_GEOMETRY, FIELD_ART } from "@/components/diamond-geometry";
+import {
+  GUARDED_STYLE,
+  YOUR_PLAYER_SR_SUFFIX,
+  YOUR_PLAYER_TEXT,
+} from "@/components/guarded-style";
 import { TeamAccessError } from "@/lib/team-access";
 import ViewPage from "./page";
 
@@ -76,6 +85,11 @@ beforeEach(() => {
   nextGame.mockResolvedValue(game);
   getChart.mockResolvedValue(fullChart);
   listEventRsvps.mockResolvedValue([]);
+  // Every test below this line describes a viewer who guards nobody on this
+  // team unless it says otherwise — which is also the AC5 case, so the
+  // existing assertions double as the regression net for "no change for
+  // viewers guarding no players".
+  guardedRosteredPlayerIds.mockResolvedValue(new Set());
   // allPlay off by default here so the existing assertions describe the
   // nine-named-positions diamond; the allPlay cases set it explicitly.
   getTeamById.mockResolvedValue({ id: "team-1", allPlay: false, archivedAt: null });
@@ -434,5 +448,360 @@ describe("ViewPage next-game card", () => {
 
     expect(html).not.toContain("Game details");
     expect(html).not.toContain("maps.google.com");
+  });
+});
+
+
+describe("ViewPage guarded-player highlight", () => {
+  /// The page's whole job for a parent is "find my kid"; #49 is the page doing
+  /// the finding instead of making them scan twelve names.
+  const twoFamilies = [
+    {
+      playerId: "ava",
+      playerName: "Ava Castellanos",
+      jerseyNumber: 7,
+      battingOrder: 1,
+      position: "SHORTSTOP" as const,
+    },
+    {
+      playerId: "ben",
+      playerName: "Ben Ortiz",
+      jerseyNumber: 12,
+      battingOrder: 2,
+      position: "PITCHER" as const,
+    },
+  ];
+
+  beforeEach(() => {
+    getChart.mockResolvedValue(twoFamilies);
+  });
+
+  it("asks who is reading, scoped to this team", async () => {
+    // Scoped, not just "which kids does this user guard": a kid they guard on
+    // another team must not light up here, and the intersection is what stops
+    // it.
+    await render();
+
+    expect(guardedRosteredPlayerIds).toHaveBeenCalledWith("team-1", "user-1");
+  });
+
+  it("halos the reader's own kid on the diamond", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    expect(html).toContain(
+      `r="${DIAMOND_GEOMETRY.haloRadius}" class="${GUARDED_STYLE.haloClassName}"`,
+    );
+  });
+
+  it("draws exactly one halo when the reader guards one of two players", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    expect(
+      html.split(`r="${DIAMOND_GEOMETRY.haloRadius}"`),
+    ).toHaveLength(2);
+  });
+
+  it("halos both when a reader has two kids on the team", async () => {
+    // Siblings on one roster is ordinary, and the diamond geometry allows two
+    // rings at once (Diamond.test.tsx pins that they never touch).
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava", "ben"]));
+
+    const html = await render();
+
+    expect(
+      html.split(`r="${DIAMOND_GEOMETRY.haloRadius}"`),
+    ).toHaveLength(3);
+  });
+
+  it("steps the guarded marker up once, and nobody else", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    expect(html.split("animate-step-up")).toHaveLength(2);
+  });
+
+  it("marks the reader's own kid in the batting order", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+    const lineupHtml = html.slice(html.indexOf("Batting order"));
+
+    expect(lineupHtml).toContain(YOUR_PLAYER_TEXT);
+    expect(lineupHtml).toContain(GUARDED_STYLE.rowClassName);
+  });
+
+  it("says it in words too, never colour alone", async () => {
+    // design-plan.md §10. A colour-blind parent reads this page in sunlight
+    // like everyone else.
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    expect(html).toContain(YOUR_PLAYER_TEXT);
+  });
+
+  it("announces the reader's players to a screen reader", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    // Full name in the mirror, not the marker abbreviation — a screen reader
+    // has no 40px marker to fit inside. The suffix comes last, after the RSVP
+    // state, so the sentence still reads as one clause.
+    expect(html).toContain(
+      `Ava Castellanos, No response ${YOUR_PLAYER_SR_SUFFIX}`,
+    );
+  });
+
+  it("does not announce a player the reader does not guard", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    expect(html).toContain("Ben Ortiz, No response</li>");
+    expect(html).not.toContain(
+      `Ben Ortiz, No response ${YOUR_PLAYER_SR_SUFFIX}`,
+    );
+  });
+
+  it("changes nothing at all for a viewer guarding no players", async () => {
+    // AC5, asserted directly rather than left to the other tests' silence: a
+    // coach with no kid on the team must see the page they saw before #49.
+    const html = await render();
+
+    // By radius, not by class alone: the halo and the fence are both
+    // `fill-none stroke-banana`, and for this reader the fence is banana —
+    // that is the point of the case. Only the radius tells the ring on a kid
+    // apart from the wall around the park.
+    expect(html).not.toContain(
+      `r="${DIAMOND_GEOMETRY.haloRadius}" class="${GUARDED_STYLE.haloClassName}"`,
+    );
+    expect(html).not.toContain(GUARDED_STYLE.rowClassName);
+    expect(html).not.toContain(YOUR_PLAYER_TEXT);
+    expect(html).not.toContain(YOUR_PLAYER_SR_SUFFIX);
+    expect(html).not.toContain("animate-step-up");
+    // Including the field itself: handing this reader a chalk fence would be a
+    // visible change to a page that is supposed to be untouched for them, and
+    // would leave them looking at a screen with no banana at all.
+    expect(html).toContain(
+      `r="${FIELD_ART.fenceRadius}" class="fill-none stroke-banana"`,
+    );
+  });
+
+  it("keeps the banana on the fence when there is no kid to move it to", async () => {
+    // design-plan.md §2 asks for *exactly* one banana per screen, which cuts
+    // both ways: zero is as much a deviation as two. The budget follows the
+    // child, and where there is no child it stays on the wall.
+    const html = await render();
+    const diamondHtml = html.slice(
+      html.indexOf("Positions"),
+      html.indexOf("Batting order"),
+    );
+
+    expect(diamondHtml.split("stroke-banana")).toHaveLength(2);
+  });
+
+  it("draws the fence in chalk once the banana has moved to the kid", async () => {
+    // design-plan.md §2 allows exactly one banana per screen, and #49 moved
+    // /view's from the wall to the reader's child — but only for a reader who
+    // has one here; see the no-guard case above. Pinned on the fence circle
+    // itself rather than on "no banana in the diamond", since the halo is
+    // banana and that is the whole point.
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+
+    expect(html).toContain(`r="${FIELD_ART.fenceRadius}" class="fill-none stroke-chalk"`);
+    expect(html).not.toContain(
+      `r="${FIELD_ART.fenceRadius}" class="fill-none stroke-banana"`,
+    );
+  });
+
+  it("leaves the halo as the diamond's only banana", async () => {
+    // Two bananas is a fruit stand (design-plan.md §2). One halo, one guarded
+    // kid, nothing else yellow on the field.
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+
+    const html = await render();
+    const diamondHtml = html.slice(
+      html.indexOf("Positions"),
+      html.indexOf("Batting order"),
+    );
+
+    expect(diamondHtml.split("stroke-banana")).toHaveLength(2);
+  });
+});
+
+describe("ViewPage duplicate first names", () => {
+  const twoAvas = [
+    {
+      playerId: "ava-c",
+      playerName: "Ava Castellanos",
+      jerseyNumber: 7,
+      battingOrder: 1,
+      position: "SHORTSTOP" as const,
+    },
+    {
+      playerId: "ava-r",
+      playerName: "Ava Rodriguez",
+      jerseyNumber: 12,
+      battingOrder: 2,
+      position: "PITCHER" as const,
+    },
+  ];
+
+  it("gives both Avas a last initial on the diamond", async () => {
+    // Two kids named Ava is ordinary on a youth roster, and two markers
+    // reading "Ava" is worse than useless to the parent of one of them.
+    getChart.mockResolvedValue(twoAvas);
+
+    const html = await render();
+
+    expect(html).toContain(">Ava C.</text>");
+    expect(html).toContain(">Ava R.</text>");
+  });
+
+  it("keeps the full names in the batting order", async () => {
+    getChart.mockResolvedValue(twoAvas);
+
+    const html = await render();
+    const lineupHtml = html.slice(html.indexOf("Batting order"));
+
+    expect(lineupHtml).toContain("Ava Castellanos");
+    expect(lineupHtml).toContain("Ava Rodriguez");
+  });
+
+  it("leaves a lone Ava as just Ava", async () => {
+    const html = await render();
+
+    expect(html).toContain(">Ava</text>");
+  });
+});
+
+describe("ViewPage bench", () => {
+  const benched = [
+    {
+      playerId: "ava",
+      playerName: "Ava Castellanos",
+      jerseyNumber: 7,
+      battingOrder: 1,
+      position: "SHORTSTOP" as const,
+    },
+    {
+      playerId: "eli",
+      playerName: "Eli Nakamura",
+      jerseyNumber: 9,
+      battingOrder: null,
+      position: null,
+    },
+  ];
+
+  it("lists a benched player rather than rendering them nowhere", async () => {
+    // Before #49 Eli appeared on neither the diamond nor the order, so his
+    // parent got a page that said nothing whatsoever about their kid.
+    getChart.mockResolvedValue(benched);
+
+    const html = await render();
+
+    expect(html).toContain("Bench");
+    expect(html).toContain("Eli Nakamura");
+  });
+
+  it("marks the reader's own kid on the bench too", async () => {
+    getChart.mockResolvedValue(benched);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["eli"]));
+
+    const html = await render();
+    const benchHtml = html.slice(html.indexOf("Bench"));
+
+    expect(benchHtml).toContain(YOUR_PLAYER_TEXT);
+    expect(benchHtml).toContain(GUARDED_STYLE.rowClassName);
+  });
+
+  it("draws no bench for an allPlay team — those players are the outfield", async () => {
+    // Calling them benched would tell those parents their kid is sitting when
+    // the diamond two inches above shows them in the outfield zone.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue(benched);
+
+    const html = await render();
+
+    expect(html).not.toContain("Bench");
+    expect(html).toContain("Eli Nakamura");
+  });
+
+  it("draws no bench card when everyone is placed", async () => {
+    const html = await render();
+
+    expect(html).not.toContain("Bench");
+  });
+
+  it("does not call a batter without a fielding spot benched", async () => {
+    // Regression: `unassigned` holds anyone the diamond doesn't seat, which
+    // includes a kid batting third who simply isn't fielding. Listing them
+    // under "Bench" would duplicate them *and* tell their parent they're
+    // sitting when they're batting third.
+    getChart.mockResolvedValue([
+      {
+        playerId: "ava",
+        playerName: "Ava Castellanos",
+        jerseyNumber: 7,
+        battingOrder: 1,
+        position: "SHORTSTOP" as const,
+      },
+      {
+        playerId: "ben",
+        playerName: "Ben Ortiz",
+        jerseyNumber: 12,
+        battingOrder: 2,
+        position: null,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).not.toContain("Bench");
+    // Still in the order, once.
+    expect(html.split("Ben Ortiz")).toHaveLength(2);
+  });
+
+  it("benches only the player who is in neither column", async () => {
+    getChart.mockResolvedValue([
+      {
+        playerId: "ben",
+        playerName: "Ben Ortiz",
+        jerseyNumber: 12,
+        battingOrder: 2,
+        position: null,
+      },
+      {
+        playerId: "eli",
+        playerName: "Eli Nakamura",
+        jerseyNumber: 9,
+        battingOrder: null,
+        position: null,
+      },
+    ]);
+
+    const html = await render();
+    const benchHtml = html.slice(html.indexOf("Bench"));
+
+    expect(benchHtml).toContain("Eli Nakamura");
+    expect(benchHtml).not.toContain("Ben Ortiz");
+  });
+
+  it("gives a benched player no batting slot number", async () => {
+    // A zero in a jersey dot reads as batting position zero, not as "no slot".
+    getChart.mockResolvedValue(benched);
+
+    const html = await render();
+    const benchHtml = html.slice(html.indexOf("Bench"));
+
+    expect(benchHtml).not.toContain(">0<");
   });
 });

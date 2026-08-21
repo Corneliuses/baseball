@@ -299,3 +299,65 @@ describe("PositionsEditor", () => {
     expect(screen.getByRole("button", { name: "Save positions" })).toBeDisabled();
   });
 });
+
+
+describe("PositionsEditor duplicate first names", () => {
+  /// The write side of #49. `/view` disambiguates two Avas; the editor drew
+  /// two chips both reading "Ava" — on the screen where mixing them up gets
+  /// written to the chart, not merely read off it.
+  const named = (
+    entryId: string,
+    playerName: string,
+    position: Position | null,
+  ): PositionsEditorEntry => ({
+    entryId,
+    playerName,
+    jerseyNumber: null,
+    position,
+  });
+
+  it("gives both Avas a last initial on the board", () => {
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[
+          named("re-1", "Ava Castellanos", "SHORTSTOP"),
+          named("re-2", "Ava Rodriguez", "PITCHER"),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Ava C.")).toBeTruthy();
+    expect(screen.getByText("Ava R.")).toBeTruthy();
+  });
+
+  it("leaves a lone Ava as just Ava", () => {
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[named("re-1", "Ava Castellanos", "SHORTSTOP")]}
+      />,
+    );
+
+    expect(screen.getByText("Ava")).toBeTruthy();
+  });
+
+  it("counts a player in the pool against one on the diamond", () => {
+    // The unassigned pool is part of the same roster: an Ava waiting to be
+    // dragged on makes the Ava already at shortstop ambiguous.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[
+          named("re-1", "Ava Castellanos", "SHORTSTOP"),
+          named("re-2", "Ava Rodriguez", null),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Ava C.")).toBeTruthy();
+  });
+});

@@ -153,12 +153,52 @@ describe("design-plan.md utility claims", () => {
   /// declared with Tailwind 4's `@utility`, so its absence means the plan is
   /// describing something that was renamed or never built — the shape the
   /// `<rect>`-pill drift took.
-  const utilities = ["bg-pinstripe", "text-halo", "animate-rise"];
+  const utilities = [
+    "bg-pinstripe",
+    "text-halo",
+    "animate-rise",
+    "animate-step-up",
+  ];
 
   it.each(utilities)("%s is declared in globals.css and named in the plan", (name) => {
     expect(globalsCss).toContain(`@utility ${name}`);
     expect(plan).toContain(name);
   });
+
+  it.each(["animate-rise", "animate-step-up"])(
+    "%s stays gated on prefers-reduced-motion",
+    (name) => {
+      // design-plan.md §8's hard rule, and #49's AC2. Both utilities carry the
+      // gate in their own @utility block, so it is deleted by editing that
+      // block — which is silent: the animation simply plays for someone who
+      // asked the OS for less motion, and no test that renders markup notices.
+      const block = globalsCss.slice(globalsCss.indexOf(`@utility ${name} {`));
+      const body = block.slice(0, block.indexOf("\n}\n"));
+
+      expect(body).toContain("prefers-reduced-motion: reduce");
+      expect(body).toMatch(/animation:\s*none/);
+    },
+  );
+
+  it.each(["animate-rise", "animate-step-up"])(
+    "%s animates transform only, never opacity",
+    (name) => {
+      // Motion serialises initial state into the SSR markup and CSS keyframes
+      // ship in the stylesheet, so a fade means the lineup is blank until the
+      // bundle loads — on a page read at a field on one bar of signal. The
+      // step-up has a second reason: a scale would push the banana halo onto
+      // the warning track (DIAMOND_GEOMETRY.haloRadius).
+      const keyframe = name === "animate-rise" ? "rise" : "step-up";
+      const block = globalsCss.slice(
+        globalsCss.indexOf(`@keyframes ${keyframe} {`),
+      );
+      const body = block.slice(0, block.indexOf("\n}\n"));
+
+      expect(body).not.toContain("opacity");
+      expect(body).not.toContain("scale");
+      expect(body).toContain("translateY");
+    },
+  );
 
   it("does not still promise the pill that `text-halo` replaced", () => {
     // The specific stale claim a reviewer caught by hand. Cheap to pin, and it

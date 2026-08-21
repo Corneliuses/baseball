@@ -1,4 +1,5 @@
 import type { Position } from "@/generated/prisma/enums";
+import { ALL_PLAY_INFIELD_POSITIONS } from "@/lib/positions";
 
 /// Where the nine positions sit on the diamond, shared by the read-only view
 /// page (#8) and the drag editor (#11) so the two can never drift apart — a
@@ -20,6 +21,26 @@ export const DIAMOND_GEOMETRY = {
   width: 400,
   height: 520,
   markerRadius: 20,
+  /// The ring drawn behind a guarded player's marker on the view page (#49).
+  /// Two hard ceilings, both silent if broken, both pinned by Diamond.test.tsx:
+  ///
+  /// 1. **Neighbours.** SHORTSTOP (168,252) and SECOND_BASE (232,252) are the
+  ///    closest pair at 64px, so 32px of budget each. A halo at 25 with a 3px
+  ///    stroke reaches 26.5 and leaves 5.5px of air.
+  /// 2. **The warning track.** CENTER_FIELD sits 345px from the home circle
+  ///    and the track band's inner edge is at `trackRadius - trackWidth / 2` =
+  ///    374, so the same 26.5 reach lands at 371.5 — on grass, by 2.5px. This
+  ///    is the binding constraint, and it is why the reveal animation
+  ///    translates rather than scales: a scale would push this ring onto the
+  ///    track at the animation's peak.
+  ///
+  /// Both numbers move if the field radii or the position coordinates do.
+  haloRadius: 25,
+  /// The halo's stroke. Geometry, not styling, because it is half of what the
+  /// ring actually reaches: `haloRadius + haloStrokeWidth / 2`. The colour
+  /// lives in `guarded-style.ts`; this number is what the clearance tests and
+  /// `zoneHaloRadius` do arithmetic on.
+  haloStrokeWidth: 3,
   nameOffset: 34,
   tagOffset: 47,
 } as const;
@@ -57,8 +78,11 @@ export const FIELD_ART = {
   /// Mowed-stripe rings, centred on home plate: radius + strokeWidth pairs.
   stripes: [90, 170, 250, 330],
   stripeWidth: 40,
-  /// Warning track band and fence arc, also centred on home plate. The fence
-  /// is drawn in banana yellow — that screen's one banana.
+  /// Warning track band and fence arc, also centred on home plate. The fence's
+  /// colour is the *caller's* choice, not this module's — see `FieldArt`'s
+  /// `fence` prop. The positions editor draws it banana, as its one banana; the
+  /// view page draws it chalk, having moved that budget onto the reader's own
+  /// child (#49, design-plan.md §6.3).
   ///
   /// Pushed out far enough that the deepest outfielder (CENTER_FIELD at y=75,
   /// so a marker top edge of y=55) stands on grass rather than straddling the
@@ -186,3 +210,76 @@ export function outfieldZoneCoords(
 
   return coords;
 }
+
+/// How far a ring at `radius` reaches from its marker's centre — the stroke
+/// straddles the radius, so half of it sits outside.
+function haloReach(radius: number): number {
+  return radius + DIAMOND_GEOMETRY.haloStrokeWidth / 2;
+}
+
+/// The largest halo that still fits around a marker in an outfield zone of
+/// `count` players, or `null` when no visible ring fits at all.
+///
+/// `DIAMOND_GEOMETRY.haloRadius` was budgeted against the *fixed* positions,
+/// whose tightest pair (SHORTSTOP/SECOND_BASE) stands 64px apart. The zone is
+/// not fixed: `outfieldZoneCoords` packs more players into the same two rows as
+/// the count grows, and neighbours close to 58px at 11–12, 48.7px at 13–14 and
+/// 41.4px at 15–16. A constant 25 therefore merges two siblings' rings at 13,
+/// and by 15 paints a ring that overlaps the *next kid's* marker — a highlight
+/// that appears to point at the wrong child, which is worse than none.
+///
+/// Reachable without an unusual roster: an allPlay team whose coach has set a
+/// batting order but no fielding positions puts every rostered player in the
+/// zone at once.
+///
+/// Returns `null` rather than a ring too small to read: below a few pixels of
+/// clear air around the marker the circle stops looking like a halo and starts
+/// looking like a thick border. The marker still bolds the name and steps up,
+/// and the `sr-only` mirror still says "(your player)" — the ring is the fast
+/// path, never the only one.
+export function zoneHaloRadius(count: number): number | null {
+  const coords = outfieldZoneCoords(count);
+  if (coords.length === 0) {
+    return null;
+  }
+
+  let minGap = Infinity;
+  for (let i = 0; i < coords.length; i += 1) {
+    for (let j = i + 1; j < coords.length; j += 1) {
+      minGap = Math.min(minGap, distance(coords[i], coords[j]));
+    }
+    // The zone shares a board with the allPlay infield. LF/CF/RF are excluded
+    // by construction — the zone is drawn *at* those coordinates.
+    for (const position of ALL_PLAY_INFIELD_POSITIONS) {
+      minGap = Math.min(minGap, distance(coords[i], POSITION_COORDS[position]));
+    }
+  }
+
+  if (minGap === Infinity) {
+    return DIAMOND_GEOMETRY.haloRadius;
+  }
+
+  const stroke = DIAMOND_GEOMETRY.haloStrokeWidth / 2;
+  const radius = Math.min(
+    DIAMOND_GEOMETRY.haloRadius,
+    // Two rings must not touch.
+    minGap / 2 - stroke,
+    // A ring must not reach a neighbouring marker's circle.
+    minGap - DIAMOND_GEOMETRY.markerRadius - stroke,
+  );
+
+  return radius >= DIAMOND_GEOMETRY.markerRadius + MIN_HALO_AIR ? radius : null;
+}
+
+/// Clear air between the marker's edge and the ring, below which the halo
+/// reads as a border rather than a highlight.
+const MIN_HALO_AIR = 3;
+
+function distance(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+export { haloReach };

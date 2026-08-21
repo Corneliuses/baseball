@@ -24,6 +24,7 @@ import {
   positionPercent,
 } from "@/components/diamond-geometry";
 import { FieldArt } from "@/components/FieldArt";
+import { buildDiamondNames } from "@/lib/diamond-names";
 import {
   NO_CATCHER_TEXT,
   NoCatcherMarker,
@@ -61,11 +62,6 @@ type PositionsEditorProps = {
   entries: PositionsEditorEntry[];
 };
 
-/// Only the first name fits on a marker — the same reason the view page's
-/// diamond shortens names. The zone below shows full names.
-function shortName(name: string): string {
-  return name.trim().split(/\s+/)[0] || name;
-}
 
 /**
  * Drag players onto the diamond (#11). A thin shell over the pure draft logic
@@ -149,6 +145,21 @@ export function PositionsEditor({
   // CENTER_FIELD (something to save). Gating both on `edited` would disable the
   // only button that collapses that row.
   const stored = useMemo(() => storedPositions(entries), [entries]);
+
+  // Computed over the whole roster, exactly as the view page's diamond does
+  // (#49): two Avas must read "Ava C." and "Ava R." on *both* boards, or the
+  // coach is disambiguating on the screen where the mistake gets written while
+  // the parents see it resolved on the screen where it only gets read.
+  const diamondNames = useMemo(
+    () =>
+      buildDiamondNames(
+        entries.map((entry) => ({
+          id: entry.entryId,
+          playerName: entry.playerName,
+        })),
+      ),
+    [entries],
+  );
   const edited = !samePositions(draft.assigned, original.assigned);
   const saveable = !samePositions(draft.assigned, stored);
 
@@ -184,7 +195,7 @@ export function PositionsEditor({
             phone it belongs above the fold rather than below a 400x520 board
             the coach has to scroll past to reach it. */}
         <Zone draft={draft} byId={byId} allPlay={allPlay} />
-        <Field draft={draft} byId={byId} />
+        <Field draft={draft} byId={byId} diamondNames={diamondNames} />
 
         <form
           action={savePositionsAction}
@@ -232,9 +243,11 @@ const collisionDetection: CollisionDetection = (args) => {
 function Field({
   draft,
   byId,
+  diamondNames,
 }: {
   draft: PositionsDraft;
   byId: Map<string, PositionsEditorEntry>;
+  diamondNames: ReadonlyMap<string, string>;
 }) {
   // An allPlay board has no catcher. The spot is still drawn — as the disc
   // that says nobody plays it — so the coach isn't left wondering whether the
@@ -273,6 +286,7 @@ function Field({
                 ? byId.get(draft.assigned[position])
                 : undefined
             }
+            diamondNames={diamondNames}
           />
         ))}
       </div>
@@ -283,9 +297,14 @@ function Field({
 function PositionTarget({
   position,
   entry,
+  diamondNames,
 }: {
   position: Position;
   entry: PositionsEditorEntry | undefined;
+  /// Marker labels for the whole roster, keyed by playerId. Passed in rather
+  /// than shortened here because "is this first name ambiguous" is a question
+  /// about every other player on the board, not about this one.
+  diamondNames: ReadonlyMap<string, string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: position });
   const { x, y } = positionPercent(position);
@@ -310,7 +329,10 @@ function PositionTarget({
         {POSITION_LABELS[position]}
       </span>
       {entry !== undefined ? (
-        <Chip entry={entry} label={shortName(entry.playerName)} />
+        <Chip
+          entry={entry}
+          label={diamondNames.get(entry.entryId) ?? entry.playerName}
+        />
       ) : (
         <span className="rounded bg-background/85 px-1 text-[11px] italic text-muted-foreground">
           Open

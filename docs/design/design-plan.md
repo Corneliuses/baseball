@@ -162,11 +162,16 @@ All inside the existing viewBox — `DIAMOND_GEOMETRY.width = 400`,
    in a slightly lighter green. This is 90% of the "real field" feeling for four circles
    of effort.
 3. **Warning track + fence** — a tan arc band at `FIELD_ART.trackRadius = 392`,
-   `FIELD_ART.trackWidth = 36` wide, and a **Banana Yellow fence line** at
-   `FIELD_ART.fenceRadius = 408`, `FIELD_ART.fenceWidth = 5`. The fence is that screen's
-   one banana. Both sit far enough out that the deepest outfielder — CENTER_FIELD at
-   y=75, so a marker edge at y=55 — stands on grass rather than straddling the track,
-   which `diamond-geometry.test.ts` pins.
+   `FIELD_ART.trackWidth = 36` wide, and a fence line at
+   `FIELD_ART.fenceRadius = 408`, `FIELD_ART.fenceWidth = 5`. The fence's colour is the
+   caller's choice, via `FieldArt`'s `fence` prop, because it is the loudest thing the
+   field art paints and therefore the screen's banana to spend: the **positions editor**
+   draws it Banana Yellow, and the **lineup view** draws it chalk *for a reader who has a
+   kid on the team*, having moved that budget onto the child (§7) — and keeps it yellow for
+   everyone else, since §2 asks for exactly one banana and zero is as much a deviation as
+   two. Both sit far enough out that the deepest
+   outfielder — CENTER_FIELD at y=75, so a marker edge at y=55 — stands on grass rather
+   than straddling the track, which `diamond-geometry.test.ts` pins.
 4. **Infield dirt** — `M200,444 L316,318 Q200,90 84,318 Z` (a diamond with an arced back
    edge behind second), plus the home-plate circle — big enough that the catcher marker
    at y=452, and the `NoCatcherMarker` disc that replaces it on an allPlay board, sit
@@ -237,6 +242,26 @@ existing `Reveal` staggers rows in like a lineup being announced. The standing c
 renders even with no game on the schedule (it's standing, not per-game); only the RSVP
 tags and legend are per-game and come off when there's nothing to respond to.
 
+This is the one page that knows who is reading it, and **this screen's banana is the
+reader's own kid** — the fence drops to chalk to pay for it. The budget follows the child,
+so a reader with none on this team keeps the yellow fence and a page identical to the one
+they saw before. A guarded
+player's diamond marker gets a Banana Yellow halo at `DIAMOND_GEOMETRY.haloRadius = 25`
+and one `animate-step-up` — shrinking, and eventually dropped, in a crowded allPlay outfield
+where a constant ring would reach the next kid's marker (`zoneHaloRadius`); the bold name
+and the screen-reader text carry it there; their batting and bench rows get a banana border, bold name and
+a `Your player` chip. Colour is never the only carrier: the chip is text, and the diamond's
+`sr-only` mirror appends `(your player)` in words. Markers carry first names only, so any
+first name two rostered players share gets a last initial — on **both**, never one, and on
+**both boards**: the viewer and the positions editor share `buildDiamondNames`. A
+viewer guarding nobody sees the page exactly as it was.
+
+The **bench** is its own card, below the diamond, holding only the players this page would
+otherwise render nowhere — non-allPlay teams, and only kids in neither column. An allPlay
+team's unplaced players are the outfield zone two inches above, and a kid batting third
+without a fielding spot is already in the order; calling either group benched would
+misdescribe them.
+
 **Chart editors** — restraint zone; dnd-kit owns every dragged element (the AGENTS.md
 rule), so flair goes only into *static* styling: field art behind the position targets,
 chalk-box drop zones, warmer chips with jersey dots. The drop-target hover state
@@ -260,6 +285,13 @@ Via the existing `LazyMotion`/`m` setup only:
 
 - Page-level: the existing `Reveal` rise on card mount; lineup rows stagger in at ~40ms
   intervals via the `animate-rise` utility, an inline `animation-delay` per row.
+- `animate-step-up`: the lineup view's guarded marker rises once, on load, and settles.
+  CSS too, and translate-only for a second reason on top of the one below — the banana halo
+  already sits 2.5px inside the warning track, so a scale would push it onto the tan at the
+  animation's peak and lose exactly the contrast the highlight is made of. It goes on an
+  *inner* `<g>`, never the one carrying `transform="translate(x y)"`: a CSS transform
+  overrides an SVG transform attribute, and animating that element drops the marker at the
+  origin.
 - `animate-rise` is CSS, not Motion, and **translate-only** — no opacity, for the same
   reason `Reveal` has none: Motion serialises `initial` into the server-rendered markup,
   so a fade ships `opacity: 0` in the HTML and the lineup stays blank until the bundle

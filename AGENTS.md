@@ -217,6 +217,37 @@ production — the dev command can prompt, generate new migrations, and reset th
   `prisma-client-api` were kept (from `github:prisma/skills`, MIT). **If anyone re-runs
   `prisma init`, remove the rest again.** `prisma-cli/SKILL.md` was edited locally to drop
   a dangling reference to the uninstalled `prisma-compute` skill.
+- **The two diamonds paint different fences, and that is the banana budget.** design-plan.md
+  §2 allows exactly one Banana Yellow element per screen. `FieldArt` takes a `fence` prop
+  because the wall is the loudest thing it paints: the positions editor spends its banana
+  there, and `/view` spends its own on the guarded-player halo instead — but only for a
+  reader who has a kid on that team, so `fence` is conditional there, not a constant. §2
+  asks for *exactly* one, and a reader with no kid and a chalk fence would see zero, which
+  is as much a deviation as two. Note the halo and the fence share the class
+  `fill-none stroke-banana`, so a test telling them apart has to key on the radius.
+  `guarded-style.ts`, `FieldArt.test.tsx` and the no-guard case in the view page's suite
+  are where that budget is written down. One known hole, judged not worth a third branch:
+  an allPlay board with 13+ players in the zone draws no ring, so a reader whose only
+  guarded kid is there and has no batting slot sees a chalk fence and no banana at all.
+  That needs an 18+ roster, past what this app is built for.
+- **Both diamonds shorten names through `buildDiamondNames` (`src/lib/diamond-names.ts`).**
+  Never re-add a local `shortName`: the editor had one, so with two Avas on the roster
+  `/view` drew "Ava C."/"Ava R." while the coach's board drew two chips both reading "Ava" —
+  on the screen where confusing them gets *written* to the chart. It keys on an opaque `id`
+  because the viewer keys markers on `playerId` and the editor keys chips on `entryId`.
+- **The guarded halo's radius is not a constant, and the reason is silent.** Fixed positions
+  use `DIAMOND_GEOMETRY.haloRadius`, but the allPlay outfield zone packs its markers closer
+  as the roster grows — 58px apart at 11–12 players, 48.7px at 13–14, 41.4px at 15–16 — so
+  `zoneHaloRadius(count)` shrinks the ring and returns **null** once none fits. A constant
+  25px ring merged two siblings' halos at 13 and, at 15, painted a ring overlapping the
+  *next kid's* marker: a highlight pointing at the wrong child. Nothing failed, because the
+  geometry suite's `ZONE_SIZES` stopped at 12 — exactly the last passing count. Keep
+  `CROWDED_ZONE_SIZES` reaching well past any real roster.
+- **A CSS `transform` overrides an SVG `transform` attribute.** The view page's markers
+  position themselves with `<g transform="translate(x y)">`, so `animate-step-up` goes on an
+  *inner* `<g>`. Put it on the positioning element and every guarded marker renders at the
+  origin — silently, with no error and no failing snapshot. Same trap applies to anything
+  else animating an SVG child later.
 - **Motion and `@dnd-kit` must never animate the same element.** dnd-kit positions drags
   by writing `transform`, and Motion's `layout` prop animates `transform` too — together
   the item lags or snaps back. dnd-kit owns everything during a drag; Motion owns page
