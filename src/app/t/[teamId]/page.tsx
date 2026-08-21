@@ -14,7 +14,11 @@ import {
 import type { Role } from "@/generated/prisma/enums";
 import { formatEventDateTime } from "@/lib/calendar";
 import { chartRole } from "@/lib/chart-role";
-import { byJerseyThenName, type ChartViewEntry } from "@/lib/chart-view";
+import {
+  byJerseyThenName,
+  hasChartSet,
+  type ChartViewEntry,
+} from "@/lib/chart-view";
 import { sortDirectory } from "@/lib/directory-rules";
 import { mapsUrl } from "@/lib/maps";
 import { listCoachContacts } from "@/lib/memberships";
@@ -33,12 +37,16 @@ import { rsvpAction } from "./schedule/actions";
 /// owed the same sentence — plus `event-gone`, which only this page can
 /// produce: from the event page a deleted event bounces to the schedule, where
 /// its absence explains itself.
-const ERROR_MESSAGES: Record<string, string> = {
+/// Null prototype, matching /profile: the key comes straight from the ?error=
+/// query param, and on a plain object ?error=constructor would resolve an
+/// Object.prototype member — truthy, so the fallback never fires — into a
+/// non-renderable React child that crashes the page.
+const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null), {
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
   "event-gone": "That event was just taken off the schedule.",
   access: "You no longer have access to make this change.",
-};
+});
 
 function eventHeading(event: ScheduleEvent): string {
   if (event.type !== "GAME") return "Practice";
@@ -90,8 +98,12 @@ export default async function TeamHomePage({
   // schedule" empty state a team between seasons would show. Same argument for
   // getChart below. A parent standing at a field being told there is no
   // practice is the failure this page exists to prevent.
+  // One clock for the whole render: `nextEvent` applies the grace window
+  // against it, and the RSVP gate below measures the same event against the
+  // same instant. Two `new Date()` calls could straddle a start time.
+  const now = new Date();
   const [event, guardedPlayerIds] = await Promise.all([
-    nextEvent(teamId),
+    nextEvent(teamId, now),
     guardedRosteredPlayerIds(teamId, userId),
   ]);
 
@@ -116,12 +128,28 @@ export default async function TeamHomePage({
     rsvpRows,
   );
 
+  // Whether this team has a chart at all, asked across the whole roster rather
+  // than this parent's kids — "no chart set yet" is a fact about the team, and
+  // it is what /view says for the same data. Without it every line below
+  // asserts a definite spot nobody assigned: OF for every kid on an allPlay
+  // team, Bench on a selective one.
+  const hasChart = hasChartSet(chartEntries);
+
   // Archived teams reject every write regardless of role, so the buttons are
   // hidden rather than shown and refused — AC 4. The summary stays: last
   // season's chart is still worth reading. `rsvpAction` remains the real
   // boundary for the load-then-archive race, and its refusal lands back here
   // with the copy above.
-  const canRsvp = event !== null && team.archivedAt === null;
+  //
+  // The start time is the other gate, and it is this page's alone. `nextEvent`
+  // keeps showing an event for GAME_GRACE_MS after it begins — right, for a
+  // card whose job is "you are standing at this one" — but here that same id is
+  // the target of a *write*. During a doubleheader, "Not going" at 11am would
+  // otherwise decline the 9am game that has already been played. Attendance at
+  // an event that has started is a fact, not a plan; the schedule is where a
+  // parent answers for the next one.
+  const started = event !== null && event.startsAt.getTime() <= now.getTime();
+  const canRsvp = event !== null && team.archivedAt === null && !started;
 
   // Parents only: the coaching staff's contact card. /directory is
   // coach-and-above, and its recorded escape hatch — "a parent who needs to
@@ -241,7 +269,7 @@ export default async function TeamHomePage({
                         ) : null}
                       </CardTitle>
                       <CardDescription>
-                        {chartLine}
+                        {hasChart ? chartLine : "No chart set yet"}
                       </CardDescription>
                     </CardHeader>
                     {event ? (

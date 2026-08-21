@@ -33,6 +33,11 @@ export type ChartRoleOptions = {
    * that fails — "Reese · #12" with nothing after it reads as a page that
    * failed to load, not as "on the bench".
    *
+   * Applied only to a player who is in **neither** column, matching the filter
+   * the view page's bench list already uses: a kid batting third with no
+   * fielding spot is in the order, and "Bats 3rd · Bench" would contradict the
+   * page a parent reads next — and misdescribe a kid who is playing.
+   *
    * Never reached on an allPlay team: everyone outside that infield is in the
    * outfield, which is what the next save writes.
    */
@@ -65,7 +70,7 @@ export function chartRole(
     parts.push(POSITION_LABELS[entry.position]);
   } else if (allPlay) {
     parts.push(OUTFIELD_ZONE_LABEL);
-  } else if (benchLabel !== undefined) {
+  } else if (benchLabel !== undefined && entry.battingOrder === null) {
     parts.push(benchLabel);
   }
 

@@ -50,9 +50,14 @@ describe("chartRole on a selective team", () => {
 
   it("prints the bench label when one is asked for — team home's shape", () => {
     expect(chartRole(entry(null), allPlay, { benchLabel: "Bench" })).toBe("Bench");
-    expect(chartRole(entry(4), allPlay, { benchLabel: "Bench" })).toBe(
-      "Bats 4th · Bench",
-    );
+  });
+
+  // The view page's bench list filters on `battingOrder === null` for this
+  // reason, and says so: a kid batting third with no fielding spot is in the
+  // order. "Bats 4th · Bench" would misdescribe a kid who is playing, and
+  // disagree with the page a parent reads next.
+  it("never calls a player in the batting order benched", () => {
+    expect(chartRole(entry(4), allPlay, { benchLabel: "Bench" })).toBe("Bats 4th");
   });
 });
 

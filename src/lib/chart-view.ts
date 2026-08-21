@@ -145,9 +145,23 @@ export function buildChartView(
   // arranged in the editor's zone.
   const unassigned = unseated.sort(byJerseyThenName);
 
-  const hasChart = players.some(
-    (player) => player.battingOrder !== null || player.position !== null,
-  );
+  return { lineup, byPosition, unassigned, hasChart: hasChartSet(entries) };
+}
 
-  return { lineup, byPosition, unassigned, hasChart };
+/**
+ * Has anyone on this team been given a batting slot or a position yet?
+ *
+ * A partial chart — entered incrementally by hand — counts; only a fully empty
+ * one is "no chart set yet". Named once because three callers ask it: this
+ * module, the readiness page, and team home (#48). The last is why it matters
+ * that they agree: with no chart at all, every position a page prints is one
+ * nobody assigned, and two of those pages would be telling the same parent
+ * different things about the same kid.
+ */
+export function hasChartSet(
+  entries: readonly Pick<ChartViewEntry, "battingOrder" | "position">[],
+): boolean {
+  return entries.some(
+    (entry) => entry.battingOrder !== null || entry.position !== null,
+  );
 }

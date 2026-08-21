@@ -34,14 +34,16 @@ docs/design/       # The design plan and its SVG mockups — kept in step with t
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher),
 `/profile` (the signed-in person's own name and phone — global, not team-scoped, since
 those are `User` columns — and the app's only sign-out, a server action wrapping Auth.js
-`signOut`), and `/t/[teamId]/` (team home, settings, roster, members, the
-owner-only returning-player picker at `roster/returning`, the coach-only bulk parent
-invite at `roster/invite`, the coach-only member directory, the coach-only roster entry
-detail at `roster/[entryId]`, the schedule at `schedule` / `schedule/[eventId]`, the
-read-only chart at `view`, the two coach-only drag-and-drop chart editors — the
-batting order at `chart` and the positions diamond at `chart/positions` — and team
-email messaging at `messages` (coach-only broadcast history) and `messages/new`
-(the compose form every role uses) plus `/t/new` for owner-gated team creation.
+`signOut`), and `/t/[teamId]/` (team home — the parent dashboard: next event, one-tap
+RSVP for each kid the viewer guards, and that kid's chart line — settings, roster,
+members, the owner-only returning-player picker at `roster/returning`, the coach-only
+bulk parent invite at `roster/invite`, the coach-only member directory, the coach-only
+roster entry detail at `roster/[entryId]`, the schedule at `schedule` /
+`schedule/[eventId]`, the read-only chart at `view`, the two coach-only drag-and-drop
+chart editors — the batting order at `chart` and the positions diamond at
+`chart/positions` — and team email messaging at `messages` (coach-only broadcast
+history) and `messages/new` (the compose form every role uses) plus `/t/new` for
+owner-gated team creation.
 
 **Contact details are staff-facing.** A parent never sees another family's phone or
 email: `/directory` and `roster/[entryId]` are both COACH+, and the team home page gives
@@ -318,6 +320,27 @@ production — the dev command can prompt, generate new migrations, and reset th
   first week. Changing a design token or a field radius will fail `pnpm check` until the
   document is updated to match. Fix whichever side is wrong — usually the document — and
   never delete the claim to silence the test. §13 of the document explains the format.
+- **`GAME_GRACE_MS` keeps an event current for three hours after it starts, which is safe
+  for a display and not for a write.** `nextGame` and `nextEvent` both apply it, so the
+  event `/view`, `/readiness` and team home name is often one already in progress — right,
+  because that is the game the coach is standing at. Team home is the first page to make
+  that same id the target of a *write*: its one-tap RSVP posts the selected event's id. On
+  a doubleheader morning, "Not going" at 11am would decline the 9am game already played,
+  so the buttons are gated on `startsAt > now` while the card itself keeps the grace
+  window. Anything else that writes against a grace-window selection needs the same gate.
+- **"Bench" is a claim about a player in neither column, and three pages have to agree.**
+  A kid batting third with no fielding spot is *in the order* — the view page's bench list
+  filters on `battingOrder === null` and says so, and `chartRole`'s `benchLabel` applies
+  under the same condition. Printing "Bats 3rd · Bench" misdescribes a kid who is playing.
+  The prior question is whether the team has a chart at all: with none, every position a
+  page prints is one nobody assigned, which is why `hasChartSet` (`chart-view.ts`) gates
+  the line on team home and the whole panel on `/view` and `/readiness`.
+- **A `?error=` key is attacker-chosen, so its lookup table needs a null prototype.** On a
+  plain object literal `?error=constructor` resolves an `Object.prototype` member — truthy,
+  so the `??` fallback never fires — and React throws "Functions are not valid as a React
+  child" on the way out. `/profile` and team home use
+  `Object.assign(Object.create(null), {…})`; the older `ERROR_MESSAGES` tables under
+  `schedule/` and `roster/` still don't and are worth hardening when next touched.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.

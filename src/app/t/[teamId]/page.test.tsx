@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const requireTeamAccess = vi.fn();
@@ -89,8 +89,14 @@ async function render(
   );
 }
 
+/// The page reads the clock to decide whether the next event has already
+/// started, so these tests pin it. Well before both fixtures below.
+const BEFORE_BOTH = new Date("2026-08-10T12:00:00Z");
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(BEFORE_BOTH);
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
   listCoachContacts.mockResolvedValue([]);
   nextEvent.mockResolvedValue(null);
@@ -104,6 +110,10 @@ beforeEach(() => {
     allPlay: true,
     archivedAt: null,
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("TeamHomePage", () => {
@@ -144,7 +154,7 @@ describe("TeamHomePage next event", () => {
 
     const html = await render();
 
-    expect(nextEvent).toHaveBeenCalledWith("team-1");
+    expect(nextEvent).toHaveBeenCalledWith("team-1", BEFORE_BOTH);
     expect(html).toContain("Game vs Hawks");
     expect(html).toContain("Aug 15");
     expect(html).toContain("6:00");
@@ -224,11 +234,51 @@ describe("TeamHomePage your players", () => {
       allPlay: false,
       archivedAt: null,
     });
-    getChart.mockResolvedValue([{ ...REESE, position: null, battingOrder: null }]);
+    getChart.mockResolvedValue([
+      { ...REESE, position: null, battingOrder: null },
+      // A teammate who is placed: "Bench" is only meaningful on a team that
+      // has a chart to be left out of.
+      { ...REESE, entryId: "entry-9", playerId: "player-9", playerName: "Kit" },
+    ]);
 
     const html = await render();
 
     expect(html).toContain("Bench");
+  });
+
+  // The view page's rule, which team home contradicted: a kid batting third
+  // with no fielding spot is in the order. Calling that Bench would both
+  // misdescribe a kid who is playing and disagree with /view, which lists them
+  // in the order and on no bench at all.
+  it("never calls a kid who is in the batting order benched", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([{ ...REESE, position: null }]);
+
+    const html = await render();
+
+    expect(html).toContain("Bats 3rd");
+    expect(html).not.toContain("Bench");
+  });
+
+  // /view renders "No chart set yet" for the same data. Printing OF for every
+  // kid on an allPlay team would assert a spot nobody has assigned.
+  it("says no chart is set rather than inventing a position", async () => {
+    getChart.mockResolvedValue([
+      { ...REESE, battingOrder: null, position: null },
+      { ...REESE, entryId: "entry-9", playerId: "player-9", battingOrder: null, position: null },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("No chart set yet");
+    expect(html).not.toContain("OF");
+    expect(html).not.toContain("Bench");
   });
 
   it("never shows another family's kid", async () => {
@@ -368,10 +418,52 @@ describe("TeamHomePage one-tap RSVP", () => {
     expect(listEventRsvps).not.toHaveBeenCalled();
   });
 
+  // GAME_GRACE_MS keeps an event on the card for three hours after it starts,
+  // which is right for a card that says "you are standing at this one" — but
+  // that same id is the target of a write. On a doubleheader morning, tapping
+  // "Not going" at 11am would otherwise decline the 9am game already played.
+  it("stops offering to answer for an event that has already started", async () => {
+    vi.setSystemTime(new Date(GAME.startsAt.getTime() + 40 * 60 * 1000));
+
+    const html = await render();
+
+    expect(html).toContain("Game vs Hawks");
+    expect(html).not.toContain('name="from" value="home"');
+    expect(html).not.toContain("Not going");
+  });
+
+  it("still shows the answer already given for an event in progress", async () => {
+    vi.setSystemTime(new Date(GAME.startsAt.getTime() + 40 * 60 * 1000));
+    listEventRsvps.mockResolvedValue([{ playerId: "player-1", attending: true }]);
+
+    const html = await render();
+
+    expect(html).toContain("text-primary");
+  });
+
+  it("still offers to answer right up to the start time", async () => {
+    vi.setSystemTime(new Date(GAME.startsAt.getTime() - 1000));
+
+    const html = await render();
+
+    expect(html).toContain('name="from" value="home"');
+  });
+
   it("reports what the action refused, in the parent's own words", async () => {
     const html = await render("team-1", { error: "access" });
 
     expect(html).toContain("You no longer have access to make this change.");
+  });
+
+  // The ?error= key is attacker-chosen. On a plain object literal
+  // ?error=constructor resolves an Object.prototype member — truthy, so the
+  // fallback never fires — and React throws on the non-renderable child.
+  it("falls back rather than resolving an inherited member of the message table", async () => {
+    for (const key of ["constructor", "__proto__", "toString"]) {
+      const html = await render("team-1", { error: key });
+
+      expect(html).toContain("Something went wrong.");
+    }
   });
 
   it("confirms a saved RSVP", async () => {

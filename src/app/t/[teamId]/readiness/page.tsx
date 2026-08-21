@@ -15,7 +15,7 @@ import { chartRole } from "@/lib/chart-role";
 import { POSITION_LABELS } from "@/lib/positions";
 import { computeReadiness, type Readiness } from "@/lib/readiness";
 import { getChart } from "@/lib/roster";
-import type { ChartViewEntry } from "@/lib/chart-view";
+import { hasChartSet, type ChartViewEntry } from "@/lib/chart-view";
 import { buildRsvpStateMap } from "@/lib/rsvp";
 import { listEventRsvps } from "@/lib/rsvps";
 import { nextGame } from "@/lib/schedule";
@@ -140,9 +140,7 @@ export default async function ReadinessPage({
     allPlay,
   );
 
-  const hasChart = chartEntries.some(
-    (entry) => entry.battingOrder !== null || entry.position !== null,
-  );
+  const hasChart = hasChartSet(chartEntries);
 
   const heading = game.opponent ? `Next game vs ${game.opponent}` : "Next game";
 
