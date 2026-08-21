@@ -20,6 +20,21 @@ export const DIAMOND_GEOMETRY = {
   width: 400,
   height: 520,
   markerRadius: 20,
+  /// The ring drawn behind a guarded player's marker on the view page (#49).
+  /// Two hard ceilings, both silent if broken, both pinned by Diamond.test.tsx:
+  ///
+  /// 1. **Neighbours.** SHORTSTOP (168,252) and SECOND_BASE (232,252) are the
+  ///    closest pair at 64px, so 32px of budget each. A halo at 25 with a 3px
+  ///    stroke reaches 26.5 and leaves 5.5px of air.
+  /// 2. **The warning track.** CENTER_FIELD sits 345px from the home circle
+  ///    and the track band's inner edge is at `trackRadius - trackWidth / 2` =
+  ///    374, so the same 26.5 reach lands at 371.5 — on grass, by 2.5px. This
+  ///    is the binding constraint, and it is why the reveal animation
+  ///    translates rather than scales: a scale would push this ring onto the
+  ///    track at the animation's peak.
+  ///
+  /// Both numbers move if the field radii or the position coordinates do.
+  haloRadius: 25,
   nameOffset: 34,
   tagOffset: 47,
 } as const;
@@ -57,8 +72,11 @@ export const FIELD_ART = {
   /// Mowed-stripe rings, centred on home plate: radius + strokeWidth pairs.
   stripes: [90, 170, 250, 330],
   stripeWidth: 40,
-  /// Warning track band and fence arc, also centred on home plate. The fence
-  /// is drawn in banana yellow — that screen's one banana.
+  /// Warning track band and fence arc, also centred on home plate. The fence's
+  /// colour is the *caller's* choice, not this module's — see `FieldArt`'s
+  /// `fence` prop. The positions editor draws it banana, as its one banana; the
+  /// view page draws it chalk, having moved that budget onto the reader's own
+  /// child (#49, design-plan.md §6.3).
   ///
   /// Pushed out far enough that the deepest outfielder (CENTER_FIELD at y=75,
   /// so a marker top edge of y=55) stands on grass rather than straddling the

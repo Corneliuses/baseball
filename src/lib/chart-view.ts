@@ -29,6 +29,19 @@ export type ChartViewEntry = {
 
 export type ChartViewPlayer = ChartViewEntry & {
   rsvpState: RsvpState;
+  /// The player's name *on the field* — what a diamond marker draws under the
+  /// position abbreviation. The first name alone, or `First L.` when another
+  /// rostered player shares that first name.
+  ///
+  /// Derived here rather than in the component because it is a fact about the
+  /// whole roster, not about one player: whether "Ava" is ambiguous depends on
+  /// who else is on the chart, and `buildChartView` is the only place that
+  /// already holds every player at once.
+  ///
+  /// `playerName` is untouched and stays the full name. Lists, the bench and
+  /// the diamond's `sr-only` mirror all use that one — the abbreviation exists
+  /// only because markers sit as little as 60px apart on the field.
+  diamondName: string;
 };
 
 export type ChartView = {
@@ -63,6 +76,52 @@ function byJerseyThenName(a: ChartViewPlayer, b: ChartViewPlayer): number {
   return a.jerseyNumber - b.jerseyNumber;
 }
 
+/// The name each player wears on the diamond, keyed by `playerId`.
+///
+/// First names collide constantly on a youth roster — two Avas on one team is
+/// ordinary — and a marker showing "Ava" twice is worse than useless to the
+/// parent of one of them. Any first name held by more than one rostered player
+/// gets a last initial, on **every** player holding it, so the two markers
+/// differ rather than one being singled out.
+///
+/// Two players sharing a first name *and* a last initial keep the same label.
+/// That is deliberate, not an oversight: a full surname overruns a marker
+/// sitting 64px from its neighbour, which is the whole reason only first names
+/// are drawn. Their full names are still in the batting order, the bench and
+/// the `sr-only` mirror, and on the view page the guarded-player halo
+/// distinguishes the one a given reader actually came to find.
+function buildDiamondNames(
+  entries: readonly ChartViewEntry[],
+): Map<string, string> {
+  // Tokenized once and reused: `split` on every player twice — once to count,
+  // once to label — is the kind of thing that reads as free and isn't.
+  const parts = entries.map((entry) => {
+    const tokens = entry.playerName.trim().split(/\s+/).filter(Boolean);
+    return {
+      playerId: entry.playerId,
+      // Falls back to the whole string for a name that is all whitespace, so
+      // this can never emit an empty marker label.
+      first: tokens[0] ?? entry.playerName,
+      last: tokens.length > 1 ? tokens[tokens.length - 1] : null,
+    };
+  });
+
+  const counts = new Map<string, number>();
+  for (const part of parts) {
+    counts.set(part.first, (counts.get(part.first) ?? 0) + 1);
+  }
+
+  return new Map(
+    parts.map((part) => {
+      const shared = (counts.get(part.first) ?? 0) > 1;
+      return [
+        part.playerId,
+        shared && part.last ? `${part.first} ${part.last[0]}.` : part.first,
+      ];
+    }),
+  );
+}
+
 /**
  * @param allPlay Which spots this team actually fields. The read-side twin of
  * `buildPositionsDraft`'s parameter of the same name, and it does the same job:
@@ -82,9 +141,13 @@ export function buildChartView(
   rsvpStates: ReadonlyMap<string, RsvpState>,
   allPlay: boolean,
 ): ChartView {
+  const diamondNames = buildDiamondNames(entries);
   const players = entries.map((entry) => ({
     ...entry,
     rsvpState: rsvpStates.get(entry.playerId) ?? "no-response",
+    // Computed across every entry, not just the seated ones: a bench player
+    // named Ava makes the shortstop named Ava ambiguous just the same.
+    diamondName: diamondNames.get(entry.playerId) ?? entry.playerName,
   }));
 
   const lineup = players
