@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const requireTeamAccess = vi.fn();
 const getEvent = vi.fn();
@@ -82,22 +82,36 @@ async function redirectUrlOf(run: () => Promise<unknown>): Promise<string> {
   throw new Error("Expected a redirect, but the action returned normally");
 }
 
+/// The RSVP gate compares an event's start against the wall clock, so this
+/// suite pins the clock rather than letting real time drift past the fixture
+/// and silently change which branch every test takes.
+const NOW = new Date("2026-08-10T12:00:00Z");
+const STARTED = "2026-08-10T11:00:00Z";
+
+const EVENT = {
+  id: "event-1",
+  type: "GAME",
+  startsAt: new Date("2026-08-15T23:00:00Z"),
+  location: "Field 3",
+  opponent: "Hawks",
+  notes: null,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
-  getEvent.mockResolvedValue({
-    id: "event-1",
-    type: "GAME",
-    startsAt: new Date("2026-08-15T23:00:00Z"),
-    location: "Field 3",
-    opponent: "Hawks",
-    notes: null,
-  });
+  getEvent.mockResolvedValue(EVENT);
   createEvent.mockResolvedValue({ id: "event-1" });
   updateEvent.mockResolvedValue({ id: "event-1" });
   deleteEvent.mockResolvedValue(undefined);
   guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1"]));
   upsertRsvp.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("createEventAction", () => {
@@ -438,6 +452,49 @@ describe("rsvpAction posted from team home", () => {
 
     expect(url).toBe("/t/team-1?error=event-gone");
     expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  // Team home hides these buttons once an event starts, but a dashboard left
+  // open through first pitch still holds a form that posts. The gate has to
+  // hold on the server too, or the render is the only thing enforcing it.
+  it("refuses a stale home form for an event that has already started", async () => {
+    getEvent.mockResolvedValue({ ...EVENT, startsAt: new Date(STARTED) });
+
+    const url = await redirectUrlOf(() => rsvpAction(homeForm));
+
+    expect(url).toBe("/t/team-1?error=event-started");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  it("still accepts a home answer right up to the start time", async () => {
+    getEvent.mockResolvedValue({ ...EVENT, startsAt: new Date(NOW.getTime() + 1000) });
+
+    await redirectUrlOf(() => rsvpAction(homeForm));
+
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true);
+  });
+
+  // Disambiguation, not authorization: the event page has always allowed a late
+  // answer on purpose — a parent realising at 9:15 they cannot make the 9:00
+  // game is telling the coach something useful, and readiness still shows that
+  // game. Only team home's page-selected event is ambiguous, because there the
+  // page chose it rather than the parent.
+  it("leaves the event page free to record a late answer", async () => {
+    getEvent.mockResolvedValue({ ...EVENT, startsAt: new Date(STARTED) });
+
+    const url = await redirectUrlOf(() =>
+      rsvpAction(
+        form({
+          teamId: "team-1",
+          eventId: "event-1",
+          playerId: "player-1",
+          response: "attending",
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true);
   });
 
   // `from` is an enum, so nothing a form can carry turns it into a redirect

@@ -46,6 +46,7 @@ const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null)
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
   "event-gone": "That event was just taken off the schedule.",
+  "event-started": "That one has already started — open the event to answer for it.",
   access: "You no longer have access to make this change.",
 });
 
@@ -57,6 +58,24 @@ const UPCOMING_LIMIT = 3;
 function eventHeading(event: ScheduleEvent): string {
   if (event.type !== "GAME") return "Practice";
   return event.opponent ? `Game vs ${event.opponent}` : "Game";
+}
+
+/// The accessible name for one RSVP button.
+///
+/// The heading alone is not enough once the page shows three events: two
+/// practices, or two games against the same opponent, produce the identical
+/// name "Reese is going to Practice" twice, and a screen-reader or voice user
+/// has no way to tell which control they are activating. The date and time are
+/// what actually distinguish them on screen, so they distinguish them here too.
+function rsvpLabel(
+  playerName: string,
+  event: ScheduleEvent,
+  attending: boolean,
+): string {
+  const verb = attending ? "is going to" : "is not going to";
+  return `${playerName} ${verb} ${eventHeading(event)} on ${formatEventDateTime(
+    event.startsAt,
+  )}`;
 }
 
 /// Calls requireTeamAccess independently of the layout above it — see the
@@ -335,7 +354,7 @@ export default async function TeamHomePage({
                                       variant={
                                         state === "attending" ? "default" : "outline"
                                       }
-                                      aria-label={`${entry.playerName} is going to ${eventHeading(event)}`}
+                                      aria-label={rsvpLabel(entry.playerName, event, true)}
                                     >
                                       Going
                                     </Button>
@@ -368,7 +387,7 @@ export default async function TeamHomePage({
                                       variant={
                                         state === "declined" ? "destructive" : "outline"
                                       }
-                                      aria-label={`${entry.playerName} is not going to ${eventHeading(event)}`}
+                                      aria-label={rsvpLabel(entry.playerName, event, false)}
                                     >
                                       Not going
                                     </Button>

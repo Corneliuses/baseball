@@ -16,7 +16,12 @@ vi.mock("./db", () => ({
   },
 }));
 
-import { guardedRosteredPlayerIds, listEventRsvps, upsertRsvp } from "./rsvps";
+import {
+  guardedRosteredPlayerIds,
+  listEventRsvps,
+  listRsvpsForEvents,
+  upsertRsvp,
+} from "./rsvps";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -51,6 +56,51 @@ describe("listEventRsvps", () => {
     findManyRsvps.mockRejectedValue(new Error("connection lost"));
 
     await expect(listEventRsvps("team-1", "event-1")).rejects.toThrow(
+      "connection lost",
+    );
+  });
+});
+
+describe("listRsvpsForEvents", () => {
+  it("scopes the query to the named events and, through them, the team", async () => {
+    findManyRsvps.mockResolvedValue([]);
+
+    await listRsvpsForEvents("team-1", ["event-1", "event-2"]);
+
+    expect(findManyRsvps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          eventId: { in: ["event-1", "event-2"] },
+          event: { teamId: "team-1" },
+        },
+      }),
+    );
+  });
+
+  // eventId is what team home buckets on: without it every card would show the
+  // same answer, which is exactly the per-event isolation this read exists for.
+  it("selects eventId alongside playerId and attending", async () => {
+    findManyRsvps.mockResolvedValue([]);
+
+    await listRsvpsForEvents("team-1", ["event-1"]);
+
+    expect(findManyRsvps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: { eventId: true, playerId: true, attending: true },
+      }),
+    );
+  });
+
+  it("asks the database nothing when there are no events", async () => {
+    await expect(listRsvpsForEvents("team-1", [])).resolves.toEqual([]);
+
+    expect(findManyRsvps).not.toHaveBeenCalled();
+  });
+
+  it("propagates database errors rather than swallowing them", async () => {
+    findManyRsvps.mockRejectedValue(new Error("connection lost"));
+
+    await expect(listRsvpsForEvents("team-1", ["event-1"])).rejects.toThrow(
       "connection lost",
     );
   });

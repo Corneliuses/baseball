@@ -321,14 +321,19 @@ production — the dev command can prompt, generate new migrations, and reset th
   document is updated to match. Fix whichever side is wrong — usually the document — and
   never delete the claim to silence the test. §13 of the document explains the format.
 - **`GAME_GRACE_MS` keeps an event current for three hours after it starts, which is safe
-  for a display and not for a write.** `nextGame` and `nextEvent` both apply it, so the
-  event `/view`, `/readiness` and team home name is often one already in progress — right,
-  because that is the game the coach is standing at. Team home is the first page to make
-  that same id the target of a *write*: its one-tap RSVP posts the selected event's id. On
-  a doubleheader morning, "Not going" at 11am would decline the 9am game already played,
-  so the buttons are gated on `startsAt > now` while the card itself keeps the grace
-  window — asked per event, so the game in progress loses its buttons while the noon game
-  keeps them. Anything else that writes against a grace-window selection needs the gate.
+  for a display and not for a write.** `nextGame` and `nextEvents` both apply it, so the
+  event named by `/view`, `/readiness` and team home is often one already in progress —
+  right, because that is the game the coach is standing at. Team home is the first page to
+  make that same id the target of a *write*: its one-tap RSVP posts the selected event's
+  id. On a doubleheader morning, "Not going" at 11am would decline the 9am game already
+  played, so the buttons are gated on `startsAt > now`, asked per event, while the cards
+  keep the grace window — the game in progress loses its buttons and the noon game keeps
+  them. **The render is not the boundary**: `rsvpAction` re-checks the start time for
+  `from=home` posts, because a dashboard left open through first pitch still holds a form
+  that submits. That check is deliberately origin-scoped — it disambiguates a
+  page-selected event, it does not authorize, and the event page still records a late
+  answer on purpose. Anything else writing against a grace-window selection needs both
+  halves.
 - **"Bench" is a claim about a player in neither column, and three pages have to agree.**
   A kid batting third with no fielding spot is *in the order* — the view page's bench list
   filters on `battingOrder === null` and says so, and `chartRole`'s `benchLabel` applies

@@ -1,5 +1,14 @@
 # Task Doc — Team home: parent dashboard with next event, one-tap RSVP, and kid chart summary (#48)
 
+> **Scope changed after this plan was approved (21 Aug 2026).** Team home now shows the
+> next **three** events, each with its own RSVP buttons, rather than one card anchored to
+> the soonest. In the shipped code `nextEvent` is `nextEvents(teamId, limit, now)`,
+> `selectNextEvent` is the `limit: 1` case of `selectNextEvents`, the buttons are grouped
+> under each event rather than under each child, and one batched read feeds
+> `buildRsvpStateMapsByEvent`. The checklist below is left as approved: it is the record
+> of what was planned, and rewriting it to match the outcome would erase the fact that
+> the scope moved mid-flight. Read it with this note in mind.
+
 ## Prerequisites
 
 - [ ] `pnpm install && pnpm db:generate` (generated client is gitignored; nothing

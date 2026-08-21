@@ -294,6 +294,24 @@ async function requireGuardedEvent(
     redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-your-player"));
   }
 
+  // Team home hides its buttons once an event has started, and that gate has to
+  // hold here too: a parent who left the dashboard open through first pitch can
+  // still post the form it rendered. Render-time gating is a convention, not a
+  // rule — the same argument AGENTS.md makes about Proxy, that only the action
+  // knows what is being written.
+  //
+  // Deliberately scoped to `from=home`, and this is a disambiguation rule
+  // rather than an authorization one. The event page has always allowed a late
+  // answer on purpose: a parent realising at 9:15 that they cannot make the
+  // 9:00 game is telling the coach something useful, and readiness still shows
+  // that game. What makes it wrong from home is that the event there is
+  // *page-selected* — on a doubleheader morning the parent tapping "Not going"
+  // may well mean the noon game. Nothing is protected by refusing an
+  // origin-less POST, because that is exactly what the event page sends.
+  if (origin === "home" && event.startsAt.getTime() <= Date.now()) {
+    redirect(`/t/${teamId}?error=event-started`);
+  }
+
   return event;
 }
 

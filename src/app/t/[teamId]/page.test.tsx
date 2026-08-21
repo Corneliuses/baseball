@@ -539,6 +539,32 @@ describe("TeamHomePage one-tap RSVP", () => {
     expect(html.match(/name="from" value="home"/g)).toHaveLength(4);
   });
 
+  // Two practices, or two games against the same opponent, give every control
+  // the identical accessible name — a voice or screen-reader user then has no
+  // way to say which one they mean.
+  it("names each button by its event, not just its kind", async () => {
+    const thursday = { ...PRACTICE, id: "prac-1" };
+    const saturday = {
+      ...PRACTICE,
+      id: "prac-2",
+      startsAt: new Date("2026-08-14T23:00:00Z"),
+    };
+    nextEvents.mockResolvedValue([thursday, saturday]);
+
+    const html = await render();
+
+    const labels = [...html.matchAll(/aria-label="([^"]*going[^"]*)"/g)].map(
+      (match) => match[1],
+    );
+
+    expect(labels).toHaveLength(4);
+    expect(new Set(labels).size).toBe(4);
+    for (const label of labels) {
+      expect(label).toContain("Reese");
+      expect(label).toContain("Practice");
+    }
+  });
+
   // The doubleheader, now actually solved rather than only made safe: the game
   // in progress loses its buttons while the noon game keeps them, so the parent
   // answers for the right one without leaving the page.
