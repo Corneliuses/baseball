@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { getChart } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -20,7 +21,7 @@ export const metadata = {
   title: "Batting order — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-order": "That order couldn't be read. Reload and try again.",
   "unknown-entry":
     "The roster changed while you were editing. Reload and try again.",
@@ -43,7 +44,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "chart-changed":
     "Another coach changed the batting order while you were editing — nothing was saved. The order below is theirs; make your changes again on top of it.",
   access: "You no longer have access to make this change.",
-};
+});
 
 /// The coach-only batting order editor (#10). Calls requireTeamAccess itself,
 /// independent of the layout — every page under /t/[teamId] does, since
@@ -93,9 +94,7 @@ export default async function ChartPage({
     battingOrder,
   }));
 
-  const errorMessage = error
-    ? (ERROR_MESSAGES[error] ?? "Something went wrong.")
-    : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">

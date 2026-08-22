@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { listTeamMembers } from "@/lib/memberships";
 import { listTeamInvitations } from "@/lib/invitations";
@@ -19,13 +20,13 @@ export const metadata = {
   title: "Members — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-invite": "Enter a valid email and choose a role.",
   "invalid-role": "Choose a valid role.",
   "email-failed": "The invitation could not be sent. Try again.",
   "last-owner": "This team must always have at least one owner.",
   access: "You no longer have access to make this change.",
-};
+});
 
 const ROLE_OPTIONS = ["OWNER", "COACH", "PARENT"] as const;
 
@@ -60,7 +61,7 @@ export default async function MembersPage({
     isLiveInvitation(invitation, now),
   );
 
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
   const ownerCount = members.filter((member) => member.role === "OWNER").length;
 
   return (

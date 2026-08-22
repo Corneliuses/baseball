@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -26,7 +27,7 @@ export const metadata = {
   title: "Event — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-type": "Choose either a game or a practice.",
   "invalid-datetime": "Enter a valid date and time.",
   "invalid-location": "Location is too long.",
@@ -35,7 +36,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
   access: "You no longer have access to make this change.",
-};
+});
 
 const inputClass =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
@@ -84,7 +85,7 @@ export default async function EventPage({
   );
 
   const canEdit = role !== "PARENT";
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
   const confirmingDelete = confirm === "delete";
   const heading =
     event.type === "GAME"
