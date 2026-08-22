@@ -220,13 +220,23 @@ describe("TeamHomePage next event", () => {
     expect(html).not.toContain("Bears");
   });
 
-  it("shows the card to a coach as well as a parent", async () => {
+  // AC 5: the event cards are the *only* thing a coach's view gains. This
+  // asserts both roles rather than one, because the criterion is about the two
+  // being the same — an earlier version of this test named the coach and then
+  // overrode the role to PARENT, so it never checked the half it was named for.
+  it("shows the cards to a coach and to a parent alike", async () => {
     nextEvents.mockResolvedValue([GAME]);
+
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    const coachHtml = await render();
+
     requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+    const parentHtml = await render();
 
-    const html = await render();
-
-    expect(html).toContain("Game vs Hawks");
+    expect(coachHtml).toContain("Game vs Hawks");
+    expect(parentHtml).toContain("Game vs Hawks");
+    expect(coachHtml).toContain("Field 3");
+    expect(parentHtml).toContain("Field 3");
   });
 });
 
