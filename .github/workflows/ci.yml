@@ -1,0 +1,82 @@
+name: CI
+
+# Every pull request, and every push to main — so a merge that silently breaks
+# something is caught even when no PR re-ran.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push supersedes the run in flight for the same branch. Nobody needs the
+# result for a commit that has already been replaced.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, typecheck, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # `postinstall` runs `prisma generate`, which is required rather than
+      # optional here: src/generated/prisma is gitignored, so nothing typechecks
+      # or runs until it exists.
+      - run: pnpm install --frozen-lockfile
+
+      # Run as separate steps rather than through `pnpm check`, so the failing
+      # one is named in the UI instead of buried in a combined log. Each still
+      # runs even if an earlier one failed — one push should report every
+      # problem, not just the first.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        if: '!cancelled()'
+        run: pnpm typecheck
+
+      - name: Unit tests
+        if: '!cancelled()'
+        run: pnpm test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # `next build` directly, NEVER `pnpm build`.
+      #
+      # The package script is `prisma migrate deploy && next build`, which is
+      # right on Vercel — every deploy brings the database up to date before the
+      # app ships. It is wrong here. Preview and Production share one
+      # DATABASE_URL (see AGENTS.md), so a CI job running the migrate step would
+      # apply migrations to the **production database** on every pull request,
+      # from any branch, including one whose migrations are still being written.
+      #
+      # Nothing is lost by skipping it: every route under /t/[teamId] is
+      # server-rendered on demand, so the build reads no data and needs no
+      # DATABASE_URL. This job answers "does it compile and typecheck as Next
+      # sees it", which is the half `pnpm check` cannot cover.
+      - name: Build
+        run: pnpm exec next build

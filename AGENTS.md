@@ -85,6 +85,17 @@ fixes, what the team has on file for them.
 
 `pnpm check` runs lint → typecheck → test and is what to run before reporting work done.
 
+`.github/workflows/ci.yml` runs the same three on every pull request and every push to
+main, plus a build — the half `pnpm check` cannot cover, since it never asks Next to
+compile. **CI builds with `pnpm exec next build`, never `pnpm build`.** The package script
+is `prisma migrate deploy && next build`, which is right on Vercel and wrong in CI:
+Preview and Production share one `DATABASE_URL`, so the migrate step would apply
+migrations to the production database from any branch, on every pull request. Nothing is
+lost by skipping it — every route under `/t/[teamId]` is server-rendered on demand, so the
+build reads no data and needs no `DATABASE_URL`. If that ever stops being true (a route
+becomes static and queries at build time), CI needs a throwaway database, not the shared
+URL.
+
 ## Architecture
 
 Server Actions for mutations; Route Handlers only for things needing a real HTTP endpoint
