@@ -10,6 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
+import { absoluteUrl } from "@/lib/absolute-url";
+import { getCalendarToken } from "@/lib/calendar-feed";
 import {
   adjacentMonth,
   bucketEventsByDay,
@@ -107,6 +109,7 @@ export default async function SchedulePage({
 
   const canEdit = role !== "PARENT";
   const errorMessage = messageFor(ERROR_MESSAGES, error);
+  const calendarToken = await getCalendarToken(teamId);
 
   return (
     <div className="space-y-6">
@@ -147,7 +150,87 @@ export default async function SchedulePage({
       )}
 
       {canEdit ? <AddEventForm teamId={teamId} /> : null}
+
+      {calendarToken ? <SeasonPassCard token={calendarToken} /> : null}
     </div>
+  );
+}
+
+/// The ICS subscription (#57), printed as a **season pass**: the same ticket
+/// stock as GameTicket — clay border, perforated stub end, rotated mono stub
+/// text — except a game admits one and the season pass admits all. Its stub
+/// is Banana Yellow: games spend clay and practices print plain, so this is
+/// the schedule screen's one banana (design-plan.md §2), and the whole
+/// season landing in a parent's pocket is exactly the wow it should mark.
+///
+/// Shown to every role — parents are the audience. The URL is a capability
+/// (the token is the credential), so the copy says to keep it in the family.
+/// No clipboard JS: a read-only input selects fine on a phone, and the
+/// webcal link opens straight into Apple Calendar.
+function SeasonPassCard({ token }: { token: string }) {
+  const feedUrl = absoluteUrl(`/api/calendar/${token}`, {
+    AUTH_URL: process.env.AUTH_URL,
+    VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    VERCEL_URL: process.env.VERCEL_URL,
+  });
+  const webcalUrl = feedUrl.replace(/^https?:\/\//, "webcal://");
+
+  return (
+    <Card className="overflow-hidden border-2 border-dirt/60 p-0">
+      <div className="flex items-stretch">
+        <div className="min-w-0 flex-1 space-y-3 p-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-destructive">
+              Season pass
+            </p>
+            <h4 className="font-display text-lg text-foreground">
+              The whole season, in your pocket
+            </h4>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Subscribe once and every game and practice shows up in your
+              phone&apos;s calendar — schedule changes ride along on their own.
+              Anyone with the link can read the schedule, so keep it in the
+              family.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="calendar-feed-url"
+              className="block text-sm font-medium text-foreground"
+            >
+              Calendar link
+            </label>
+            <input
+              id="calendar-feed-url"
+              type="text"
+              readOnly
+              value={feedUrl}
+              className="w-full rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">
+              On an iPhone the button below opens it straight in Calendar. In
+              Google Calendar: Other calendars → From URL, then paste the link.
+            </p>
+          </div>
+
+          <Button asChild variant="outline" className="w-full">
+            <a href={webcalUrl}>Add to my calendar</a>
+          </Button>
+        </div>
+
+        {/* The stub: decorative, so it lives outside any control — and this
+            screen's one banana. */}
+        <div
+          aria-hidden="true"
+          className="flex w-16 shrink-0 items-center justify-center border-l-2 border-dashed border-dirt/60 bg-banana"
+        >
+          <span className="rotate-90 whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-banana-foreground">
+            Admit all
+          </span>
+        </div>
+      </div>
+    </Card>
   );
 }
 

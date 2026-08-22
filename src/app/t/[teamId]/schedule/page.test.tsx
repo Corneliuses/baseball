@@ -5,10 +5,15 @@ const requireTeamAccess = vi.fn();
 const listEventsInMonthGrid = vi.fn();
 const listUpcomingEvents = vi.fn();
 const listPastEvents = vi.fn();
+const getCalendarToken = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
   TeamAccessError: class TeamAccessError extends Error {},
+}));
+
+vi.mock("@/lib/calendar-feed", () => ({
+  getCalendarToken: (...args: unknown[]) => getCalendarToken(...args),
 }));
 
 vi.mock("@/lib/schedule", () => ({
@@ -65,6 +70,7 @@ beforeEach(() => {
   listEventsInMonthGrid.mockResolvedValue([]);
   listUpcomingEvents.mockResolvedValue([]);
   listPastEvents.mockResolvedValue([]);
+  getCalendarToken.mockResolvedValue("feed-token-1");
 });
 
 describe("SchedulePage access", () => {
@@ -267,5 +273,40 @@ describe("SchedulePage practice locations", () => {
     const html = await render({ view: "list" });
 
     expect(html).toContain("https://maps.google.com/?q=Field%201");
+  });
+});
+
+describe("SchedulePage season pass card", () => {
+  it("shows the feed URL and a webcal link to every role, parents included", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+
+    const html = await render();
+
+    expect(getCalendarToken).toHaveBeenCalledWith("team-1");
+    expect(html).toContain("The whole season, in your pocket");
+    // Host comes from absoluteUrl's env precedence — assert scheme and path,
+    // not a particular deploy host.
+    expect(html).toMatch(/https?:\/\/[^"&]*\/api\/calendar\/feed-token-1/);
+    expect(html).toMatch(/webcal:\/\/[^"&]*\/api\/calendar\/feed-token-1/);
+  });
+
+  it("spends the schedule screen's one banana on the season pass stub — no more, no fewer", async () => {
+    // Game tickets are clay and practices print plain, so the pass's stub is
+    // the screen's single Banana Yellow element (design-plan.md §2).
+    listUpcomingEvents.mockResolvedValue([game, practice]);
+
+    const html = await render({ view: "list" });
+
+    expect(html.match(/bg-banana/g)).toHaveLength(1);
+    expect(html).toContain("Admit all");
+  });
+
+  it("omits the card rather than rendering a broken URL when the token is missing", async () => {
+    getCalendarToken.mockResolvedValue(null);
+
+    const html = await render();
+
+    expect(html).not.toContain("The whole season, in your pocket");
+    expect(html).not.toContain("/api/calendar/");
   });
 });
