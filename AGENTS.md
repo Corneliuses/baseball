@@ -345,10 +345,14 @@ production — the dev command can prompt, generate new migrations, and reset th
   page-selected event, it does not authorize, and the event page still records a late
   answer on purpose. Anything else writing against a grace-window selection needs both
   halves.
-- **"Bench" is a claim about a player in neither column, and three pages have to agree.**
-  A kid batting third with no fielding spot is *in the order* — the view page's bench list
+- **"Substitute" is a claim about a player in neither column, and three pages have to
+  agree.** (The label was softened from "Bench" everywhere a person reads it — team home's
+  marquee, /view's Substitutes card, the positions editor's zone — but the code and its
+  comments still say bench/`isBenched`/`benchLabel` for the state itself.) A kid batting
+  third with no fielding spot is *in the order* — the view page's substitutes list
   filters on `battingOrder === null` and says so, and `chartRole`'s `benchLabel` applies
-  under the same condition. Printing "Bats 3rd · Bench" misdescribes a kid who is playing.
+  under the same condition. Printing "Bats 3rd · Substitute" misdescribes a kid who is
+  playing.
   The prior question is whether the team has a chart at all: with none, every position a
   page prints is one nobody assigned, which is why `hasChartSet` (`chart-view.ts`) gates
   the line on team home and the whole panel on `/view` and `/readiness`.

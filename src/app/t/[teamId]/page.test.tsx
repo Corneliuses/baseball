@@ -279,7 +279,7 @@ describe("TeamHomePage your players", () => {
     expect(html).toContain("bg-banana");
   });
 
-  it("keeps the banana in its pocket for a benched kid", async () => {
+  it("keeps the banana in its pocket for a substitute", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
       name: "Sluggers",
@@ -294,7 +294,7 @@ describe("TeamHomePage your players", () => {
 
     const html = await render();
 
-    expect(html).toContain("Bench");
+    expect(html).toContain("Substitute");
     expect(html).not.toContain("bg-banana");
   });
 
@@ -334,7 +334,7 @@ describe("TeamHomePage your players", () => {
     expect(html).toContain("Bats 3rd · OF");
   });
 
-  it("reads a null position as Bench on a selective team", async () => {
+  it("reads a null position as Substitute on a selective team", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
       name: "Sluggers",
@@ -344,21 +344,23 @@ describe("TeamHomePage your players", () => {
     });
     getChart.mockResolvedValue([
       { ...REESE, position: null, battingOrder: null },
-      // A teammate who is placed: "Bench" is only meaningful on a team that
-      // has a chart to be left out of.
+      // A teammate who is placed: "Substitute" is only meaningful on a team
+      // that has a chart to be left out of.
       { ...REESE, entryId: "entry-9", playerId: "player-9", playerName: "Kit" },
     ]);
 
     const html = await render();
 
-    expect(html).toContain("Bench");
+    // The softer word, by request — never "Bench" on a page a family reads.
+    expect(html).toContain("Substitute");
+    expect(html).not.toContain("Bench");
   });
 
   // The view page's rule, which team home contradicted: a kid batting third
-  // with no fielding spot is in the order. Calling that Bench would both
-  // misdescribe a kid who is playing and disagree with /view, which lists them
-  // in the order and on no bench at all.
-  it("never calls a kid who is in the batting order benched", async () => {
+  // with no fielding spot is in the order. Calling that a substitute would
+  // both misdescribe a kid who is playing and disagree with /view, which lists
+  // them in the order and in no substitutes card at all.
+  it("never calls a kid who is in the batting order a substitute", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
       name: "Sluggers",
@@ -371,7 +373,7 @@ describe("TeamHomePage your players", () => {
     const html = await render();
 
     expect(html).toContain("Bats 3rd");
-    expect(html).not.toContain("Bench");
+    expect(html).not.toContain("Substitute");
   });
 
   // /view renders "No chart set yet" for the same data. Printing OF for every
@@ -386,7 +388,7 @@ describe("TeamHomePage your players", () => {
 
     expect(html).toContain("No chart set yet");
     expect(html).not.toContain("OF");
-    expect(html).not.toContain("Bench");
+    expect(html).not.toContain("Substitute");
   });
 
   it("never shows another family's kid", async () => {

@@ -23,8 +23,9 @@ export function ordinal(n: number): string {
 
 export type ChartRoleOptions = {
   /**
-   * What to print when this team fields no spot for the player — "Bench" on
-   * team home, nothing at all on the readiness page.
+   * What to print when this team fields no spot for the player — "Substitute"
+   * on team home (the app-wide word for the state; softer than "Bench" for
+   * the family reading it), nothing at all on the readiness page.
    *
    * Opt-in rather than always on, because the two callers are answering
    * different questions. Readiness lists a player the coach already knows is
@@ -34,9 +35,9 @@ export type ChartRoleOptions = {
    * failed to load, not as "on the bench".
    *
    * Applied only to a player who is in **neither** column, matching the filter
-   * the view page's bench list already uses: a kid batting third with no
-   * fielding spot is in the order, and "Bats 3rd · Bench" would contradict the
-   * page a parent reads next — and misdescribe a kid who is playing.
+   * the view page's substitutes list already uses: a kid batting third with no
+   * fielding spot is in the order, and "Bats 3rd · Substitute" would contradict
+   * the page a parent reads next — and misdescribe a kid who is playing.
    *
    * Never reached on an allPlay team: everyone outside that infield is in the
    * outfield, which is what the next save writes.

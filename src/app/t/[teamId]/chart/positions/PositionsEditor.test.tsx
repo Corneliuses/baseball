@@ -63,7 +63,9 @@ describe("PositionsEditor", () => {
     const zone = screen.getByRole("region", { name: "Outfield" });
     expect(zone).toHaveTextContent("Player-b");
     expect(zone).toHaveTextContent("Player-c");
-    expect(screen.queryByRole("region", { name: "Bench" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Substitutes" }),
+    ).not.toBeInTheDocument();
   });
 
   it("marks the catcher's empty spot with a filled circle under allPlay", () => {
@@ -113,7 +115,7 @@ describe("PositionsEditor", () => {
     );
   });
 
-  it("renders all nine targets and a Bench zone when allPlay is false", () => {
+  it("renders all nine targets and a Substitutes zone when allPlay is false", () => {
     render(
       <PositionsEditor
         teamId="team-1"
@@ -128,7 +130,7 @@ describe("PositionsEditor", () => {
     }
     expect(field).toHaveTextContent("Player-a");
 
-    const zone = screen.getByRole("region", { name: "Bench" });
+    const zone = screen.getByRole("region", { name: "Substitutes" });
     expect(zone).toHaveTextContent("Player-b");
   });
 

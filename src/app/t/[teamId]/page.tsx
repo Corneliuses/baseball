@@ -190,7 +190,7 @@ export default async function TeamHomePage({
   // than this parent's kids — "no chart set yet" is a fact about the team, and
   // it is what /view says for the same data. Without it every line below
   // asserts a definite spot nobody assigned: OF for every kid on an allPlay
-  // team, Bench on a selective one.
+  // team, Substitute on a selective one.
   const hasChart = hasChartSet(chartEntries);
 
   // Archived teams reject every write regardless of role, so the buttons are
@@ -263,10 +263,12 @@ export default async function TeamHomePage({
 
           The marquee is THIS screen's one banana (design-plan.md §2), and the
           budget follows the child the same way /view's halo does: a kid the
-          chart seats gets Banana Yellow; Bench and no-chart-yet drop to quiet
-          secondary stock, because a banana shouting an empty state is the
-          wrong kind of loud. `isBenched` is chartRole's own condition for
-          printing the bench label, so the styling and the sentence cannot
+          chart seats gets Banana Yellow; the Substitute and no-chart-yet
+          states drop to quiet secondary stock, because a banana shouting an
+          empty state is the wrong kind of loud. `isBenched` is chartRole's
+          own condition for printing the bench label ("Substitute" — the
+          app-wide word for the state; softer than "Bench" for the family
+          reading it), so the styling and the sentence cannot
           disagree. Nothing else on this page may go banana while these cards
           do. */}
       {myKids.length > 0 ? (
@@ -277,7 +279,7 @@ export default async function TeamHomePage({
           <ul className="space-y-3">
             {myKids.map((entry, index) => {
               const roleLine = hasChart
-                ? chartRole(entry, team.allPlay, { benchLabel: "Bench" })
+                ? chartRole(entry, team.allPlay, { benchLabel: "Substitute" })
                 : "No chart set yet";
               const celebrate = hasChart && !isBenched(entry, team.allPlay);
 

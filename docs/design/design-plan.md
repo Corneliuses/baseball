@@ -235,9 +235,9 @@ pinstripes — and a marquee strip carrying `chartRole`'s line ("Bats 1st · 2B"
 by CSS so the DOM keeps the exact sentence readiness and `/view` also print. Cards rise in
 with the same staggered `animate-rise` the lineup view announces rows with. **This
 screen's banana is the marquee**, and the budget follows the child exactly as it does on
-`/view`: a kid the chart seats gets Banana Yellow with a little star; Bench and
-no-chart-yet drop to quiet secondary stock, because a banana shouting an empty state is
-the wrong kind of loud — and a team-home screen with no guarded kid (a coach, say) simply
+`/view`: a kid the chart seats gets Banana Yellow with a little star; the Substitute and
+no-chart-yet states drop to quiet secondary stock, because a banana shouting an empty
+state is the wrong kind of loud — and a team-home screen with no guarded kid (a coach, say) simply
 has no banana, matching the calm-admin rule below rather than inventing a yellow thing to
 spend it on. `isBenched` in `chart-role.ts` is `chartRole`'s own bench condition, exported
 so the styling and the sentence cannot disagree.
@@ -275,7 +275,11 @@ The **bench** is its own card, below the diamond, holding only the players this 
 otherwise render nowhere — non-allPlay teams, and only kids in neither column. An allPlay
 team's unplaced players are the outfield zone two inches above, and a kid batting third
 without a fielding spot is already in the order; calling either group benched would
-misdescribe them.
+misdescribe them. The card — and every other surface a person reads — says **Substitutes**,
+never "Bench": the softer word, chosen for the family reading it, and shared with team
+home's marquee and the positions editor's zone so the state keeps one name. The code still
+calls the state bench (`isBenched`, `benchLabel`, the local variables); only the printed
+word softened.
 
 **Chart editors** — restraint zone; dnd-kit owns every dragged element (the AGENTS.md
 rule), so flair goes only into *static* styling: field art behind the position targets,
