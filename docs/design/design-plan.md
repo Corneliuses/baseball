@@ -228,11 +228,21 @@ section heading it sits under, the settings Archive/Unarchive controls, and the 
 header. A second word for one state is a worse card, however good the flourish.
 
 **Team home's player cards (post-ship addition)** — the parent's own kids stopped being a
-log line. Each guarded kid gets a rookie-card hero at the top of the dashboard: the jersey
+log line. Each guarded kid gets a rookie-card hero at the top of the dashboard, and its
+card art is **the kid standing on the real field**: `MiniDiamondHero` crops the painted
+`FieldArt` board to a wide strip framed on the kid's spot (`POSITION_COORDS`, or the
+outfield zone's centre for an allPlay kid with no named position), with the guarded halo
+ringing a marker that wears the kid's jersey number in the JerseyDot colours — the same
+field, coordinates, halo and step-up the lineup pages use, so the card is a close-up of
+the board the parent opens next, never a third diamond that could drift. A kid the chart
+puts on no field (a substitute, or a selective team's order-only batter) gets no field
+art rather than an invented spot. Below the art: the jersey
 number worn big on a `JerseyDot` (the component grew an `lg` cut for exactly this), the
 name in slab caps on a pinstripe band — a hero surface, which is where §5 allows
 pinstripes — and a marquee strip carrying `chartRole`'s line ("Bats 1st · 2B"), uppercased
-by CSS so the DOM keeps the exact sentence readiness and `/view` also print. Cards rise in
+by CSS so the DOM keeps the exact sentence readiness and `/view` also print. The hero's
+fence is always chalk: the halo and the marquee are one banana treatment of one child,
+the way `/view`'s halo, row border and chip are. Cards rise in
 with the same staggered `animate-rise` the lineup view announces rows with. **This
 screen's banana is the marquee**, and the budget follows the child exactly as it does on
 `/view`: a kid the chart seats gets Banana Yellow with a little star; the Substitute and

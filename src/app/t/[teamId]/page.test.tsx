@@ -48,6 +48,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 import TeamHomePage from "./page";
+import { POSITION_COORDS } from "@/components/diamond-geometry";
+import { heroViewBox } from "@/components/MiniDiamondHero";
 
 /// 6:00 PM Central on 15 August 2026 (CDT, UTC-5).
 const GAME = {
@@ -307,6 +309,77 @@ describe("TeamHomePage your players", () => {
     const html = await render();
 
     expect(html).not.toContain("bg-banana");
+  });
+
+  // The mini-diamond hero: the kid standing on the painted field, cropped to
+  // their spot. The same FieldArt and coordinates the lineup pages draw, so
+  // the card is a close-up of the board the parent opens next.
+  it("puts a fielded kid on the painted field, cropped to their position", async () => {
+    getChart.mockResolvedValue([{ ...REESE, position: "SHORTSTOP" }]);
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+
+    const html = await render();
+
+    expect(html).toContain("fill-grass");
+    expect(html).toContain(`viewBox="${heroViewBox(POSITION_COORDS.SHORTSTOP)}"`);
+  });
+
+  it("frames an allPlay kid with no position in the outfield zone", async () => {
+    getChart.mockResolvedValue([{ ...REESE, position: null }]);
+
+    const html = await render();
+
+    // outfieldZoneCoords(1) is CENTER_FIELD's spot by construction.
+    expect(html).toContain("fill-grass");
+    expect(html).toContain(`viewBox="${heroViewBox(POSITION_COORDS.CENTER_FIELD)}"`);
+  });
+
+  // A selective team's kid who bats but doesn't field is celebrated (they're
+  // in the order) yet stands on no field — drawing them at a position would
+  // assert a spot nobody assigned, the same lie the big diamonds refuse.
+  it("draws no field for an order-only kid, but still celebrates them", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([{ ...REESE, position: null }]);
+
+    const html = await render();
+
+    expect(html).toContain("bg-banana");
+    expect(html).not.toContain("fill-grass");
+  });
+
+  it("draws no field for a substitute or when no chart is set", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    // A substitute on a team that does have a chart (the teammate is placed).
+    getChart.mockResolvedValue([
+      { ...REESE, position: null, battingOrder: null },
+      { ...REESE, entryId: "entry-9", playerId: "player-9", playerName: "Kit" },
+    ]);
+    const substituteHtml = await render();
+
+    // No chart at all: with no spot assigned there is nothing to frame.
+    getChart.mockResolvedValue([{ ...REESE, position: null, battingOrder: null }]);
+    const noChartHtml = await render();
+
+    expect(substituteHtml).not.toContain("fill-grass");
+    expect(noChartHtml).not.toContain("fill-grass");
   });
 
   it("announces the cards with the staggered lineup rise", async () => {

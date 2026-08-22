@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { JerseyDot } from "@/components/JerseyDot";
+import { MiniDiamondHero } from "@/components/MiniDiamondHero";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ import {
 import { sortDirectory } from "@/lib/directory-rules";
 import { mapsUrl } from "@/lib/maps";
 import { listCoachContacts } from "@/lib/memberships";
+import { fieldedPositions } from "@/lib/positions";
 import { getChart } from "@/lib/roster";
 import { buildRsvpStateMapsByEvent } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listRsvpsForEvents } from "@/lib/rsvps";
@@ -193,6 +195,13 @@ export default async function TeamHomePage({
   // team, Substitute on a selective one.
   const hasChart = hasChartSet(chartEntries);
 
+  // The spots this team actually fields — the player-card hero's framing
+  // question, asked once here rather than per kid. Same rule chartRole applies
+  // inside: a stale CENTER_FIELD or CATCHER row on an allPlay team is not a
+  // spot, so that kid frames in the outfield zone, where both big boards
+  // already draw them.
+  const fielded = fieldedPositions(team.allPlay);
+
   // Archived teams reject every write regardless of role, so the buttons are
   // hidden rather than shown and refused — AC 4. The summaries and any answer
   // already given stay: last season is still worth reading. `rsvpAction`
@@ -254,7 +263,10 @@ export default async function TeamHomePage({
       ) : null}
 
       {/* Is my kid playing — answered as a celebration, not a log line. Each
-          kid gets a rookie-card hero: the jersey number worn big, the name in
+          kid gets a rookie-card hero: the painted field cropped to their spot
+          (MiniDiamondHero — the same FieldArt and coordinates the lineup
+          pages draw, so this is a close-up of the board the parent opens
+          next, not a third diamond), the jersey number worn big, the name in
           slab caps on a pinstripe band (a hero surface, which is where §5 says
           pinstripes may go), and a marquee strip announcing the chart line.
           Still first, above the events, so a parent with one kid gets all
@@ -283,6 +295,21 @@ export default async function TeamHomePage({
                 : "No chart set yet";
               const celebrate = hasChart && !isBenched(entry, team.allPlay);
 
+              // Where the hero frames the kid, by the diamonds' own rules: a
+              // fielded position at its spot, anyone else on an allPlay team
+              // in the outfield zone (null), and no field art at all
+              // (undefined) for a kid the chart puts on no field — a
+              // selective team's substitute or order-only batter. The hero
+              // never asserts a spot nobody assigned, which is also why it is
+              // gated on `celebrate`: with no chart there is no spot, and a
+              // substitute's card stays quiet.
+              const heroPosition =
+                entry.position !== null && fielded.has(entry.position)
+                  ? entry.position
+                  : team.allPlay
+                    ? null
+                    : undefined;
+
               return (
                 <li
                   key={entry.entryId}
@@ -293,6 +320,12 @@ export default async function TeamHomePage({
                   style={{ animationDelay: `${index * 40}ms` }}
                 >
                   <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                    {celebrate && heroPosition !== undefined ? (
+                      <MiniDiamondHero
+                        position={heroPosition}
+                        jerseyNumber={entry.jerseyNumber}
+                      />
+                    ) : null}
                     <div className="flex items-center gap-3 bg-pinstripe px-4 py-4">
                       {entry.jerseyNumber !== null ? (
                         <JerseyDot number={entry.jerseyNumber} size="lg" />
