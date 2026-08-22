@@ -172,8 +172,8 @@ export default async function ViewPage({
   // diamond's zone, and calling them benched would tell those parents their kid
   // is sitting when the diamond two inches above shows them playing. Then
   // `battingOrder === null`, because a kid batting third with no fielding spot
-  // is already in the order — listing them again under "Bench" would both
-  // duplicate them and misdescribe them.
+  // is already in the order — listing them again under "Substitutes" would
+  // both duplicate them and misdescribe them.
   const bench = allPlay
     ? []
     : chart.unassigned.filter((player) => player.battingOrder === null);
@@ -286,7 +286,7 @@ export default async function ViewPage({
           {bench.length > 0 ? (
             <Card className="mt-6">
               <CardHeader>
-                <CardTitle className="text-lg">Bench</CardTitle>
+                <CardTitle className="text-lg">Substitutes</CardTitle>
                 <CardDescription>
                   Not in the batting order or the field chart right now.
                 </CardDescription>

@@ -355,10 +355,13 @@ function Zone({
   allPlay: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: POSITION_POOL_ID });
-  const title = allPlay ? "Outfield" : "Bench";
+  // "Substitutes", never "Bench": the app-wide word for the state, chosen
+  // because a parent reads it too — the coach's zone here and the family's
+  // pages must not speak two dialects of the same idea.
+  const title = allPlay ? "Outfield" : "Substitutes";
   const empty = allPlay
     ? "Drag a player here to move them to the outfield."
-    : "Drag a player here to sit them out.";
+    : "Drag a player here to make them a substitute.";
 
   return (
     <section aria-label={title}>

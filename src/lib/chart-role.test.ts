@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chartRole, ordinal } from "@/lib/chart-role";
+import { chartRole, isBenched, ordinal } from "@/lib/chart-role";
 
 const entry = (
   battingOrder: number | null,
@@ -49,15 +49,19 @@ describe("chartRole on a selective team", () => {
   });
 
   it("prints the bench label when one is asked for — team home's shape", () => {
-    expect(chartRole(entry(null), allPlay, { benchLabel: "Bench" })).toBe("Bench");
+    expect(chartRole(entry(null), allPlay, { benchLabel: "Substitute" })).toBe(
+      "Substitute",
+    );
   });
 
-  // The view page's bench list filters on `battingOrder === null` for this
-  // reason, and says so: a kid batting third with no fielding spot is in the
-  // order. "Bats 4th · Bench" would misdescribe a kid who is playing, and
-  // disagree with the page a parent reads next.
+  // The view page's substitutes list filters on `battingOrder === null` for
+  // this reason, and says so: a kid batting third with no fielding spot is in
+  // the order. "Bats 4th · Substitute" would misdescribe a kid who is playing,
+  // and disagree with the page a parent reads next.
   it("never calls a player in the batting order benched", () => {
-    expect(chartRole(entry(4), allPlay, { benchLabel: "Bench" })).toBe("Bats 4th");
+    expect(chartRole(entry(4), allPlay, { benchLabel: "Substitute" })).toBe(
+      "Bats 4th",
+    );
   });
 });
 
@@ -73,7 +77,9 @@ describe("chartRole on an allPlay team", () => {
   // where both diamonds already draw that player.
   it("reads a null position as OF, never as bench", () => {
     expect(chartRole(entry(2), allPlay)).toBe("Bats 2nd · OF");
-    expect(chartRole(entry(2), allPlay, { benchLabel: "Bench" })).toBe("Bats 2nd · OF");
+    expect(chartRole(entry(2), allPlay, { benchLabel: "Substitute" })).toBe(
+      "Bats 2nd · OF",
+    );
   });
 
   it("reads a stale CENTER_FIELD or CATCHER row as OF", () => {
@@ -83,5 +89,41 @@ describe("chartRole on an allPlay team", () => {
 
   it("prints OF alone for a player with no batting slot", () => {
     expect(chartRole(entry(null), allPlay)).toBe("OF");
+  });
+});
+
+describe("isBenched", () => {
+  it("is true only for a player in neither column on a selective team", () => {
+    expect(isBenched(entry(null), false)).toBe(true);
+    expect(isBenched(entry(3, "SHORTSTOP"), false)).toBe(false);
+    expect(isBenched(entry(3), false)).toBe(false);
+    expect(isBenched(entry(null, "SHORTSTOP"), false)).toBe(false);
+  });
+
+  it("is never true on an allPlay team — the leftover kids are the outfield", () => {
+    expect(isBenched(entry(null), true)).toBe(false);
+    expect(isBenched(entry(null, "CENTER_FIELD"), true)).toBe(false);
+  });
+
+  // The pin the export promises: isBenched true exactly when chartRole would
+  // print the bench label. Team home styles on the former and prints the
+  // latter, so a disagreement here is a banana marquee shouting "Substitute" —
+  // or a playing kid rendered on quiet stock.
+  it("agrees with chartRole about when the bench label prints", () => {
+    const shapes = [
+      entry(null),
+      entry(3),
+      entry(null, "SHORTSTOP"),
+      entry(3, "SHORTSTOP"),
+      entry(null, "CATCHER"),
+      entry(null, "CENTER_FIELD"),
+    ];
+    for (const allPlay of [false, true]) {
+      for (const shape of shapes) {
+        expect(isBenched(shape, allPlay)).toBe(
+          chartRole(shape, allPlay, { benchLabel: "Substitute" }) === "Substitute",
+        );
+      }
+    }
   });
 });

@@ -227,6 +227,31 @@ that is the app's existing vocabulary for this state, shared with the "Archived 
 section heading it sits under, the settings Archive/Unarchive controls, and the team
 header. A second word for one state is a worse card, however good the flourish.
 
+**Team home's player cards (post-ship addition)** — the parent's own kids stopped being a
+log line. Each guarded kid gets a rookie-card hero at the top of the dashboard, and its
+card art is **the kid standing on the real field**: `MiniDiamondHero` crops the painted
+`FieldArt` board to a wide strip framed on the kid's spot (`POSITION_COORDS`, or the
+outfield zone's centre for an allPlay kid with no named position), with the guarded halo
+ringing a marker that wears the kid's jersey number in the JerseyDot colours — the same
+field, coordinates, halo and step-up the lineup pages use, so the card is a close-up of
+the board the parent opens next, never a third diamond that could drift. A kid the chart
+puts on no field (a substitute, or a selective team's order-only batter) gets no field
+art rather than an invented spot. Below the art: the jersey
+number worn big on a `JerseyDot` (the component grew an `lg` cut for exactly this), the
+name in slab caps on a pinstripe band — a hero surface, which is where §5 allows
+pinstripes — and a marquee strip carrying `chartRole`'s line ("Bats 1st · 2B"), uppercased
+by CSS so the DOM keeps the exact sentence readiness and `/view` also print. The hero's
+fence is always chalk: the halo and the marquee are one banana treatment of one child,
+the way `/view`'s halo, row border and chip are. Cards rise in
+with the same staggered `animate-rise` the lineup view announces rows with. **This
+screen's banana is the marquee**, and the budget follows the child exactly as it does on
+`/view`: a kid the chart seats gets Banana Yellow with a little star; the Substitute and
+no-chart-yet states drop to quiet secondary stock, because a banana shouting an empty
+state is the wrong kind of loud — and a team-home screen with no guarded kid (a coach, say) simply
+has no banana, matching the calm-admin rule below rather than inventing a yellow thing to
+spend it on. `isBenched` in `chart-role.ts` is `chartRole`'s own bench condition, exported
+so the styling and the sentence cannot disagree.
+
 **Schedule** — games become **ticket stubs** (sketch A): perforated edge, slab opponent
 name, Geist Mono date, RSVP tallies on the stub end. Practices print on plain cream stock
 with a clay dashed border — games must feel like the main event. Month grid keeps using
@@ -260,7 +285,11 @@ The **bench** is its own card, below the diamond, holding only the players this 
 otherwise render nowhere — non-allPlay teams, and only kids in neither column. An allPlay
 team's unplaced players are the outfield zone two inches above, and a kid batting third
 without a fielding spot is already in the order; calling either group benched would
-misdescribe them.
+misdescribe them. The card — and every other surface a person reads — says **Substitutes**,
+never "Bench": the softer word, chosen for the family reading it, and shared with team
+home's marquee and the positions editor's zone so the state keeps one name. The code still
+calls the state bench (`isBenched`, `benchLabel`, the local variables); only the printed
+word softened.
 
 **Chart editors** — restraint zone; dnd-kit owns every dragged element (the AGENTS.md
 rule), so flair goes only into *static* styling: field art behind the position targets,
@@ -285,13 +314,15 @@ Via the existing `LazyMotion`/`m` setup only:
 
 - Page-level: the existing `Reveal` rise on card mount; lineup rows stagger in at ~40ms
   intervals via the `animate-rise` utility, an inline `animation-delay` per row.
-- `animate-step-up`: the lineup view's guarded marker rises once, on load, and settles.
+- `animate-step-up`: the guarded marker rises once, on load, and settles — on the lineup
+  view's diamond and on team home's `MiniDiamondHero`, which draws the same haloed marker.
   CSS too, and translate-only for a second reason on top of the one below — the banana halo
   already sits 2.5px inside the warning track, so a scale would push it onto the tan at the
   animation's peak and lose exactly the contrast the highlight is made of. It goes on an
   *inner* `<g>`, never the one carrying `transform="translate(x y)"`: a CSS transform
   overrides an SVG transform attribute, and animating that element drops the marker at the
-  origin.
+  origin. Both suites pin that placement, because the failure is silent — the marker simply
+  renders at the field's origin, with no error.
 - `animate-rise` is CSS, not Motion, and **translate-only** — no opacity, for the same
   reason `Reveal` has none: Motion serialises `initial` into the server-rendered markup,
   so a fade ships `opacity: 0` in the HTML and the lineup stays blank until the bundle

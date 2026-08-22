@@ -708,7 +708,9 @@ describe("ViewPage bench", () => {
 
     const html = await render();
 
-    expect(html).toContain("Bench");
+    // "Substitutes", not "Bench" — the softer word is the app-wide label for
+    // this state, shared with team home's marquee and the positions editor.
+    expect(html).toContain("Substitutes");
     expect(html).toContain("Eli Nakamura");
   });
 
@@ -717,7 +719,7 @@ describe("ViewPage bench", () => {
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["eli"]));
 
     const html = await render();
-    const benchHtml = html.slice(html.indexOf("Bench"));
+    const benchHtml = html.slice(html.indexOf("Substitutes"));
 
     expect(benchHtml).toContain(YOUR_PLAYER_TEXT);
     expect(benchHtml).toContain(GUARDED_STYLE.rowClassName);
@@ -731,20 +733,20 @@ describe("ViewPage bench", () => {
 
     const html = await render();
 
-    expect(html).not.toContain("Bench");
+    expect(html).not.toContain("Substitutes");
     expect(html).toContain("Eli Nakamura");
   });
 
   it("draws no bench card when everyone is placed", async () => {
     const html = await render();
 
-    expect(html).not.toContain("Bench");
+    expect(html).not.toContain("Substitutes");
   });
 
   it("does not call a batter without a fielding spot benched", async () => {
     // Regression: `unassigned` holds anyone the diamond doesn't seat, which
     // includes a kid batting third who simply isn't fielding. Listing them
-    // under "Bench" would duplicate them *and* tell their parent they're
+    // under "Substitutes" would duplicate them *and* tell their parent they're
     // sitting when they're batting third.
     getChart.mockResolvedValue([
       {
@@ -765,7 +767,7 @@ describe("ViewPage bench", () => {
 
     const html = await render();
 
-    expect(html).not.toContain("Bench");
+    expect(html).not.toContain("Substitutes");
     // Still in the order, once.
     expect(html.split("Ben Ortiz")).toHaveLength(2);
   });
@@ -789,7 +791,7 @@ describe("ViewPage bench", () => {
     ]);
 
     const html = await render();
-    const benchHtml = html.slice(html.indexOf("Bench"));
+    const benchHtml = html.slice(html.indexOf("Substitutes"));
 
     expect(benchHtml).toContain("Eli Nakamura");
     expect(benchHtml).not.toContain("Ben Ortiz");
@@ -800,7 +802,7 @@ describe("ViewPage bench", () => {
     getChart.mockResolvedValue(benched);
 
     const html = await render();
-    const benchHtml = html.slice(html.indexOf("Bench"));
+    const benchHtml = html.slice(html.indexOf("Substitutes"));
 
     expect(benchHtml).not.toContain(">0<");
   });

@@ -48,6 +48,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 import TeamHomePage from "./page";
+import { POSITION_COORDS } from "@/components/diamond-geometry";
+import { heroViewBox } from "@/components/MiniDiamondHero";
 
 /// 6:00 PM Central on 15 August 2026 (CDT, UTC-5).
 const GAME = {
@@ -248,13 +250,151 @@ describe("TeamHomePage your players", () => {
     getChart.mockResolvedValue([REESE]);
   });
 
-  it("summarises jersey, batting slot and position in one line", async () => {
+  it("shows the name, the jersey number worn big, and the chart line", async () => {
     const html = await render();
 
     expect(guardedRosteredPlayerIds).toHaveBeenCalledWith("team-1", "user-1");
     expect(html).toContain("Reese");
-    expect(html).toContain("#12");
+    // The jersey number rides in a JerseyDot, not as "#12" prose — the number
+    // itself is the card's celebration.
+    expect(html).toContain(">12<");
+    // chartRole's exact sentence stays in the DOM (the marquee uppercases by
+    // CSS only), so this page, readiness and /view keep saying the same thing.
     expect(html).toContain("Bats 3rd · SS");
+  });
+
+  it("leaves the jersey dot off a kid with no number rather than inventing one", async () => {
+    getChart.mockResolvedValue([{ ...REESE, jerseyNumber: null }]);
+
+    const html = await render();
+
+    expect(html).toContain("Reese");
+    expect(html).toContain("Bats 3rd · SS");
+  });
+
+  // Design-plan §2: one banana per screen, and on this screen — as on /view —
+  // the banana is the reader's own kid. The marquee goes yellow only for a kid
+  // the chart actually seats.
+  it("spends the screen's banana on a kid with a spot in the chart", async () => {
+    const html = await render();
+
+    expect(html).toContain("bg-banana");
+  });
+
+  it("keeps the banana in its pocket for a substitute", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([
+      { ...REESE, position: null, battingOrder: null },
+      { ...REESE, entryId: "entry-9", playerId: "player-9", playerName: "Kit" },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Substitute");
+    expect(html).not.toContain("bg-banana");
+  });
+
+  it("keeps the banana in its pocket when no chart is set", async () => {
+    getChart.mockResolvedValue([
+      { ...REESE, battingOrder: null, position: null },
+      { ...REESE, entryId: "entry-9", playerId: "player-9", battingOrder: null, position: null },
+    ]);
+
+    const html = await render();
+
+    expect(html).not.toContain("bg-banana");
+  });
+
+  // The mini-diamond hero: the kid standing on the painted field, cropped to
+  // their spot. The same FieldArt and coordinates the lineup pages draw, so
+  // the card is a close-up of the board the parent opens next.
+  it("puts a fielded kid on the painted field, cropped to their position", async () => {
+    getChart.mockResolvedValue([{ ...REESE, position: "SHORTSTOP" }]);
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+
+    const html = await render();
+
+    expect(html).toContain("fill-grass");
+    expect(html).toContain(`viewBox="${heroViewBox(POSITION_COORDS.SHORTSTOP)}"`);
+  });
+
+  it("frames an allPlay kid with no position in the outfield zone", async () => {
+    getChart.mockResolvedValue([{ ...REESE, position: null }]);
+
+    const html = await render();
+
+    // outfieldZoneCoords(1) is CENTER_FIELD's spot by construction.
+    expect(html).toContain("fill-grass");
+    expect(html).toContain(`viewBox="${heroViewBox(POSITION_COORDS.CENTER_FIELD)}"`);
+  });
+
+  // A selective team's kid who bats but doesn't field is celebrated (they're
+  // in the order) yet stands on no field — drawing them at a position would
+  // assert a spot nobody assigned, the same lie the big diamonds refuse.
+  it("draws no field for an order-only kid, but still celebrates them", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([{ ...REESE, position: null }]);
+
+    const html = await render();
+
+    expect(html).toContain("bg-banana");
+    expect(html).not.toContain("fill-grass");
+  });
+
+  it("draws no field for a substitute or when no chart is set", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    // A substitute on a team that does have a chart (the teammate is placed).
+    getChart.mockResolvedValue([
+      { ...REESE, position: null, battingOrder: null },
+      { ...REESE, entryId: "entry-9", playerId: "player-9", playerName: "Kit" },
+    ]);
+    const substituteHtml = await render();
+
+    // No chart at all: with no spot assigned there is nothing to frame.
+    getChart.mockResolvedValue([{ ...REESE, position: null, battingOrder: null }]);
+    const noChartHtml = await render();
+
+    expect(substituteHtml).not.toContain("fill-grass");
+    expect(noChartHtml).not.toContain("fill-grass");
+  });
+
+  it("announces the cards with the staggered lineup rise", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1", "player-3"]));
+    getChart.mockResolvedValue([
+      REESE,
+      { ...REESE, entryId: "entry-3", playerId: "player-3", playerName: "Sam", jerseyNumber: 4 },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("animate-rise");
+    // Staggered per card, like a lineup being read out — the second card waits
+    // its turn.
+    expect(html).toContain("animation-delay:40ms");
   });
 
   // The rule fieldedPositions exists for — and the reason chartRole is shared
@@ -267,7 +407,7 @@ describe("TeamHomePage your players", () => {
     expect(html).toContain("Bats 3rd · OF");
   });
 
-  it("reads a null position as Bench on a selective team", async () => {
+  it("reads a null position as Substitute on a selective team", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
       name: "Sluggers",
@@ -277,21 +417,23 @@ describe("TeamHomePage your players", () => {
     });
     getChart.mockResolvedValue([
       { ...REESE, position: null, battingOrder: null },
-      // A teammate who is placed: "Bench" is only meaningful on a team that
-      // has a chart to be left out of.
+      // A teammate who is placed: "Substitute" is only meaningful on a team
+      // that has a chart to be left out of.
       { ...REESE, entryId: "entry-9", playerId: "player-9", playerName: "Kit" },
     ]);
 
     const html = await render();
 
-    expect(html).toContain("Bench");
+    // The softer word, by request — never "Bench" on a page a family reads.
+    expect(html).toContain("Substitute");
+    expect(html).not.toContain("Bench");
   });
 
   // The view page's rule, which team home contradicted: a kid batting third
-  // with no fielding spot is in the order. Calling that Bench would both
-  // misdescribe a kid who is playing and disagree with /view, which lists them
-  // in the order and on no bench at all.
-  it("never calls a kid who is in the batting order benched", async () => {
+  // with no fielding spot is in the order. Calling that a substitute would
+  // both misdescribe a kid who is playing and disagree with /view, which lists
+  // them in the order and in no substitutes card at all.
+  it("never calls a kid who is in the batting order a substitute", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
       name: "Sluggers",
@@ -304,7 +446,7 @@ describe("TeamHomePage your players", () => {
     const html = await render();
 
     expect(html).toContain("Bats 3rd");
-    expect(html).not.toContain("Bench");
+    expect(html).not.toContain("Substitute");
   });
 
   // /view renders "No chart set yet" for the same data. Printing OF for every
@@ -319,7 +461,7 @@ describe("TeamHomePage your players", () => {
 
     expect(html).toContain("No chart set yet");
     expect(html).not.toContain("OF");
-    expect(html).not.toContain("Bench");
+    expect(html).not.toContain("Substitute");
   });
 
   it("never shows another family's kid", async () => {
