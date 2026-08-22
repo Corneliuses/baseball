@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { JerseyDot } from "@/components/JerseyDot";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
 import { formatEventDateTime } from "@/lib/calendar";
-import { chartRole } from "@/lib/chart-role";
+import { chartRole, isBenched } from "@/lib/chart-role";
 import {
   byJerseyThenName,
   hasChartSet,
@@ -58,6 +59,23 @@ const UPCOMING_LIMIT = 3;
 function eventHeading(event: ScheduleEvent): string {
   if (event.type !== "GAME") return "Practice";
   return event.opponent ? `Game vs ${event.opponent}` : "Game";
+}
+
+/// The little star on a player card's marquee strip. Decorative — the chart
+/// line beside it is the content — so it is aria-hidden like the pennant glyph
+/// on TeamCard. fill-current, so it inherits the marquee's text colour and
+/// never needs its own contrast audit.
+function StarGlyph() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      focusable="false"
+      className="h-3.5 w-3.5 shrink-0 fill-current"
+    >
+      <path d="M10 1.5l2.47 5.36 5.86.62-4.37 3.96 1.2 5.77L10 14.3l-5.16 2.91 1.2-5.77-4.37-3.96 5.86-.62z" />
+    </svg>
+  );
 }
 
 /// The accessible name for one RSVP button.
@@ -235,25 +253,71 @@ export default async function TeamHomePage({
         </p>
       ) : null}
 
-      {/* Is my kid playing. One line each, above the events, so a parent with
-          one kid gets all three answers without scrolling. */}
+      {/* Is my kid playing — answered as a celebration, not a log line. Each
+          kid gets a rookie-card hero: the jersey number worn big, the name in
+          slab caps on a pinstripe band (a hero surface, which is where §5 says
+          pinstripes may go), and a marquee strip announcing the chart line.
+          Still first, above the events, so a parent with one kid gets all
+          three answers without scrolling — and now has something worth a
+          screenshot.
+
+          The marquee is THIS screen's one banana (design-plan.md §2), and the
+          budget follows the child the same way /view's halo does: a kid the
+          chart seats gets Banana Yellow; Bench and no-chart-yet drop to quiet
+          secondary stock, because a banana shouting an empty state is the
+          wrong kind of loud. `isBenched` is chartRole's own condition for
+          printing the bench label, so the styling and the sentence cannot
+          disagree. Nothing else on this page may go banana while these cards
+          do. */}
       {myKids.length > 0 ? (
-        <ul className="space-y-1">
-          {myKids.map((entry) => (
-            <li key={entry.entryId} className="text-sm">
-              <span className="font-medium text-foreground">{entry.playerName}</span>
-              {entry.jerseyNumber !== null ? (
-                <span className="text-muted-foreground"> · #{entry.jerseyNumber}</span>
-              ) : null}
-              <span className="text-muted-foreground">
-                {" · "}
-                {hasChart
-                  ? chartRole(entry, team.allPlay, { benchLabel: "Bench" })
-                  : "No chart set yet"}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <section className="space-y-2">
+          <h3 className="font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            {myKids.length === 1 ? "Your player" : "Your players"}
+          </h3>
+          <ul className="space-y-3">
+            {myKids.map((entry, index) => {
+              const roleLine = hasChart
+                ? chartRole(entry, team.allPlay, { benchLabel: "Bench" })
+                : "No chart set yet";
+              const celebrate = hasChart && !isBenched(entry, team.allPlay);
+
+              return (
+                <li
+                  key={entry.entryId}
+                  // The lineup-announcement rise, staggered per card at the
+                  // view page's 40ms cadence. CSS, translate-only, and
+                  // reduced-motion-gated in the utility itself.
+                  className="animate-rise"
+                  style={{ animationDelay: `${index * 40}ms` }}
+                >
+                  <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                    <div className="flex items-center gap-3 bg-pinstripe px-4 py-4">
+                      {entry.jerseyNumber !== null ? (
+                        <JerseyDot number={entry.jerseyNumber} size="lg" />
+                      ) : null}
+                      <p className="font-display text-2xl uppercase leading-tight tracking-wide text-foreground">
+                        {entry.playerName}
+                      </p>
+                    </div>
+                    {/* Uppercased by CSS so the DOM keeps chartRole's exact
+                        sentence — the one the readiness page and /view agree
+                        on, and the one the page tests pin. */}
+                    <p
+                      className={`flex items-center gap-2 px-4 py-2 font-mono text-sm font-bold uppercase tracking-widest ${
+                        celebrate
+                          ? "bg-banana text-banana-foreground"
+                          : "bg-secondary text-secondary-foreground"
+                      }`}
+                    >
+                      {celebrate ? <StarGlyph /> : null}
+                      <span>{roleLine}</span>
+                    </p>
+                  </article>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       ) : null}
 
       {/* When and where, and the answer, for each of the next few. Games *and*

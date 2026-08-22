@@ -248,13 +248,80 @@ describe("TeamHomePage your players", () => {
     getChart.mockResolvedValue([REESE]);
   });
 
-  it("summarises jersey, batting slot and position in one line", async () => {
+  it("shows the name, the jersey number worn big, and the chart line", async () => {
     const html = await render();
 
     expect(guardedRosteredPlayerIds).toHaveBeenCalledWith("team-1", "user-1");
     expect(html).toContain("Reese");
-    expect(html).toContain("#12");
+    // The jersey number rides in a JerseyDot, not as "#12" prose — the number
+    // itself is the card's celebration.
+    expect(html).toContain(">12<");
+    // chartRole's exact sentence stays in the DOM (the marquee uppercases by
+    // CSS only), so this page, readiness and /view keep saying the same thing.
     expect(html).toContain("Bats 3rd · SS");
+  });
+
+  it("leaves the jersey dot off a kid with no number rather than inventing one", async () => {
+    getChart.mockResolvedValue([{ ...REESE, jerseyNumber: null }]);
+
+    const html = await render();
+
+    expect(html).toContain("Reese");
+    expect(html).toContain("Bats 3rd · SS");
+  });
+
+  // Design-plan §2: one banana per screen, and on this screen — as on /view —
+  // the banana is the reader's own kid. The marquee goes yellow only for a kid
+  // the chart actually seats.
+  it("spends the screen's banana on a kid with a spot in the chart", async () => {
+    const html = await render();
+
+    expect(html).toContain("bg-banana");
+  });
+
+  it("keeps the banana in its pocket for a benched kid", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([
+      { ...REESE, position: null, battingOrder: null },
+      { ...REESE, entryId: "entry-9", playerId: "player-9", playerName: "Kit" },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Bench");
+    expect(html).not.toContain("bg-banana");
+  });
+
+  it("keeps the banana in its pocket when no chart is set", async () => {
+    getChart.mockResolvedValue([
+      { ...REESE, battingOrder: null, position: null },
+      { ...REESE, entryId: "entry-9", playerId: "player-9", battingOrder: null, position: null },
+    ]);
+
+    const html = await render();
+
+    expect(html).not.toContain("bg-banana");
+  });
+
+  it("announces the cards with the staggered lineup rise", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1", "player-3"]));
+    getChart.mockResolvedValue([
+      REESE,
+      { ...REESE, entryId: "entry-3", playerId: "player-3", playerName: "Sam", jerseyNumber: 4 },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("animate-rise");
+    // Staggered per card, like a lineup being read out — the second card waits
+    // its turn.
+    expect(html).toContain("animation-delay:40ms");
   });
 
   // The rule fieldedPositions exists for — and the reason chartRole is shared

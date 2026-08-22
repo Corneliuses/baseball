@@ -227,6 +227,21 @@ that is the app's existing vocabulary for this state, shared with the "Archived 
 section heading it sits under, the settings Archive/Unarchive controls, and the team
 header. A second word for one state is a worse card, however good the flourish.
 
+**Team home's player cards (post-ship addition)** — the parent's own kids stopped being a
+log line. Each guarded kid gets a rookie-card hero at the top of the dashboard: the jersey
+number worn big on a `JerseyDot` (the component grew an `lg` cut for exactly this), the
+name in slab caps on a pinstripe band — a hero surface, which is where §5 allows
+pinstripes — and a marquee strip carrying `chartRole`'s line ("Bats 1st · 2B"), uppercased
+by CSS so the DOM keeps the exact sentence readiness and `/view` also print. Cards rise in
+with the same staggered `animate-rise` the lineup view announces rows with. **This
+screen's banana is the marquee**, and the budget follows the child exactly as it does on
+`/view`: a kid the chart seats gets Banana Yellow with a little star; Bench and
+no-chart-yet drop to quiet secondary stock, because a banana shouting an empty state is
+the wrong kind of loud — and a team-home screen with no guarded kid (a coach, say) simply
+has no banana, matching the calm-admin rule below rather than inventing a yellow thing to
+spend it on. `isBenched` in `chart-role.ts` is `chartRole`'s own bench condition, exported
+so the styling and the sentence cannot disagree.
+
 **Schedule** — games become **ticket stubs** (sketch A): perforated edge, slab opponent
 name, Geist Mono date, RSVP tallies on the stub end. Practices print on plain cream stock
 with a clay dashed border — games must feel like the main event. Month grid keeps using

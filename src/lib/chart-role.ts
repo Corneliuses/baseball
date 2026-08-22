@@ -76,3 +76,25 @@ export function chartRole(
 
   return parts.join(" · ");
 }
+
+/**
+ * The condition under which `chartRole` prints its `benchLabel`: the chart
+ * seats this player nowhere — neither in the batting order nor at a spot the
+ * team fields. Never true on an allPlay team, where everyone outside the
+ * infield is in the outfield.
+ *
+ * Exported so team home can *style* the bench state (quiet card stock) apart
+ * from the celebration (the banana marquee) without string-matching the label
+ * it just asked `chartRole` to print. Kept beside `chartRole` so the sentence
+ * and the styling decision cannot drift: `chart-role.test.ts` pins that the
+ * two agree on every shape of entry.
+ */
+export function isBenched(
+  entry: Pick<ChartViewEntry, "battingOrder" | "position">,
+  allPlay: boolean,
+): boolean {
+  if (entry.battingOrder !== null) return false;
+  if (allPlay) return false;
+  const fielded = fieldedPositions(allPlay);
+  return entry.position === null || !fielded.has(entry.position);
+}

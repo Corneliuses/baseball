@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chartRole, ordinal } from "@/lib/chart-role";
+import { chartRole, isBenched, ordinal } from "@/lib/chart-role";
 
 const entry = (
   battingOrder: number | null,
@@ -83,5 +83,41 @@ describe("chartRole on an allPlay team", () => {
 
   it("prints OF alone for a player with no batting slot", () => {
     expect(chartRole(entry(null), allPlay)).toBe("OF");
+  });
+});
+
+describe("isBenched", () => {
+  it("is true only for a player in neither column on a selective team", () => {
+    expect(isBenched(entry(null), false)).toBe(true);
+    expect(isBenched(entry(3, "SHORTSTOP"), false)).toBe(false);
+    expect(isBenched(entry(3), false)).toBe(false);
+    expect(isBenched(entry(null, "SHORTSTOP"), false)).toBe(false);
+  });
+
+  it("is never true on an allPlay team — the leftover kids are the outfield", () => {
+    expect(isBenched(entry(null), true)).toBe(false);
+    expect(isBenched(entry(null, "CENTER_FIELD"), true)).toBe(false);
+  });
+
+  // The pin the export promises: isBenched true exactly when chartRole would
+  // print the bench label. Team home styles on the former and prints the
+  // latter, so a disagreement here is a banana marquee shouting "Bench" — or a
+  // playing kid rendered on quiet stock.
+  it("agrees with chartRole about when the bench label prints", () => {
+    const shapes = [
+      entry(null),
+      entry(3),
+      entry(null, "SHORTSTOP"),
+      entry(3, "SHORTSTOP"),
+      entry(null, "CATCHER"),
+      entry(null, "CENTER_FIELD"),
+    ];
+    for (const allPlay of [false, true]) {
+      for (const shape of shapes) {
+        expect(isBenched(shape, allPlay)).toBe(
+          chartRole(shape, allPlay, { benchLabel: "Bench" }) === "Bench",
+        );
+      }
+    }
   });
 });
