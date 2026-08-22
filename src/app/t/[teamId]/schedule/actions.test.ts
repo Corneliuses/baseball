@@ -7,6 +7,8 @@ const updateEvent = vi.fn();
 const deleteEvent = vi.fn();
 const guardedRosteredPlayerIds = vi.fn();
 const upsertRsvp = vi.fn();
+const clearRsvp = vi.fn();
+const isPlayerRostered = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -23,6 +25,8 @@ vi.mock("@/lib/schedule", () => ({
 vi.mock("@/lib/rsvps", () => ({
   guardedRosteredPlayerIds: (...args: unknown[]) => guardedRosteredPlayerIds(...args),
   upsertRsvp: (...args: unknown[]) => upsertRsvp(...args),
+  clearRsvp: (...args: unknown[]) => clearRsvp(...args),
+  isPlayerRostered: (...args: unknown[]) => isPlayerRostered(...args),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -108,6 +112,8 @@ beforeEach(() => {
   deleteEvent.mockResolvedValue(undefined);
   guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1"]));
   upsertRsvp.mockResolvedValue(undefined);
+  clearRsvp.mockResolvedValue(undefined);
+  isPlayerRostered.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -314,18 +320,21 @@ describe("rsvpAction", () => {
     expect(getEvent).toHaveBeenCalledWith("team-1", "event-1");
   });
 
-  it("upserts attending: true for an attending response", async () => {
+  // The null fourth argument is provenance (#54): a guardian's own answer is
+  // family-recorded, and writing null on every family tap is what erases a
+  // coach's earlier entry without special casing.
+  it("upserts attending: true, family-recorded, for an attending response", async () => {
     await redirectUrlOf(() => rsvpAction(rsvpForm));
 
-    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true);
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true, null);
   });
 
-  it("upserts attending: false for a declined response", async () => {
+  it("upserts attending: false, family-recorded, for a declined response", async () => {
     await redirectUrlOf(() =>
       rsvpAction(form({ ...Object.fromEntries(rsvpForm), response: "declined" })),
     );
 
-    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", false);
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", false, null);
   });
 
   it("redirects to the event with a saved flag on success", async () => {
@@ -352,13 +361,16 @@ describe("rsvpAction", () => {
     expect(upsertRsvp).not.toHaveBeenCalled();
   });
 
-  it("refuses to write when the caller does not guard the named player", async () => {
+  it("refuses to write when a parent does not guard the named player", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["someone-elses-kid"]));
 
     const url = await redirectUrlOf(() => rsvpAction(rsvpForm));
 
     expect(url).toBe("/t/team-1/schedule/event-1?error=not-your-player");
     expect(upsertRsvp).not.toHaveBeenCalled();
+    // A parent never reaches the staff path's roster question.
+    expect(isPlayerRostered).not.toHaveBeenCalled();
   });
 
   it("redirects with ?error=access when the team is archived", async () => {
@@ -374,6 +386,105 @@ describe("rsvpAction", () => {
     const data = form({ teamId: "team-1", eventId: "event-1", response: "attending" });
 
     await expect(rsvpAction(data)).rejects.toThrow("Invalid player ID");
+  });
+});
+
+/// #54: staff (COACH+) may answer for any rostered player — the texted
+/// "Mason's out Saturday" finally has somewhere to land. The path never skips
+/// team/event scoping, and provenance rides the same upsert as the state.
+describe("rsvpAction on the staff path", () => {
+  const unguardedForm = form({
+    teamId: "team-1",
+    eventId: "event-1",
+    playerId: "other-family-kid",
+    response: "declined",
+  });
+
+  it("lets a coach record for a rostered player they do not guard", async () => {
+    const url = await redirectUrlOf(() => rsvpAction(unguardedForm));
+
+    expect(isPlayerRostered).toHaveBeenCalledWith("team-1", "other-family-kid");
+    expect(upsertRsvp).toHaveBeenCalledWith(
+      "event-1",
+      "other-family-kid",
+      false,
+      "user-1",
+    );
+    expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
+  });
+
+  it("lets an owner record too — the check is COACH+, not COACH exactly", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "owner-1" });
+
+    await redirectUrlOf(() => rsvpAction(unguardedForm));
+
+    expect(upsertRsvp).toHaveBeenCalledWith(
+      "event-1",
+      "other-family-kid",
+      false,
+      "owner-1",
+    );
+  });
+
+  // Guardianship is checked first, so a coach answering for their own kid
+  // records as the family — "Recorded by coach" on your own child, tapped by
+  // you, would be noise.
+  it("records a coach's own kid as family, not staff", async () => {
+    await redirectUrlOf(() =>
+      rsvpAction(form({ ...Object.fromEntries(unguardedForm), playerId: "player-1" })),
+    );
+
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", false, null);
+    expect(isPlayerRostered).not.toHaveBeenCalled();
+  });
+
+  // Role alone must never authorize a raw playerId: players are global
+  // (Decision 15), so without the roster check a crafted form could RSVP
+  // another team's kid onto this event.
+  it("refuses a player who is not rostered on this team", async () => {
+    isPlayerRostered.mockResolvedValue(false);
+
+    const url = await redirectUrlOf(() => rsvpAction(unguardedForm));
+
+    expect(url).toBe("/t/team-1/schedule/event-1?error=not-on-team");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+  });
+
+  it("clears a response by deleting the row, never by writing one", async () => {
+    const url = await redirectUrlOf(() =>
+      rsvpAction(form({ ...Object.fromEntries(unguardedForm), response: "clear" })),
+    );
+
+    expect(clearRsvp).toHaveBeenCalledWith("event-1", "other-family-kid");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+    expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
+  });
+
+  // AC3's "no special casing" cuts both ways: clear is authorized like any
+  // other response, so a guardian clearing their own kid also works.
+  it("accepts clear from a guardian for their own kid", async () => {
+    await redirectUrlOf(() =>
+      rsvpAction(
+        form({
+          teamId: "team-1",
+          eventId: "event-1",
+          playerId: "player-1",
+          response: "clear",
+        }),
+      ),
+    );
+
+    expect(clearRsvp).toHaveBeenCalledWith("event-1", "player-1");
+  });
+
+  it("still rejects an archived team before any staff logic runs", async () => {
+    requireTeamAccess.mockRejectedValue(new TeamAccessError("archived", "archived"));
+
+    const url = await redirectUrlOf(() => rsvpAction(unguardedForm));
+
+    expect(url).toBe("/t/team-1/schedule/event-1?error=access");
+    expect(upsertRsvp).not.toHaveBeenCalled();
+    expect(clearRsvp).not.toHaveBeenCalled();
   });
 });
 
@@ -396,7 +507,7 @@ describe("rsvpAction posted from team home", () => {
     expect(requireTeamAccess).toHaveBeenCalledWith("team-1", { intent: "write" });
     expect(getEvent).toHaveBeenCalledWith("team-1", "event-1");
     expect(guardedRosteredPlayerIds).toHaveBeenCalledWith("team-1", "user-1");
-    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true);
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true, null);
   });
 
   it("redirects back to team home on success", async () => {
@@ -425,6 +536,7 @@ describe("rsvpAction posted from team home", () => {
   });
 
   it("keeps a not-your-player refusal at home", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["someone-elses-kid"]));
 
     const url = await redirectUrlOf(() => rsvpAction(homeForm));
@@ -471,7 +583,7 @@ describe("rsvpAction posted from team home", () => {
 
     await redirectUrlOf(() => rsvpAction(homeForm));
 
-    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true);
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true, null);
   });
 
   // Disambiguation, not authorization: the event page has always allowed a late
@@ -494,7 +606,7 @@ describe("rsvpAction posted from team home", () => {
     );
 
     expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
-    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true);
+    expect(upsertRsvp).toHaveBeenCalledWith("event-1", "player-1", true, null);
   });
 
   // `from` is an enum, so nothing a form can carry turns it into a redirect

@@ -5,7 +5,12 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { wallClockToInstant } from "@/lib/calendar";
-import { guardedRosteredPlayerIds, upsertRsvp } from "@/lib/rsvps";
+import {
+  clearRsvp,
+  guardedRosteredPlayerIds,
+  isPlayerRostered,
+  upsertRsvp,
+} from "@/lib/rsvps";
 import {
   createEvent,
   deleteEvent,
@@ -221,7 +226,11 @@ export async function deleteEventAction(formData: FormData) {
   redirect(`/t/${teamId}/schedule`);
 }
 
-const rsvpResponseSchema = z.enum(["attending", "declined"]);
+/// `clear` (#54) deletes the row, returning the player to "no response" —
+/// surfaced only in the staff controls, but accepted from either write path:
+/// a guardian clearing their own kid is harmless, and refusing it would be
+/// exactly the special casing AC3 forbids.
+const rsvpResponseSchema = z.enum(["attending", "declined", "clear"]);
 
 /**
  * Where to send the parent back to once the RSVP is in.
@@ -259,7 +268,9 @@ function rsvpReturnUrl(
 
 /**
  * Prove the caller may write to this team, that the event they named is on
- * it, AND that they guard the player they are RSVPing for.
+ * it, AND that they may answer for the player they are RSVPing for — either
+ * as the player's family or, since #54, as team staff recording a texted
+ * "Mason's out" on the family's behalf.
  *
  * `requireTeamAccess` alone only proves team membership — any PARENT can
  * write. It cannot prove which family the named player belongs to, because a
@@ -269,14 +280,30 @@ function rsvpReturnUrl(
  * because that link is global (Decision 15) — guardianship by itself would
  * let a parent RSVP a kid who only plays on another team onto this one's
  * event.
+ *
+ * Two write paths, tried in order; the returned `recordedById` is what
+ * `upsertRsvp` stamps on the row:
+ *
+ *   1. Guardian — the caller guards this player. Records as the family
+ *      (`recordedById: null`), and is checked FIRST so a coach RSVPing their
+ *      own kid records as a parent, not as staff.
+ *   2. Staff — COACH+ answering for any player rostered on this team
+ *      (`recordedById: userId`). Skips guardianship but never the scoping:
+ *      `isPlayerRostered` mirrors the guardian path's roster intersection,
+ *      because role alone must not let a crafted form RSVP another team's
+ *      kid onto this event.
+ *
+ * Neither path bypasses anything above it — archived teams die in
+ * `requireTeamAccess`, and a cross-team event dies in `getEvent`, before any
+ * per-player question is asked.
  */
-async function requireGuardedEvent(
+async function requireRsvpWriter(
   teamId: string,
   eventId: string,
   playerId: string,
   origin: RsvpOrigin,
 ) {
-  const { userId } = await requireTeamAccess(teamId, { intent: "write" });
+  const { role, userId } = await requireTeamAccess(teamId, { intent: "write" });
 
   const event = await getEvent(teamId, eventId);
   if (!event) {
@@ -289,9 +316,18 @@ async function requireGuardedEvent(
     );
   }
 
+  let recordedById: string | null = null;
   const guardedPlayerIds = await guardedRosteredPlayerIds(teamId, userId);
   if (!guardedPlayerIds.has(playerId)) {
-    redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-your-player"));
+    if (role === "PARENT") {
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-your-player"));
+    }
+    if (!(await isPlayerRostered(teamId, playerId))) {
+      // Only reachable from a crafted form — the page renders rows from the
+      // roster — so the copy is for the coach who somehow got here, not a flow.
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-on-team"));
+    }
+    recordedById = userId;
   }
 
   // Team home hides its buttons once an event has started, and that gate has to
@@ -312,16 +348,17 @@ async function requireGuardedEvent(
     redirect(`/t/${teamId}?error=event-started`);
   }
 
-  return event;
+  return { event, recordedById };
 }
 
 /// RSVP is reporting, never a gate — open to every role (PARENT+), unlike
 /// the COACH+ mutations above. Archived teams still reject the write, same
 /// as every other mutation on this team.
 ///
-/// Posted from two places: the event page's attendance list and team home's
+/// Posted from two places: the event page's attendance list (families and,
+/// since #54, staff answering for any rostered player) and team home's
 /// one-tap buttons (#48). `from` decides only where the parent lands — the
-/// checks in `requireGuardedEvent` run identically for both.
+/// checks in `requireRsvpWriter` run identically for both.
 export async function rsvpAction(formData: FormData) {
   const teamId = extractTeamId(formData);
   const eventId = extractEventId(formData);
@@ -336,8 +373,22 @@ export async function rsvpAction(formData: FormData) {
   try {
     // Write against the id `getEvent` resolved, not the raw form field — same
     // convention as the roster actions deriving playerId from getRosterEntry.
-    const event = await requireGuardedEvent(teamId, eventId, playerId, origin);
-    await upsertRsvp(event.id, playerId, parsedResponse.data === "attending");
+    const { event, recordedById } = await requireRsvpWriter(
+      teamId,
+      eventId,
+      playerId,
+      origin,
+    );
+    if (parsedResponse.data === "clear") {
+      await clearRsvp(event.id, playerId);
+    } else {
+      await upsertRsvp(
+        event.id,
+        playerId,
+        parsedResponse.data === "attending",
+        recordedById,
+      );
+    }
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {

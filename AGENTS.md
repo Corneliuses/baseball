@@ -361,6 +361,15 @@ production — the dev command can prompt, generate new migrations, and reset th
   page-selected event, it does not authorize, and the event page still records a late
   answer on purpose. Anything else writing against a grace-window selection needs both
   halves.
+- **An RSVP row has two possible authors, and `recordedById` is provenance, not
+  ownership.** Since #54 `rsvpAction` has a staff path — COACH+ may set or clear any
+  rostered player's response from the event page (`isPlayerRostered` replaces the
+  guardianship check there; team/event scoping is never skipped). `Rsvp.recordedById`
+  is set on staff writes and nulled on family writes *in the same upsert*, which is the
+  whole of last-write-wins: the family stays the owner of the state, and "Recorded by
+  coach" on the event page keys on that column. Guardianship is checked first, so a
+  coach RSVPing their own kid records as family. Readiness and the state tri-state
+  (`rsvp.ts`) are deliberately provenance-blind.
 - **"Substitute" is a claim about a player in neither column, and three pages have to
   agree.** (The label was softened from "Bench" everywhere a person reads it — team home's
   marquee, /view's Substitutes card, the positions editor's zone — but the code and its

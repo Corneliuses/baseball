@@ -1,5 +1,5 @@
 import { db } from "./db";
-import type { EventRsvpRow, RsvpRow } from "./rsvp";
+import type { EventRsvpRow, RsvpSourceRow } from "./rsvp";
 
 /// Team-scoped RSVP reads and writes, per AGENTS.md — "Never call Prisma
 /// directly from a component." The pure tri-state logic lives next door in
@@ -21,10 +21,10 @@ import type { EventRsvpRow, RsvpRow } from "./rsvp";
 export async function listEventRsvps(
   teamId: string,
   eventId: string,
-): Promise<RsvpRow[]> {
+): Promise<RsvpSourceRow[]> {
   return db.rsvp.findMany({
     where: { eventId, event: { teamId } },
-    select: { playerId: true, attending: true },
+    select: { playerId: true, attending: true, recordedById: true },
   });
 }
 
@@ -62,18 +62,53 @@ export async function guardedRosteredPlayerIds(
   return new Set(links.map((link) => link.playerId));
 }
 
+/**
+ * Whether this player holds a roster spot on this team — the staff RSVP
+ * path's counterpart to `guardedRosteredPlayerIds` (#54). Players are global
+ * (Decision 15), so role alone must never authorize a write against a raw
+ * playerId: without this, a coach's form could RSVP a kid who only plays on
+ * another team onto this team's event.
+ */
+export async function isPlayerRostered(
+  teamId: string,
+  playerId: string,
+): Promise<boolean> {
+  const entry = await db.rosterEntry.findUnique({
+    where: { playerId_teamId: { playerId, teamId } },
+    select: { id: true },
+  });
+  return entry !== null;
+}
+
 /// Upserts on the `eventId_playerId` unique. Callers must already have
 /// proven the event belongs to the caller's team (`getEvent`) and that the
-/// caller guards this player (`guardedRosteredPlayerIds`) — this function
-/// trusts both and does neither check itself.
+/// caller may write for this player (`guardedRosteredPlayerIds`, or COACH+
+/// with `isPlayerRostered`) — this function trusts both and does neither
+/// check itself.
+///
+/// `recordedById` is written on create AND update: null for a family's own
+/// tap, the staff user's id for a coach recording on their behalf. Writing it
+/// unconditionally is what makes last-write-wins carry provenance — a
+/// guardian's tap erases the "recorded by coach" note, and vice versa, in the
+/// same statement that writes the state.
 export async function upsertRsvp(
   eventId: string,
   playerId: string,
   attending: boolean,
+  recordedById: string | null,
 ): Promise<void> {
   await db.rsvp.upsert({
     where: { eventId_playerId: { eventId, playerId } },
-    create: { eventId, playerId, attending },
-    update: { attending },
+    create: { eventId, playerId, attending, recordedById },
+    update: { attending, recordedById },
   });
+}
+
+/// Removes the row outright, returning the player to "no response" — the
+/// tri-state in rsvp.ts treats row-absence as the real state, so clearing is
+/// a delete, not a third value. `deleteMany` rather than `delete` because
+/// clearing an already-clear player (two coaches, one kid) must be a no-op,
+/// not a P2025.
+export async function clearRsvp(eventId: string, playerId: string): Promise<void> {
+  await db.rsvp.deleteMany({ where: { eventId, playerId } });
 }

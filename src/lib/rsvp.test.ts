@@ -3,6 +3,7 @@ import {
   buildRsvpStateMap,
   buildRsvpStateMapsByEvent,
   deriveRsvpState,
+  staffRecordedPlayerIds,
   type RsvpRow,
 } from "@/lib/rsvp";
 
@@ -104,5 +105,28 @@ describe("buildRsvpStateMapsByEvent", () => {
 
   it("returns an empty map for no events", () => {
     expect(buildRsvpStateMapsByEvent([], ["ava"], rows).size).toBe(0);
+  });
+});
+
+describe("staffRecordedPlayerIds", () => {
+  it("returns players whose current response a staff member recorded", () => {
+    const ids = staffRecordedPlayerIds([
+      { playerId: "ava", attending: false, recordedById: "coach-1" },
+      { playerId: "bo", attending: true, recordedById: null },
+    ]);
+
+    expect(ids).toEqual(new Set(["ava"]));
+  });
+
+  it("returns an empty set when every response is family-recorded", () => {
+    const ids = staffRecordedPlayerIds([
+      { playerId: "ava", attending: true, recordedById: null },
+    ]);
+
+    expect(ids.size).toBe(0);
+  });
+
+  it("returns an empty set for no rows", () => {
+    expect(staffRecordedPlayerIds([]).size).toBe(0);
   });
 });

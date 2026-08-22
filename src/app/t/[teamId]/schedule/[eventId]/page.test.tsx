@@ -206,6 +206,12 @@ describe("EventPage feedback", () => {
   it("confirms a save", async () => {
     expect(await render({ saved: "1" })).toContain("Saved.");
   });
+
+  it("explains a not-on-team refusal from the staff RSVP path", async () => {
+    expect(await render({ error: "not-on-team" })).toContain(
+      "That player is not on this team&#x27;s roster.",
+    );
+  });
 });
 
 describe("EventPage attendance", () => {
@@ -216,8 +222,8 @@ describe("EventPage attendance", () => {
   it("labels all three RSVP states distinctly in one render", async () => {
     getRoster.mockResolvedValue(rosterOfThree);
     listEventRsvps.mockResolvedValue([
-      { playerId: "ava", attending: true },
-      { playerId: "ben", attending: false },
+      { playerId: "ava", attending: true, recordedById: null },
+      { playerId: "ben", attending: false, recordedById: null },
       // Cy has no row at all — the third state.
     ]);
 
@@ -230,7 +236,9 @@ describe("EventPage attendance", () => {
 
   it("styles no-response differently from declined, not just labels it", async () => {
     getRoster.mockResolvedValue(rosterOfThree);
-    listEventRsvps.mockResolvedValue([{ playerId: "ben", attending: false }]);
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ben", attending: false, recordedById: null },
+    ]);
 
     const html = await render();
 
@@ -251,7 +259,8 @@ describe("EventPage attendance", () => {
     expect(html).toContain("No response");
   });
 
-  it("offers Going / Not going toggles only for players the caller guards", async () => {
+  it("offers a parent Going / Not going toggles only for players they guard", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
     getRoster.mockResolvedValue(roster);
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
 
@@ -263,6 +272,68 @@ describe("EventPage attendance", () => {
     const benFormCount = html.split('value="ben"').length - 1;
     expect(avaFormCount).toBe(2);
     expect(benFormCount).toBe(0);
+  });
+
+  // #54: staff answer for any rostered player — the coach's texted-absence
+  // path. The action re-checks the role; this only renders the controls.
+  it("offers a coach toggles on every row, guarded or not", async () => {
+    getRoster.mockResolvedValue(roster);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set());
+
+    const html = await render();
+
+    expect(html.split('value="ava"').length - 1).toBe(2);
+    expect(html.split('value="ben"').length - 1).toBe(2);
+  });
+
+  it("offers a coach Clear only where a response exists to clear", async () => {
+    getRoster.mockResolvedValue(roster);
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: false, recordedById: null },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Clear");
+    // Ava has a row (three forms: Going / Not going / Clear); Ben has no
+    // response, so there is nothing to clear and only the two toggles render.
+    expect(html.split('value="ava"').length - 1).toBe(3);
+    expect(html.split('value="ben"').length - 1).toBe(2);
+  });
+
+  it("never offers Clear to a parent, even on their own kid", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+    getRoster.mockResolvedValue(roster);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: false, recordedById: null },
+    ]);
+
+    expect(await render()).not.toContain("Clear");
+  });
+
+  // AC2: a staff-recorded response is visually distinguishable — and the note
+  // is text, so it reads the same for the family it is explaining things to.
+  it("marks a staff-recorded response with a note beside the badge", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+    getRoster.mockResolvedValue(roster);
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: false, recordedById: "coach-1" },
+      { playerId: "ben", attending: false, recordedById: null },
+    ]);
+
+    const html = await render();
+
+    expect(html.split("Recorded by coach").length - 1).toBe(1);
+  });
+
+  it("shows no provenance note when every response is family-recorded", async () => {
+    getRoster.mockResolvedValue(roster);
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: true, recordedById: null },
+    ]);
+
+    expect(await render()).not.toContain("Recorded by coach");
   });
 
   it("lists players in the same order as the roster page, not database order", async () => {
