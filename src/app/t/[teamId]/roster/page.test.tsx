@@ -42,6 +42,23 @@ describe("Roster page", () => {
     expect(markup.indexOf("Ada")).toBeLessThan(markup.indexOf("Zed"));
   });
 
+  // One of the twelve pages that really did crash on ?error=constructor before
+  // the tables moved to messageTable: an inherited Object.prototype member is
+  // truthy, so the ?? fallback never fired and React was handed a function.
+  it("falls back rather than resolving an inherited member of the message table", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    getRoster.mockResolvedValue([]);
+
+    for (const key of ["constructor", "__proto__", "toString"]) {
+      const result = await RosterPage({
+        params: Promise.resolve({ teamId: "team-1" }),
+        searchParams: Promise.resolve({ error: key }),
+      });
+
+      expect(renderToStaticMarkup(result)).toContain("Something went wrong.");
+    }
+  });
+
   it("passes the caller's role through to gate the add-player form", async () => {
     requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
     getRoster.mockResolvedValue([]);

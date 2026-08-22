@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRosterEntry, type RosterEntryGuardian } from "@/lib/roster";
 
@@ -25,7 +26,7 @@ export const metadata = {
   title: "Player — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-name": "Player name is required.",
   "invalid-dob": "Enter a valid date, or leave it blank.",
   "invalid-jersey": "Jersey number must be a whole number between 0 and 99.",
@@ -35,7 +36,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "email-failed": "The invitation could not be sent. Try again.",
   "not-a-guardian": "That person is not a guardian of this player.",
   access: "You no longer have access to make this change.",
-};
+});
 
 function toDateInputValue(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : "";
@@ -89,7 +90,7 @@ export default async function RosterEntryPage({
     notFound();
   }
 
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
   const confirmingRemoval = confirm === "remove";
   // Unlinking confirms per guardian: ?confirm=unlink&guardian=<id> shows the
   // step on that row only, so the other rows keep their one-tap buttons.

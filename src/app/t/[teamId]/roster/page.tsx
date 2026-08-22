@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -21,7 +22,7 @@ export const metadata = {
   title: "Roster — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-name": "Player name is required.",
   "invalid-dob": "Enter a valid date, or leave it blank.",
   "invalid-jersey": "Jersey number must be a whole number between 0 and 99.",
@@ -29,7 +30,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "already-rostered": "That player is already on this team's roster.",
   "email-failed": "The player was added, but a notice email could not be sent.",
   access: "You no longer have access to make this change.",
-};
+});
 
 /// Calls requireTeamAccess itself, independent of the layout — every page
 /// under /t/[teamId] does, since layouts don't re-run on client navigation.
@@ -56,7 +57,7 @@ export default async function RosterPage({
   const roster = sortRoster(await getRoster(teamId));
   const canEdit = role !== "PARENT";
   const isOwner = role === "OWNER";
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
     <div className="space-y-6">

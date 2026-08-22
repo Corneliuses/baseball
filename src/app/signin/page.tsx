@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 
 import { requestSignInLink } from "./actions";
+import { messageFor, messageTable } from "@/lib/error-messages";
 
 export const metadata = {
   title: "Sign in — Youth Baseball Team Manager",
@@ -22,7 +23,7 @@ export const metadata = {
 /// reaches this page from a click — the send path always ends on
 /// /signin/check-email — but naming the reason would still leak whether an
 /// invitation exists, so both get the neutral wording.
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-email":
     "That doesn't look like an email address — check it and try again.",
   Verification:
@@ -31,7 +32,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     "That sign-in link is no longer valid. Enter your email to try again, or ask your coach to send a new invite.",
   Configuration:
     "Something is wrong on our end, and it has been logged. Please try again in a few minutes.",
-};
+});
 
 const FALLBACK_ERROR_MESSAGE =
   "Something went wrong signing you in. Enter your email and try again.";
@@ -43,9 +44,7 @@ export default async function SignInPage({
 }) {
   const { error, callbackUrl } = await searchParams;
 
-  const errorMessage = error
-    ? (ERROR_MESSAGES[error] ?? FALLBACK_ERROR_MESSAGE)
-    : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error, FALLBACK_ERROR_MESSAGE);
 
   return (
     <PageContainer>

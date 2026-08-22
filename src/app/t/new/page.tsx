@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { isOwnerEmail } from "@/lib/owner";
 import { getCurrentUser } from "@/lib/session";
 
@@ -17,11 +18,11 @@ export const metadata = {
   title: "New team — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-name": "Team name is required.",
   "create-failed": "Something went wrong creating the team. Try again.",
   access: "You don't have access to create a team.",
-};
+});
 
 /// /t/new is a sibling of /t/[teamId], not a child of it — there is no
 /// teamId yet to run requireTeamAccess against, so ownership is checked
@@ -39,7 +40,7 @@ export default async function NewTeamPage({
     notFound();
   }
 
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
     <div className="mx-auto w-full max-w-md">

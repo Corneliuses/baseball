@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { listReturningCandidates } from "@/lib/roster";
 import { sortReturningCandidates } from "@/lib/returning-players";
@@ -19,13 +20,13 @@ export const metadata = {
   title: "Add returning player — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-jersey": "Jersey number must be a whole number between 0 and 99.",
   "jersey-taken": "That jersey number is already in use on this team.",
   "already-rostered": "That player is already on this team's roster.",
   "not-a-candidate": "That player is no longer available to add.",
   access: "You no longer have access to make this change.",
-};
+});
 
 function teamLabel(team: { name: string; season: string | null; archivedAt: Date | null }) {
   const season = team.season ? ` (${team.season})` : "";
@@ -61,7 +62,7 @@ export default async function ReturningPlayersPage({
     ? allCandidates.filter((candidate) => candidate.name.toLowerCase().includes(filter))
     : allCandidates;
 
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
     <div className="space-y-6">

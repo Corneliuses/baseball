@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { getProfile } from "@/lib/profile";
 import { getCurrentUser } from "@/lib/session";
 
@@ -19,11 +20,8 @@ export const metadata = {
   title: "Your profile — Youth Baseball Team Manager",
 };
 
-// Null prototype: the key comes straight from the ?error= query param, and on
-// a plain object ?error=__proto__ or ?error=constructor would resolve an
-// Object.prototype member — truthy, so the fallback never fires — into a
-// non-renderable React child that crashes the page.
-const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null), {
+// messageTable, never a bare literal — see src/lib/error-messages.ts.
+const ERROR_MESSAGES = messageTable({
   "invalid-phone": "Phone number must be 32 characters or fewer.",
   "save-failed": "Your changes couldn't be saved. Try again.",
   "signout-failed": "Signing out didn't work. Try again.",
@@ -59,7 +57,7 @@ export default async function ProfilePage({
     redirect("/signin?callbackUrl=%2Fprofile");
   }
 
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
     <PageContainer>

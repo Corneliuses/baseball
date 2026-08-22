@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { getChart } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -20,7 +21,7 @@ export const metadata = {
   title: "Positions — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-positions":
     "That diamond couldn't be read. Reload and try again.",
   "unknown-entry":
@@ -43,7 +44,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "chart-changed":
     "Another coach changed the positions while you were editing — nothing was saved. The diamond below is theirs; make your changes again on top of it.",
   access: "You no longer have access to make this change.",
-};
+});
 
 /// The coach-only positions diamond (#11). Calls requireTeamAccess itself,
 /// independent of the layout — every page under /t/[teamId] does, since
@@ -91,9 +92,7 @@ export default async function PositionsPage({
     position,
   }));
 
-  const errorMessage = error
-    ? (ERROR_MESSAGES[error] ?? "Something went wrong.")
-    : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">

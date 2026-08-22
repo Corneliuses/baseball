@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { listTeamMembers } from "@/lib/memberships";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 
@@ -28,11 +29,8 @@ export const metadata = {
 /// docs — the same coupling as roster/invite.
 export const maxDuration = 60;
 
-// Null prototype: the key comes straight from the ?error= query param, and
-// on a plain object ?error=__proto__ or ?error=constructor would resolve an
-// Object.prototype member instead of falling through to the fallback,
-// crashing the page on a non-renderable React child. Same fix as /profile.
-const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null), {
+// messageTable, never a bare literal — see src/lib/error-messages.ts.
+const ERROR_MESSAGES = messageTable({
   "invalid-audience": "Choose who this message goes to. Nothing was sent.",
   "invalid-subject": "Enter a subject — keep it under 200 characters.",
   "invalid-body": "Enter a message — keep it under 5,000 characters.",
@@ -76,9 +74,7 @@ export default async function NewMessagePage({
     ? (await listTeamMembers(teamId)).filter((m) => m.role === "PARENT")
     : [];
 
-  const errorMessage = error
-    ? (ERROR_MESSAGES[error] ?? "Something went wrong.")
-    : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
   const statusParts = [
     sent ? `Sent to ${sent} ${sent === "1" ? "person" : "people"}` : null,
     failed

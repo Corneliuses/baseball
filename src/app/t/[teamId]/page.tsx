@@ -20,6 +20,7 @@ import {
   type ChartViewEntry,
 } from "@/lib/chart-view";
 import { sortDirectory } from "@/lib/directory-rules";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import { listCoachContacts } from "@/lib/memberships";
 import { getChart } from "@/lib/roster";
@@ -38,11 +39,8 @@ import { rsvpAction } from "./schedule/actions";
 /// produce: from the event page a deleted event bounces to the schedule, where
 /// its absence explains itself.
 ///
-/// Null prototype, matching /profile: the key comes straight from the ?error=
-/// query param, and on a plain object ?error=constructor would resolve an
-/// Object.prototype member — truthy, so the fallback never fires — into a
-/// non-renderable React child that crashes the page.
-const ERROR_MESSAGES: Record<string, string> = Object.assign(Object.create(null), {
+/// messageTable, never a bare literal — see src/lib/error-messages.ts.
+const ERROR_MESSAGES = messageTable({
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
   "event-gone": "That event was just taken off the schedule.",
@@ -205,7 +203,7 @@ export default async function TeamHomePage({
   const coachContacts =
     role === "PARENT" ? sortDirectory(await listCoachContacts(teamId)) : [];
 
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
     <div className="space-y-6">
