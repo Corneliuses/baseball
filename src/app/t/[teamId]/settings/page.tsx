@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -18,10 +19,10 @@ export const metadata = {
   title: "Team settings — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-name": "Team name is required.",
   access: "You no longer have access to make this change.",
-};
+});
 
 /// Viewing this page requires OWNER, but the intent is "read" — an archived
 /// team must still let its owner reach this page to unarchive it. The
@@ -50,7 +51,7 @@ export default async function TeamSettingsPage({
     notFound();
   }
 
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
   const confirmingArchive = confirm === "archive" && !team.archivedAt;
 
   return (

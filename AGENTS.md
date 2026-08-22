@@ -352,12 +352,14 @@ production — the dev command can prompt, generate new migrations, and reset th
   The prior question is whether the team has a chart at all: with none, every position a
   page prints is one nobody assigned, which is why `hasChartSet` (`chart-view.ts`) gates
   the line on team home and the whole panel on `/view` and `/readiness`.
-- **A `?error=` key is attacker-chosen, so its lookup table needs a null prototype.** On a
+- **A `?error=` key is attacker-chosen, so never build its lookup table by hand.** On a
   plain object literal `?error=constructor` resolves an `Object.prototype` member — truthy,
   so the `??` fallback never fires — and React throws "Functions are not valid as a React
-  child" on the way out. `/profile` and team home use
-  `Object.assign(Object.create(null), {…})`; the older `ERROR_MESSAGES` tables under
-  `schedule/` and `roster/` still don't and are worth hardening when next touched.
+  child" on the way out, crashing the page from a hand-typed URL. Every page goes through
+  `messageTable` / `messageFor` (`src/lib/error-messages.ts`), which null-prototypes the
+  table **and** refuses to return a non-string from the lookup — two layers, because
+  fifteen pages hand-rolling the first is precisely how three ended up hardened and twelve
+  did not. A new `?error=` page adds `messageTable({…})`, never `= {…}`.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.

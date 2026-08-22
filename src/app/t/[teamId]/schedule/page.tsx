@@ -24,6 +24,7 @@ import {
   WEEKDAY_LABELS,
   type CalendarMonth,
 } from "@/lib/calendar";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import {
   listEventsInMonthGrid,
@@ -39,14 +40,14 @@ export const metadata = {
   title: "Schedule — Youth Baseball Team Manager",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-type": "Choose either a game or a practice.",
   "invalid-datetime": "Enter a valid date and time.",
   "invalid-location": "Location is too long.",
   "invalid-opponent": "Opponent is too long.",
   "invalid-notes": "Notes are too long.",
   access: "You no longer have access to make this change.",
-};
+});
 
 const TYPE_LABELS = { GAME: "Game", PRACTICE: "Practice" } as const;
 
@@ -105,7 +106,7 @@ export default async function SchedulePage({
       : [];
 
   const canEdit = role !== "PARENT";
-  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "Something went wrong.") : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
     <div className="space-y-6">

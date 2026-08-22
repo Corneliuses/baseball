@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRosterWithGuardians } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -29,13 +30,13 @@ export const metadata = {
 /// config docs.
 export const maxDuration = 60;
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_MESSAGES = messageTable({
   "invalid-email": "One of the email addresses isn't valid. Nothing was sent.",
   "invalid-message": "The message is too long — keep it under 1,000 characters.",
   "no-emails": "Enter at least one email address.",
   "too-many": "That's too many invitations for one batch. Nothing was sent.",
   access: "You no longer have access to make this change.",
-};
+});
 
 /// Coach-only, like the chart editors: parents have no link here and minRole
 /// turns a pasted URL into a 404. Calls requireTeamAccess itself, independent
@@ -70,9 +71,7 @@ export default async function BulkInvitePage({
   );
   const covered = roster.filter((entry) => entry.guardianEmails.length > 0);
 
-  const errorMessage = error
-    ? (ERROR_MESSAGES[error] ?? "Something went wrong.")
-    : null;
+  const errorMessage = messageFor(ERROR_MESSAGES, error);
   const statusParts = [
     sent ? `${sent} invitation${sent === "1" ? "" : "s"} sent` : null,
     linked ? `${linked} already-member parent${linked === "1" ? "" : "s"} linked` : null,

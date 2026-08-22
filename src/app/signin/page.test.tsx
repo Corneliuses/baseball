@@ -31,6 +31,24 @@ describe("SignInPage", () => {
     expect(screen.getByText(/invite-only/i)).toBeInTheDocument();
   });
 
+  // The ?error= key is whatever the URL says. On a bare object literal these
+  // resolve to inherited functions — truthy, so the fallback never fires — and
+  // React throws "Functions are not valid as a React child". This page is also
+  // the only one wording its own fallback, so it proves messageFor's third
+  // argument survives the trip.
+  it("falls back to its own wording for an inherited key", async () => {
+    for (const key of ["constructor", "__proto__", "toString"]) {
+      const { unmount } = render(
+        await SignInPage({ searchParams: Promise.resolve({ error: key }) }),
+      );
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /something went wrong signing you in/i,
+      );
+      unmount();
+    }
+  });
+
   it("shows no error by default", async () => {
     await renderPage();
 
