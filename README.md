@@ -48,8 +48,9 @@ What exists today:
   linking and phone), owner-only member management, an owner-only returning-player picker
   (`roster/returning`), the member directory (`directory`), the schedule — a month
   grid and chronological list with coach-only create/edit/delete, plus an Attendance card
-  on the event detail page where any guardian can RSVP their own kids (`schedule`,
-  `schedule/[eventId]`), the read-only view page (`view`): a server-rendered SVG diamond and
+  on the event detail page where any guardian can RSVP their own kids and coaches can
+  record (or clear) any rostered player's response on a family's behalf, marked
+  "Recorded by coach" (`schedule`, `schedule/[eventId]`), the read-only view page (`view`): a server-rendered SVG diamond and
   ordered batting lineup for the next game, RSVP state shown but never used to filter or
   reorder anyone — and the coach-only batting order editor (`chart`): drag-and-drop reorder
   via `@dnd-kit`, swap-on-drop, an unassigned pool when `allPlay` is off, and a two-phase
