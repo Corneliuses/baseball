@@ -114,6 +114,7 @@ describe("createTeam", () => {
         name: "Sharks",
         season: "2026",
         allPlay: true,
+        calendarToken: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
         memberships: {
           create: { userId: "owner-1", role: "OWNER" },
         },

@@ -44,7 +44,10 @@ roster entry detail at `roster/[entryId]`, the schedule at `schedule` /
 chart editors — the batting order at `chart` and the positions diamond at
 `chart/positions` — and team email messaging at `messages` (coach-only broadcast
 history) and `messages/new` (the compose form every role uses) plus `/t/new` for
-owner-gated team creation.
+owner-gated team creation. Outside `/t/` entirely — because `proxy.ts` would bounce a
+cookie-less calendar app to sign-in — `/api/calendar/[token]` serves each team's ICS
+feed, authorized by the capability token in the URL (`Team.calendarToken`) rather than a
+session; the subscribe URL is surfaced on the schedule page.
 
 **Contact details are staff-facing.** A parent never sees another family's phone or
 email: `/directory` and `roster/[entryId]` are both COACH+, and the team home page gives

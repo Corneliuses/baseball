@@ -1,3 +1,4 @@
+import { generateCalendarToken } from "./calendar-token";
 import { db } from "./db";
 
 /// Team-scoped data access. The single place scoped team queries and writes
@@ -93,6 +94,7 @@ export async function createTeam(
       name: input.name,
       season: input.season,
       allPlay: input.allPlay,
+      calendarToken: generateCalendarToken(),
       memberships: {
         create: { userId: ownerId, role: "OWNER" },
       },
