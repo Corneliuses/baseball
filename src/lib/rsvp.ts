@@ -18,6 +18,25 @@ export type RsvpState = "attending" | "declined" | "no-response";
 /// `deriveRsvpState`; `playerId` is what `buildRsvpStateMap` keys on.
 export type RsvpRow = { playerId: string; attending: boolean };
 
+/// A row that also carries provenance (#54): `recordedById` is set only when
+/// a staff member recorded the response on the family's behalf, null when the
+/// family recorded it themselves.
+export type RsvpSourceRow = RsvpRow & { recordedById: string | null };
+
+/**
+ * The players whose *current* response was recorded by staff rather than
+ * their own family — what the event page's "Recorded by coach" note keys on.
+ * Provenance never affects state: `deriveRsvpState` and the maps below stay
+ * blind to it, which is what keeps readiness unchanged by #54.
+ */
+export function staffRecordedPlayerIds(
+  rows: readonly RsvpSourceRow[],
+): Set<string> {
+  return new Set(
+    rows.filter((row) => row.recordedById !== null).map((row) => row.playerId),
+  );
+}
+
 /**
  * @param row The player's `Rsvp` row for this event, or undefined if none exists.
  */

@@ -2,22 +2,30 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const findManyRsvps = vi.fn();
 const upsertRsvpMock = vi.fn();
+const deleteManyRsvps = vi.fn();
 const findManyGuardianPlayers = vi.fn();
+const findUniqueRosterEntry = vi.fn();
 
 vi.mock("./db", () => ({
   db: {
     rsvp: {
       findMany: (...args: unknown[]) => findManyRsvps(...args),
       upsert: (...args: unknown[]) => upsertRsvpMock(...args),
+      deleteMany: (...args: unknown[]) => deleteManyRsvps(...args),
     },
     guardianPlayer: {
       findMany: (...args: unknown[]) => findManyGuardianPlayers(...args),
+    },
+    rosterEntry: {
+      findUnique: (...args: unknown[]) => findUniqueRosterEntry(...args),
     },
   },
 }));
 
 import {
+  clearRsvp,
   guardedRosteredPlayerIds,
+  isPlayerRostered,
   listEventRsvps,
   listRsvpsForEvents,
   upsertRsvp,
@@ -40,14 +48,16 @@ describe("listEventRsvps", () => {
     );
   });
 
-  it("selects only playerId and attending", async () => {
+  // recordedById is what the event page's "Recorded by coach" note keys on
+  // (#54); the multi-event read for team home deliberately stays without it.
+  it("selects playerId, attending, and recordedById", async () => {
     findManyRsvps.mockResolvedValue([]);
 
     await listEventRsvps("team-1", "event-1");
 
     expect(findManyRsvps).toHaveBeenCalledWith(
       expect.objectContaining({
-        select: { playerId: true, attending: true },
+        select: { playerId: true, attending: true, recordedById: true },
       }),
     );
   });
@@ -134,14 +144,70 @@ describe("guardedRosteredPlayerIds", () => {
   });
 });
 
+describe("isPlayerRostered", () => {
+  it("looks up the roster spot on the playerId_teamId unique", async () => {
+    findUniqueRosterEntry.mockResolvedValue({ id: "entry-1" });
+
+    await expect(isPlayerRostered("team-1", "ava")).resolves.toBe(true);
+
+    expect(findUniqueRosterEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { playerId_teamId: { playerId: "ava", teamId: "team-1" } },
+      }),
+    );
+  });
+
+  it("returns false for a player with no spot on this team", async () => {
+    findUniqueRosterEntry.mockResolvedValue(null);
+
+    await expect(isPlayerRostered("team-1", "other-team-kid")).resolves.toBe(false);
+  });
+});
+
 describe("upsertRsvp", () => {
   it("upserts on the eventId_playerId unique with the given attendance", async () => {
-    await upsertRsvp("event-1", "ava", true);
+    await upsertRsvp("event-1", "ava", true, null);
 
     expect(upsertRsvpMock).toHaveBeenCalledWith({
       where: { eventId_playerId: { eventId: "event-1", playerId: "ava" } },
-      create: { eventId: "event-1", playerId: "ava", attending: true },
-      update: { attending: true },
+      create: { eventId: "event-1", playerId: "ava", attending: true, recordedById: null },
+      update: { attending: true, recordedById: null },
     });
+  });
+
+  // Written on create AND update: a family tap must erase a coach's
+  // provenance in the same statement that overwrites the state, and vice
+  // versa — that is the whole of last-write-wins for #54.
+  it("writes the staff recorder on both create and update", async () => {
+    await upsertRsvp("event-1", "ava", false, "coach-1");
+
+    expect(upsertRsvpMock).toHaveBeenCalledWith({
+      where: { eventId_playerId: { eventId: "event-1", playerId: "ava" } },
+      create: {
+        eventId: "event-1",
+        playerId: "ava",
+        attending: false,
+        recordedById: "coach-1",
+      },
+      update: { attending: false, recordedById: "coach-1" },
+    });
+  });
+});
+
+describe("clearRsvp", () => {
+  it("deletes the pair's row", async () => {
+    deleteManyRsvps.mockResolvedValue({ count: 1 });
+
+    await clearRsvp("event-1", "ava");
+
+    expect(deleteManyRsvps).toHaveBeenCalledWith({
+      where: { eventId: "event-1", playerId: "ava" },
+    });
+  });
+
+  it("is a no-op when no row exists, not an error", async () => {
+    deleteManyRsvps.mockResolvedValue({ count: 0 });
+
+    await expect(clearRsvp("event-1", "ava")).resolves.toBeUndefined();
   });
 });

@@ -16,10 +16,11 @@ import { messageFor, messageTable } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
-import { buildRsvpStateMap } from "@/lib/rsvp";
+import { buildRsvpStateMap, staffRecordedPlayerIds } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listEventRsvps } from "@/lib/rsvps";
 import { getEvent } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { getTeamById } from "@/lib/teams";
 
 import { deleteEventAction, rsvpAction, updateEventAction } from "../actions";
 
@@ -35,6 +36,7 @@ const ERROR_MESSAGES = messageTable({
   "invalid-notes": "Notes are too long.",
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
+  "not-on-team": "That player is not on this team's roster.",
   access: "You no longer have access to make this change.",
 });
 
@@ -71,11 +73,15 @@ export default async function EventPage({
     notFound();
   }
 
-  const [rosterEntries, rsvpRows, guardedPlayerIds] = await Promise.all([
+  const [team, rosterEntries, rsvpRows, guardedPlayerIds] = await Promise.all([
+    getTeamById(teamId),
     getRoster(teamId),
     listEventRsvps(teamId, eventId),
     guardedRosteredPlayerIds(teamId, userId),
   ]);
+  if (!team) {
+    notFound();
+  }
   // Same order as the roster page — getRoster has no orderBy, so without this
   // the same team lists in a different (and unstable) order on each page.
   const roster = sortRoster(rosterEntries);
@@ -83,8 +89,14 @@ export default async function EventPage({
     roster.map((entry) => entry.player.id),
     rsvpRows,
   );
+  // Which current responses a staff member recorded (#54) — the note that
+  // keeps a family from wondering how their kid got marked out.
+  const staffRecorded = staffRecordedPlayerIds(rsvpRows);
 
   const canEdit = role !== "PARENT";
+  // Archived teams reject every write server-side; hiding the buttons rather
+  // than showing-and-refusing matches team home (its `teamIsWritable`).
+  const teamIsWritable = team.archivedAt === null;
   const errorMessage = messageFor(ERROR_MESSAGES, error);
   const confirmingDelete = confirm === "delete";
   const heading =
@@ -158,7 +170,12 @@ export default async function EventPage({
                 // `no-response` is styled distinct from `declined` — it means
                 // the family hasn't answered, not that they said no. See rsvp.ts.
                 const badge = RSVP_STYLE[state];
-                const canRsvp = guardedPlayerIds.has(entry.player.id);
+                // Guardians answer for their own kids; staff (COACH+) may
+                // answer for any rostered player (#54). The action re-checks
+                // both — these flags only decide what to render.
+                const canRsvp =
+                  teamIsWritable &&
+                  (guardedPlayerIds.has(entry.player.id) || canEdit);
 
                 return (
                   <li
@@ -169,7 +186,17 @@ export default async function EventPage({
                       <p className="text-sm font-medium text-foreground">
                         {entry.player.name}
                       </p>
-                      <p className={`text-xs ${badge.tagClassName}`}>{badge.label}</p>
+                      <p className={`text-xs ${badge.tagClassName}`}>
+                        {badge.label}
+                        {staffRecorded.has(entry.player.id) ? (
+                          // Text, never colour alone — same rule as the badge
+                          // itself (rsvp-style.ts).
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · Recorded by coach
+                          </span>
+                        ) : null}
+                      </p>
                     </div>
                     {canRsvp ? (
                       <div className="flex shrink-0 gap-2">
@@ -178,10 +205,16 @@ export default async function EventPage({
                           <input type="hidden" name="eventId" value={event.id} />
                           <input type="hidden" name="playerId" value={entry.player.id} />
                           <input type="hidden" name="response" value="attending" />
+                          {/* A coach's list renders these controls on every
+                              row, so each needs the player's name in its
+                              accessible name — same argument as team home's
+                              rsvpLabel; here one event is on screen, so the
+                              name alone disambiguates. */}
                           <Button
                             type="submit"
                             size="sm"
                             variant={state === "attending" ? "default" : "outline"}
+                            aria-label={`${entry.player.name} is going`}
                           >
                             Going
                           </Button>
@@ -195,10 +228,34 @@ export default async function EventPage({
                             type="submit"
                             size="sm"
                             variant={state === "declined" ? "destructive" : "outline"}
+                            aria-label={`${entry.player.name} is not going`}
                           >
                             Not going
                           </Button>
                         </form>
+                        {canEdit && state !== "no-response" ? (
+                          // Staff-only: back to "No response" when the coach
+                          // recorded something the family didn't mean, or is
+                          // undoing their own entry. No row → nothing to clear.
+                          <form action={rsvpAction}>
+                            <input type="hidden" name="teamId" value={teamId} />
+                            <input type="hidden" name="eventId" value={event.id} />
+                            <input
+                              type="hidden"
+                              name="playerId"
+                              value={entry.player.id}
+                            />
+                            <input type="hidden" name="response" value="clear" />
+                            <Button
+                              type="submit"
+                              size="sm"
+                              variant="ghost"
+                              aria-label={`Clear ${entry.player.name}'s response`}
+                            >
+                              Clear
+                            </Button>
+                          </form>
+                        ) : null}
                       </div>
                     ) : null}
                   </li>

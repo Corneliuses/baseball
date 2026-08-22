@@ -744,6 +744,14 @@ describe("TeamHomePage one-tap RSVP", () => {
     expect(html).toContain("You no longer have access to make this change.");
   });
 
+  // The staff path (#54) can also refuse from a home-origin post, so its code
+  // needs words here too — same parity rule as the other shared codes.
+  it("explains a not-on-team refusal from the staff RSVP path", async () => {
+    const html = await render("team-1", { error: "not-on-team" });
+
+    expect(html).toContain("That player is not on this team&#x27;s roster.");
+  });
+
   // The ?error= key is attacker-chosen. On a plain object literal
   // ?error=constructor resolves an Object.prototype member — truthy, so the
   // fallback never fires — and React throws on the non-renderable child.
