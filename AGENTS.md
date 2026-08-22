@@ -360,6 +360,11 @@ production — the dev command can prompt, generate new migrations, and reset th
   table **and** refuses to return a non-string from the lookup — two layers, because
   fifteen pages hand-rolling the first is precisely how three ended up hardened and twelve
   did not. A new `?error=` page adds `messageTable({…})`, never `= {…}`.
+  `src/error-message-tables.test.ts` enforces it — it **parses** every file in `src/` and
+  fails on any element access whose index mentions `error`, in any spelling, after two
+  regex versions leaked five of them. It cannot see a helper that indexes the table under
+  another name, which is why `messageFor`'s own string check is the thing that actually
+  holds.
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.
