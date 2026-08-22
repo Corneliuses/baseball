@@ -11,14 +11,11 @@ import {
 } from "@/components/ui/card";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { formatEventDateTime } from "@/lib/calendar";
-import {
-  fieldedPositions,
-  OUTFIELD_ZONE_LABEL,
-  POSITION_LABELS,
-} from "@/lib/positions";
+import { chartRole } from "@/lib/chart-role";
+import { POSITION_LABELS } from "@/lib/positions";
 import { computeReadiness, type Readiness } from "@/lib/readiness";
 import { getChart } from "@/lib/roster";
-import type { ChartViewEntry } from "@/lib/chart-view";
+import { hasChartSet, type ChartViewEntry } from "@/lib/chart-view";
 import { buildRsvpStateMap } from "@/lib/rsvp";
 import { listEventRsvps } from "@/lib/rsvps";
 import { nextGame } from "@/lib/schedule";
@@ -42,44 +39,11 @@ export const metadata = {
 /// Coach-only, matching both chart editors: parents keep /t/[teamId]/view, and
 /// nothing here is a parent's decision to make. Intent is "read", so a coach on
 /// an archived team can still look at last season's chart.
-
-function ordinal(n: number): string {
-  const teens = n % 100;
-  if (teens >= 11 && teens <= 13) return `${n}th`;
-  const ones = n % 10;
-  if (ones === 1) return `${n}st`;
-  if (ones === 2) return `${n}nd`;
-  if (ones === 3) return `${n}rd`;
-  return `${n}th`;
-}
-
-/**
- * Where this player sits in the chart, so a name in the list carries enough
- * context to act on without cross-referencing the editor.
- *
- * The position label goes through the team's fielded set rather than straight
- * to `POSITION_LABELS`, for the same reason `computeReadiness` filters
- * uncovered spots through it: an allPlay team's stale `CENTER_FIELD` or
- * `CATCHER` row is not a spot that team fields. Printing "CF" beside the name
- * would have this page assert a position it simultaneously refuses to check —
- * and contradict the view page and the editor, which both show that player in
- * the outfield. On an allPlay team everyone outside the infield is in the
- * outfield, `position = null` included, which is exactly what the next save
- * will write.
- */
-function chartRole(entry: ChartViewEntry, allPlay: boolean): string {
-  const parts: string[] = [];
-  if (entry.battingOrder !== null) parts.push(`Bats ${ordinal(entry.battingOrder)}`);
-
-  const fielded = fieldedPositions(allPlay);
-  if (entry.position !== null && fielded.has(entry.position)) {
-    parts.push(POSITION_LABELS[entry.position]);
-  } else if (allPlay) {
-    parts.push(OUTFIELD_ZONE_LABEL);
-  }
-
-  return parts.join(" · ");
-}
+///
+/// `chartRole` — the "Bats 3rd · SS" line beside each name — lives in
+/// src/lib/chart-role.ts now, shared with team home (#48). It is called here
+/// without a bench label, which is this page's existing behavior: a coach
+/// reading a list of who is out already knows the chart.
 
 function PlayerList({
   entries,
@@ -176,9 +140,7 @@ export default async function ReadinessPage({
     allPlay,
   );
 
-  const hasChart = chartEntries.some(
-    (entry) => entry.battingOrder !== null || entry.position !== null,
-  );
+  const hasChart = hasChartSet(chartEntries);
 
   const heading = game.opponent ? `Next game vs ${game.opponent}` : "Next game";
 

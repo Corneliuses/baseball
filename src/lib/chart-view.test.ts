@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildChartView, type ChartViewEntry } from "@/lib/chart-view";
+import {
+  buildChartView,
+  hasChartSet,
+  type ChartViewEntry,
+} from "@/lib/chart-view";
+import type { Position } from "@/generated/prisma/enums";
 import type { RsvpState } from "@/lib/rsvp";
 
 const fullChart: ChartViewEntry[] = [
@@ -457,5 +462,24 @@ describe("buildChartView diamond names", () => {
       "Ava Castellanos",
       "Ava Rodriguez",
     ]);
+  });
+});
+
+describe("hasChartSet", () => {
+  const entry = (battingOrder: number | null, position: Position | null) => ({
+    battingOrder,
+    position,
+  });
+
+  it("is false for an empty roster and for a roster nobody has placed", () => {
+    expect(hasChartSet([])).toBe(false);
+    expect(hasChartSet([entry(null, null), entry(null, null)])).toBe(false);
+  });
+
+  // A chart entered incrementally by hand still counts — only a fully empty one
+  // is "no chart set yet".
+  it("is true as soon as one player has a slot or a position", () => {
+    expect(hasChartSet([entry(1, null), entry(null, null)])).toBe(true);
+    expect(hasChartSet([entry(null, "PITCHER"), entry(null, null)])).toBe(true);
   });
 });

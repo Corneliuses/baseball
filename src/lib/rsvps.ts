@@ -1,5 +1,5 @@
 import { db } from "./db";
-import type { RsvpRow } from "./rsvp";
+import type { EventRsvpRow, RsvpRow } from "./rsvp";
 
 /// Team-scoped RSVP reads and writes, per AGENTS.md — "Never call Prisma
 /// directly from a component." The pure tri-state logic lives next door in
@@ -25,6 +25,28 @@ export async function listEventRsvps(
   return db.rsvp.findMany({
     where: { eventId, event: { teamId } },
     select: { playerId: true, attending: true },
+  });
+}
+
+/**
+ * The same read across several events at once, for team home (#48).
+ *
+ * Scoped by `teamId` exactly like `listEventRsvps`, so an id from another
+ * team's schedule returns nothing rather than that team's attendance. Does not
+ * swallow database errors, for the reason in the module docstring: "nobody has
+ * answered" is a real product state and a caught outage would assert it.
+ */
+export async function listRsvpsForEvents(
+  teamId: string,
+  eventIds: readonly string[],
+): Promise<EventRsvpRow[]> {
+  if (eventIds.length === 0) {
+    return [];
+  }
+
+  return db.rsvp.findMany({
+    where: { eventId: { in: [...eventIds] }, event: { teamId } },
+    select: { eventId: true, playerId: true, attending: true },
   });
 }
 

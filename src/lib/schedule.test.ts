@@ -25,6 +25,7 @@ import {
   listEventsInMonthGrid,
   listPastEvents,
   listUpcomingEvents,
+  nextEvents,
   nextGame,
   updateEvent as updateEventFn,
 } from "@/lib/schedule";
@@ -182,6 +183,61 @@ describe("nextGame", () => {
     findManyEvents.mockRejectedValue(new Error("connection refused"));
 
     await expect(nextGame("team-1", NOW)).rejects.toThrow("connection refused");
+  });
+});
+
+describe("nextEvents", () => {
+  it("does not filter by type — a practice is a legitimate next event", async () => {
+    await nextEvents("team-1", 3, NOW);
+
+    const [[args]] = findManyEvents.mock.calls;
+    expect(args.where.teamId).toBe("team-1");
+    expect(args.where.type).toBeUndefined();
+    expect(args.orderBy).toEqual({ startsAt: "asc" });
+  });
+
+  it("applies the same grace window as nextGame", async () => {
+    await nextEvents("team-1", 3, NOW);
+
+    const [[args]] = findManyEvents.mock.calls;
+    expect(args.where.startsAt.gt.toISOString()).toBe(
+      new Date(NOW.getTime() - GAME_GRACE_MS).toISOString(),
+    );
+  });
+
+  it("puts a practice first when it is the soonest thing on the schedule", async () => {
+    findManyEvents.mockResolvedValue([
+      eventRow({ id: "practice-1", type: "PRACTICE", opponent: null }),
+      eventRow({ id: "game-1", startsAt: new Date("2026-08-05T23:00:00Z") }),
+    ]);
+
+    await expect(nextEvents("team-1", 3, NOW)).resolves.toMatchObject([
+      { id: "practice-1", type: "PRACTICE" },
+      { id: "game-1" },
+    ]);
+  });
+
+  it("returns at most the limit asked for, soonest first", async () => {
+    findManyEvents.mockResolvedValue([
+      eventRow({ id: "d", startsAt: new Date("2026-08-09T23:00:00Z") }),
+      eventRow({ id: "b", startsAt: new Date("2026-08-03T23:00:00Z") }),
+      eventRow({ id: "a", startsAt: new Date("2026-08-02T23:00:00Z") }),
+      eventRow({ id: "c", startsAt: new Date("2026-08-05T23:00:00Z") }),
+    ]);
+
+    const events = await nextEvents("team-1", 3, NOW);
+
+    expect(events.map((event) => event.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("returns an empty list when nothing is upcoming", async () => {
+    await expect(nextEvents("team-1", 3, NOW)).resolves.toEqual([]);
+  });
+
+  it("rethrows a database error rather than reporting an empty schedule", async () => {
+    findManyEvents.mockRejectedValue(new Error("connection refused"));
+
+    await expect(nextEvents("team-1", 3, NOW)).rejects.toThrow("connection refused");
   });
 });
 

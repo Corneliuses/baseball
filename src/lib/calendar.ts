@@ -369,13 +369,70 @@ export function parseViewParam(raw: unknown): ScheduleView {
 }
 
 // ---------------------------------------------------------------------------
-// Next game
+// Next event / next game
 // ---------------------------------------------------------------------------
 
-export type GameCandidate = {
-  type: EventType;
+/// Anything with a start instant. `selectNextEvent` needs nothing else, so a
+/// practice and a game are the same shape to it — the games-only rule lives in
+/// `selectNextGame` alone.
+export type EventCandidate = {
   startsAt: Date;
 };
+
+export type GameCandidate = EventCandidate & {
+  type: EventType;
+};
+
+/**
+ * The soonest event that has not yet finished — **any type, games and
+ * practices alike**.
+ *
+ * This is the informational question team home (#48) asks: a parent wants to
+ * know where to be next, and the next thing on the calendar is as often a
+ * practice as a game. Contrast `selectNextGame` below, which readiness (#12)
+ * and the view page (#8) need because a practice has no chart to check.
+ *
+ * The grace window is `GAME_GRACE_MS` for both — a practice that started forty
+ * minutes ago is the one the parent is driving to, for exactly the reason that
+ * constant documents for games.
+ *
+ * `now` is a parameter rather than `new Date()` so this stays pure and its
+ * tests do not depend on the clock.
+ */
+export function selectNextEvent<T extends EventCandidate>(
+  events: readonly T[],
+  now: Date,
+): T | null {
+  return selectNextEvents(events, now, 1)[0] ?? null;
+}
+
+/**
+ * The soonest `limit` events that have not yet finished, soonest first.
+ *
+ * The general form of `selectNextEvent`, which is now the `limit: 1` case —
+ * one definition of the grace window and of "soonest", so a page showing three
+ * events and a page showing one can never disagree about which is next.
+ *
+ * Sorts rather than trusting the caller's order: the pure function has to hold
+ * on its own, the same reason `nextGame` does not pass `take: 1` to Postgres.
+ * A `limit` of zero or less returns nothing.
+ */
+export function selectNextEvents<T extends EventCandidate>(
+  events: readonly T[],
+  now: Date,
+  limit: number,
+): T[] {
+  if (limit <= 0) {
+    return [];
+  }
+
+  const cutoff = now.getTime() - GAME_GRACE_MS;
+
+  return events
+    .filter((event) => event.startsAt.getTime() > cutoff)
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .slice(0, limit);
+}
 
 /**
  * The soonest game that has not yet finished — **games only, never practices**.
@@ -384,6 +441,13 @@ export type GameCandidate = {
  * page (#8) both ignore them. Keeping that rule in this one function is the
  * point: it is not repeated at each call site.
  *
+ * Delegates the "has it finished yet, and which is soonest" half to
+ * `selectNextEvent` so the grace window is applied in one place — this
+ * function's only job is the type filter, which is the only thing that
+ * distinguishes it. A flag on one shared function was considered and rejected:
+ * it would let a caller ask for the wrong rule by passing the wrong boolean,
+ * where two named functions make the choice explicit at every call site.
+ *
  * `now` is a parameter rather than `new Date()` so this stays pure and its
  * tests do not depend on the clock.
  */
@@ -391,20 +455,8 @@ export function selectNextGame<T extends GameCandidate>(
   events: readonly T[],
   now: Date,
 ): T | null {
-  const cutoff = now.getTime() - GAME_GRACE_MS;
-  let soonest: T | null = null;
-
-  for (const event of events) {
-    if (event.type !== "GAME") {
-      continue;
-    }
-    if (event.startsAt.getTime() <= cutoff) {
-      continue;
-    }
-    if (soonest === null || event.startsAt.getTime() < soonest.startsAt.getTime()) {
-      soonest = event;
-    }
-  }
-
-  return soonest;
+  return selectNextEvent(
+    events.filter((event) => event.type === "GAME"),
+    now,
+  );
 }

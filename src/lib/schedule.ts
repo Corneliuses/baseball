@@ -2,6 +2,7 @@ import { EventType } from "@/generated/prisma/enums";
 import {
   GAME_GRACE_MS,
   monthGridRange,
+  selectNextEvents,
   selectNextGame,
   startOfDayInZone,
   type CalendarMonth,
@@ -19,11 +20,12 @@ import { db } from "./db";
 ///   - `getEvent` does NOT swallow — its caller turns a null return into
 ///     `notFound()`, so a caught outage would misreport "this event doesn't
 ///     exist" for one that does. Same fix `getTeamById` got in #3.
-///   - `nextGame` does NOT swallow either, for a sharper version of the same
-///     reason: `null` is a meaningful product state ("no upcoming game") that
-///     #8 and #12 both render. A swallowed outage would quietly assert that
-///     state instead of failing, and the coach would see "no upcoming game" on
-///     the morning of one.
+///   - `nextGame` and `nextEvent` do NOT swallow either, for a sharper version
+///     of the same reason: `null` is a meaningful product state ("no upcoming
+///     game", "nothing on the schedule") that #8, #12 and #48 all render. A
+///     swallowed outage would quietly assert that state instead of failing, and
+///     the coach would see "no upcoming game" on the morning of one — or a
+///     parent an empty team home on the day of a practice.
 ///   - The mutations propagate too: callers (server actions) run
 ///     requireTeamAccess before calling any of these, and a write that
 ///     silently fails and still looks like it succeeded is worse than one that
@@ -181,6 +183,38 @@ export async function nextGame(
   });
 
   return selectNextGame(candidates, now);
+}
+
+/**
+ * The team's next few events, soonest first — **games and practices alike**.
+ *
+ * The informational twin of `nextGame`, for team home (#48): a parent asking
+ * "where do I need to be next" is as often driving to a practice as to a game,
+ * and wants to see what is after that without opening the schedule. Readiness
+ * (#12) and the view page (#8) must keep using `nextGame`, because a practice
+ * has no chart to check against attendance.
+ *
+ * Structured exactly like `nextGame` — same double filter (SQL for the work,
+ * `selectNextEvents` for the definition), same absent `take: 1` and for the
+ * same reason, same refusal to swallow a database error. The `limit` is applied
+ * by the pure function only: the query is bounded by the grace window, and a
+ * season's worth of events is small enough that fetching them is free.
+ */
+export async function nextEvents(
+  teamId: string,
+  limit: number,
+  now: Date = new Date(),
+): Promise<ScheduleEvent[]> {
+  const candidates = await db.event.findMany({
+    where: {
+      teamId,
+      startsAt: { gt: new Date(now.getTime() - GAME_GRACE_MS) },
+    },
+    select: EVENT_SELECT,
+    orderBy: { startsAt: "asc" },
+  });
+
+  return selectNextEvents(candidates, now, limit);
 }
 
 // ---------------------------------------------------------------------------

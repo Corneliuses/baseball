@@ -68,7 +68,16 @@ export type ChartView = {
 /// reshaping a ChartViewPlayer to borrow it costs more than the four lines.
 /// Unnumbered players sort last; jerseys are unique per team, so the name
 /// comparison only ever settles two unnumbered players.
-function byJerseyThenName(a: ChartViewPlayer, b: ChartViewPlayer): number {
+///
+/// Exported, and typed on the two fields it actually reads, because team home
+/// (#48) needs the same order for a parent's own kids: `getChart` is a
+/// findMany with no orderBy, so anything rendering its rows unsorted reshuffles
+/// between requests. A third hand-rolled copy of this comparison is how the two
+/// diamonds' names drifted apart before `buildDiamondNames`.
+export function byJerseyThenName(
+  a: Pick<ChartViewEntry, "jerseyNumber" | "playerName">,
+  b: Pick<ChartViewEntry, "jerseyNumber" | "playerName">,
+): number {
   if (a.jerseyNumber === null && b.jerseyNumber === null) {
     return a.playerName.localeCompare(b.playerName);
   }
@@ -136,9 +145,23 @@ export function buildChartView(
   // arranged in the editor's zone.
   const unassigned = unseated.sort(byJerseyThenName);
 
-  const hasChart = players.some(
-    (player) => player.battingOrder !== null || player.position !== null,
-  );
+  return { lineup, byPosition, unassigned, hasChart: hasChartSet(entries) };
+}
 
-  return { lineup, byPosition, unassigned, hasChart };
+/**
+ * Has anyone on this team been given a batting slot or a position yet?
+ *
+ * A partial chart — entered incrementally by hand — counts; only a fully empty
+ * one is "no chart set yet". Named once because three callers ask it: this
+ * module, the readiness page, and team home (#48). The last is why it matters
+ * that they agree: with no chart at all, every position a page prints is one
+ * nobody assigned, and two of those pages would be telling the same parent
+ * different things about the same kid.
+ */
+export function hasChartSet(
+  entries: readonly Pick<ChartViewEntry, "battingOrder" | "position">[],
+): boolean {
+  return entries.some(
+    (entry) => entry.battingOrder !== null || entry.position !== null,
+  );
 }
