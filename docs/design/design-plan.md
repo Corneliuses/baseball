@@ -314,13 +314,15 @@ Via the existing `LazyMotion`/`m` setup only:
 
 - Page-level: the existing `Reveal` rise on card mount; lineup rows stagger in at ~40ms
   intervals via the `animate-rise` utility, an inline `animation-delay` per row.
-- `animate-step-up`: the lineup view's guarded marker rises once, on load, and settles.
+- `animate-step-up`: the guarded marker rises once, on load, and settles — on the lineup
+  view's diamond and on team home's `MiniDiamondHero`, which draws the same haloed marker.
   CSS too, and translate-only for a second reason on top of the one below — the banana halo
   already sits 2.5px inside the warning track, so a scale would push it onto the tan at the
   animation's peak and lose exactly the contrast the highlight is made of. It goes on an
   *inner* `<g>`, never the one carrying `transform="translate(x y)"`: a CSS transform
   overrides an SVG transform attribute, and animating that element drops the marker at the
-  origin.
+  origin. Both suites pin that placement, because the failure is silent — the marker simply
+  renders at the field's origin, with no error.
 - `animate-rise` is CSS, not Motion, and **translate-only** — no opacity, for the same
   reason `Reveal` has none: Motion serialises `initial` into the server-rendered markup,
   so a fade ships `opacity: 0` in the HTML and the lineup stays blank until the bundle

@@ -34,8 +34,9 @@ docs/design/       # The design plan and its SVG mockups — kept in step with t
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher),
 `/profile` (the signed-in person's own name and phone — global, not team-scoped, since
 those are `User` columns — and the app's only sign-out, a server action wrapping Auth.js
-`signOut`), and `/t/[teamId]/` (team home — the parent dashboard: each kid's chart line
-and the next three events, every one of them answerable in one tap — settings, roster,
+`signOut`), and `/t/[teamId]/` (team home — the parent dashboard: a player card per kid
+(`MiniDiamondHero` field art, jersey dot, slab name plate, chart-line marquee) and the
+next three events, every one of them answerable in one tap — settings, roster,
 members, the owner-only returning-player picker at `roster/returning`, the coach-only
 bulk parent invite at `roster/invite`, the coach-only member directory, the coach-only
 roster entry detail at `roster/[entryId]`, the schedule at `schedule` /
@@ -230,7 +231,7 @@ production — the dev command can prompt, generate new migrations, and reset th
   `prisma-client-api` were kept (from `github:prisma/skills`, MIT). **If anyone re-runs
   `prisma init`, remove the rest again.** `prisma-cli/SKILL.md` was edited locally to drop
   a dangling reference to the uninstalled `prisma-compute` skill.
-- **The two diamonds paint different fences, and that is the banana budget.** design-plan.md
+- **Three surfaces paint `FieldArt`, and their fences are the banana budget.** design-plan.md
   §2 allows exactly one Banana Yellow element per screen. `FieldArt` takes a `fence` prop
   because the wall is the loudest thing it paints: the positions editor spends its banana
   there, and `/view` spends its own on the guarded-player halo instead — but only for a
@@ -243,6 +244,18 @@ production — the dev command can prompt, generate new migrations, and reset th
   an allPlay board with 13+ players in the zone draws no ring, so a reader whose only
   guarded kid is there and has no batting slot sees a chalk fence and no banana at all.
   That needs an 18+ roster, past what this app is built for.
+
+  The third caller is **`MiniDiamondHero`** (team home's player cards), and it passes
+  `fence="chalk"` unconditionally — not a judgement call, a consequence of when it renders
+  at all: the hero is drawn only for a kid the chart seats, and that card has already spent
+  the banana on the halo and the marquee strip. Its crop is also so tight that the fence
+  is usually outside the viewBox entirely. Two things follow, and both are the `/view`
+  precedent rather than new rules. The treatment **follows the child**, so a parent with
+  two kids gets it twice — two haloed markers and two marquees — exactly as `/view` already
+  draws two halos, two row borders and two chips for that family. And a reader with **no**
+  guarded kid gets no banana at all on team home, which is deliberate: unlike `/view` there
+  is no field art to hand the yellow back to, and team home without a kid on it is one of
+  §7's calm pages, not a fun page missing its accent.
 - **Both diamonds shorten names through `buildDiamondNames` (`src/lib/diamond-names.ts`).**
   Never re-add a local `shortName`: the editor had one, so with two Avas on the roster
   `/view` drew "Ava C."/"Ava R." while the coach's board drew two chips both reading "Ava" —
