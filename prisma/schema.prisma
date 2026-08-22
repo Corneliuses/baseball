@@ -227,17 +227,17 @@ model Event {
 /// One player's attendance for one event. Practices have RSVPs too; only games
 /// are read by the next-game readiness check.
 model Rsvp {
-  id        String   @id @default(cuid())
-  eventId   String
-  playerId  String
-  attending Boolean
+  id           String   @id @default(cuid())
+  eventId      String
+  playerId     String
+  attending    Boolean
   /// Set only when a staff member (COACH+) recorded this response on the
   /// family's behalf (#54); null means the family recorded it themselves.
   /// Every write sets or clears it, so last-write-wins carries provenance —
   /// the parent stays the owner of the state. SetNull so deleting a staff
   /// account can never take a family's RSVP with it.
   recordedById String?
-  updatedAt DateTime @updatedAt
+  updatedAt    DateTime @updatedAt
 
   event      Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   player     Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
@@ -245,6 +245,7 @@ model Rsvp {
 
   @@unique([eventId, playerId])
   @@index([playerId])
+  @@index([recordedById])
 }
 
 // ---------------------------------------------------------------------------

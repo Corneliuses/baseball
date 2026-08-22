@@ -37,7 +37,7 @@ import { rsvpAction } from "./schedule/actions";
 
 /// Copy for the codes `rsvpAction` redirects here with when it is posted from
 /// this page (`from=home`). Deliberately the event page's wording for the
-/// three codes both pages share — a parent who taps Going from either place is
+/// four codes both pages share — a parent who taps Going from either place is
 /// owed the same sentence — plus `event-gone`, which only this page can
 /// produce: from the event page a deleted event bounces to the schedule, where
 /// its absence explains itself.
@@ -46,6 +46,7 @@ import { rsvpAction } from "./schedule/actions";
 const ERROR_MESSAGES = messageTable({
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
+  "not-on-team": "That player is not on this team's roster.",
   "event-gone": "That event was just taken off the schedule.",
   "event-started": "That one has already started — open the event to answer for it.",
   access: "You no longer have access to make this change.",

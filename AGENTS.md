@@ -192,10 +192,12 @@ pnpm db:generate     # required — the client is gitignored
 Copy `.env.example` to `.env` and fill it in — it documents every variable and where its
 name comes from. `DATABASE_URL` and `AUTH_SECRET` are the two needed to boot.
 
-**One migration exists** — `prisma/migrations/20260728053521_001`, the initial schema (14
-tables). Creating further migrations needs a live Postgres URL: a Neon dev branch, not
-`prisma dev`, which provisions Prisma Postgres, a different service than Decision 3's
-choice.
+**Migrations live in `prisma/migrations/`** — `20260728053521_001` is the initial
+14-table schema, and everything after it is small and additive (the team calendar token,
+the RSVP `recordedById` column and its index). Creating further migrations needs a live
+Postgres URL: a Neon dev branch, not `prisma dev`, which provisions Prisma Postgres, a
+different service than Decision 3's choice — or hand-write the SQL and verify it against
+the schema with `prisma migrate diff`.
 
 **Migrations apply automatically on deploy.** `pnpm build` is
 `prisma migrate deploy && next build`, so every Vercel deploy brings the database up to

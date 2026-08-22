@@ -6,6 +6,7 @@ const getEvent = vi.fn();
 const getRoster = vi.fn();
 const listEventRsvps = vi.fn();
 const guardedRosteredPlayerIds = vi.fn();
+const getTeamById = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -18,6 +19,10 @@ vi.mock("@/lib/schedule", () => ({
 
 vi.mock("@/lib/roster", () => ({
   getRoster: (...args: unknown[]) => getRoster(...args),
+}));
+
+vi.mock("@/lib/teams", () => ({
+  getTeamById: (...args: unknown[]) => getTeamById(...args),
 }));
 
 vi.mock("@/lib/rsvps", () => ({
@@ -69,10 +74,21 @@ const rosterOfThree = [
   { id: "entry-3", jerseyNumber: 3, player: { id: "cy", name: "Cy", dateOfBirth: null } },
 ];
 
+const team = {
+  id: "team-1",
+  name: "Cubs",
+  season: "Fall 2026",
+  allPlay: true,
+  archivedAt: null as Date | null,
+  createdAt: new Date("2026-07-01T00:00:00Z"),
+  calendarToken: "token",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
   getEvent.mockResolvedValue(game);
+  getTeamById.mockResolvedValue(team);
   getRoster.mockResolvedValue([]);
   listEventRsvps.mockResolvedValue([]);
   guardedRosteredPlayerIds.mockResolvedValue(new Set());
@@ -334,6 +350,44 @@ describe("EventPage attendance", () => {
     ]);
 
     expect(await render()).not.toContain("Recorded by coach");
+  });
+
+  // Archived teams reject every write server-side, so the buttons are hidden
+  // rather than shown and refused — same rule as team home's teamIsWritable.
+  it("renders no RSVP controls on an archived team, for staff or family", async () => {
+    getTeamById.mockResolvedValue({
+      ...team,
+      archivedAt: new Date("2026-08-01T00:00:00Z"),
+    });
+    getRoster.mockResolvedValue(roster);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ava"]));
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: false, recordedById: null },
+    ]);
+
+    const html = await render();
+
+    // The states still read; only the writes disappear.
+    expect(html).toContain("Not going");
+    expect(html.split('value="ava"').length - 1).toBe(0);
+    expect(html.split('value="ben"').length - 1).toBe(0);
+    expect(html).not.toContain("Clear");
+  });
+
+  // A coach's list renders identical button labels on every row, so each
+  // control carries the player's name for screen-reader and voice users.
+  it("names the player in each RSVP button's accessible name", async () => {
+    getRoster.mockResolvedValue(roster);
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: false, recordedById: null },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain('aria-label="Ava is going"');
+    expect(html).toContain('aria-label="Ava is not going"');
+    expect(html).toContain('aria-label="Clear Ava&#x27;s response"');
+    expect(html).toContain('aria-label="Ben is going"');
   });
 
   it("lists players in the same order as the roster page, not database order", async () => {
