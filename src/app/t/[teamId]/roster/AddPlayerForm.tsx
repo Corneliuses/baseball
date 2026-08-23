@@ -3,6 +3,9 @@
 import * as React from "react";
 import { useActionState } from "react";
 
+import Link from "next/link";
+
+import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/SubmitButton";
 import { StatusBanner } from "@/components/StatusBanner";
 import { messageFor } from "@/lib/error-messages";
@@ -38,13 +41,15 @@ export function AddPlayerForm({ teamId }: { teamId: string }) {
   );
 
   const rejected = state.status === "invalid" ? state : null;
+  const duplicate = state.status === "duplicate-name" ? state : null;
+  const echoed = rejected?.values ?? duplicate?.values ?? null;
 
-  const [name, setName] = React.useState(() => rejected?.values.name ?? "");
+  const [name, setName] = React.useState(() => echoed?.name ?? "");
   const [dateOfBirth, setDateOfBirth] = React.useState(
-    () => rejected?.values.dateOfBirth ?? "",
+    () => echoed?.dateOfBirth ?? "",
   );
   const [jerseyNumber, setJerseyNumber] = React.useState(
-    () => rejected?.values.jerseyNumber ?? "",
+    () => echoed?.jerseyNumber ?? "",
   );
 
   const message = rejected ? messageFor(ROSTER_ERROR_MESSAGES, rejected.code) : null;
@@ -120,6 +125,43 @@ export function AddPlayerForm({ teamId }: { teamId: string }) {
       {message ? (
         <StatusBanner tone="error" id={errorId}>
           {message}
+        </StatusBanner>
+      ) : null}
+
+      {duplicate ? (
+        // Asked once, before a second global Player by the same name comes
+        // into existence. Adding "Jake Miller" twice used to silently produce
+        // two children who are, to the data model, different people — separate
+        // guardians, separate jersey and batting rows, separate everything.
+        //
+        // A question, not a rejection: two kids on one team really can share a
+        // name, so the coach can wave it through.
+        <StatusBanner tone="error">
+          <p className="font-medium">
+            {duplicate.match.kind === "rostered"
+              ? `${duplicate.match.name} is already on this roster.`
+              : `${duplicate.match.name} played on one of your past teams.`}{" "}
+            Same kid?
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {duplicate.match.kind === "rostered"
+              ? "Adding them again creates a second player with the same name — separate jersey, separate batting slot, separate guardians."
+              : "Adding them here creates a brand-new player. The returning-player picker reuses the one you already have, and brings their guardians across."}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {/* The only place `force` is ever set. Submitting this button
+                posts the same values with the check waived. */}
+            <SubmitButton name="force" value="1" variant="outline" pendingLabel="Adding…">
+              Add anyway
+            </SubmitButton>
+            {duplicate.match.kind === "returning" ? (
+              <Button asChild variant="outline">
+                <Link href={`/t/${teamId}/roster/returning`}>
+                  Use the returning-player picker
+                </Link>
+              </Button>
+            ) : null}
+          </div>
         </StatusBanner>
       ) : null}
 

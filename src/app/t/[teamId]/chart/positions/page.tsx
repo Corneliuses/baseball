@@ -16,6 +16,7 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
 import { PositionsEditor } from "./PositionsEditor";
+import { DraftStash } from "../DraftStash";
 import { EditorTabs } from "../EditorTabs";
 
 export const metadata = {
@@ -159,6 +160,15 @@ export default async function PositionsPage({
             allPlay={team.allPlay}
             entries={entries}
           />
+          {/* The board this coach just lost, if another coach's save landed
+              first. Read-only reference — see DraftStash. */}
+          {error === "chart-changed" ? (
+            <DraftStash
+              teamId={teamId}
+              kind="positions"
+              title="Your unsaved positions"
+            />
+          ) : null}
         </>
       )}
     </div>

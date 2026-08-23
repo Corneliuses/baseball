@@ -6,18 +6,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { listDirectory } from "@/lib/memberships";
 import { sortDirectory } from "@/lib/directory-rules";
 
 export const metadata = {
   title: "Directory — Youth Baseball Team Manager",
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  OWNER: "Owner",
-  COACH: "Coach",
-  PARENT: "Parent",
 };
 
 /// Coach-and-above only. The directory is every family's contact details in
@@ -61,7 +56,7 @@ export default async function DirectoryPage({
                   <CardTitle className="text-base">
                     {entry.name ?? entry.email}{" "}
                     <span className="text-sm font-normal text-muted-foreground">
-                      · {ROLE_LABELS[entry.role] ?? entry.role}
+                      · {roleLabel(entry.role)}
                     </span>
                   </CardTitle>
                 </CardHeader>

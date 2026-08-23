@@ -29,6 +29,19 @@ export type AddPlayerState =
       code: string;
       field: AddPlayerField;
       values: AddPlayerValues;
+    }
+  /// Somebody by this exact name already exists, and the coach has not yet
+  /// said whether that is the same child. Nothing has been written.
+  ///
+  /// A question, not a rejection: two kids on one team really can share a
+  /// name. The form offers "Add anyway", which resubmits with `force` set,
+  /// and — when the match is a past player — a link to the returning-player
+  /// picker, which reuses the existing Player and carries their guardians
+  /// across instead of creating a second child by the same name.
+  | {
+      status: "duplicate-name";
+      match: { kind: "rostered" | "returning"; name: string };
+      values: AddPlayerValues;
     };
 
 export const ADD_PLAYER_INITIAL_STATE: AddPlayerState = { status: "idle" };

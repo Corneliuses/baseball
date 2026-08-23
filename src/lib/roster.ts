@@ -548,3 +548,81 @@ export async function addReturningPlayer(
     return { entry, notify: toCreate };
   });
 }
+
+/// One kind of name collision the coach should be warned about before a new
+/// global `Player` row is created.
+export type DuplicateNameMatch = {
+  kind: "rostered" | "returning";
+  playerId: string;
+  name: string;
+};
+
+/**
+ * Find an exact name match for a player about to be added by hand.
+ *
+ * `addPlayerToRoster` always creates a brand-new global `Player`, and nothing
+ * stopped it: adding "Jake Miller" twice silently produced two children who
+ * are, as far as the data model is concerned, different people — separate
+ * guardians, separate jersey and batting-order rows, separate everything
+ * (Dugout Report C7). The unique indexes do not help, because they constrain
+ * jersey numbers and roster membership, not names.
+ *
+ * Two places worth checking, and they mean different things to the coach:
+ *
+ * - **rostered** — someone by that name is already on *this* team, so this is
+ *   almost certainly a mistake or a genuine pair of same-named kids.
+ * - **returning** — someone by that name played for one of this owner's past
+ *   teams, so the right move is usually the returning-player picker, which
+ *   reuses the existing `Player` and carries the guardians across.
+ *
+ * **Exact matches only**, trimmed and case-insensitive. Fuzzy matching would
+ * turn a warning into a nuisance on a roster where "Jake M" and "Jake Miller"
+ * may well be two children, and the issue asks for an exact-match warning
+ * specifically. Two children on one team really can share a name — hence a
+ * warning the coach can wave through, never a rejection.
+ *
+ * Read errors are swallowed to `null`: this is advisory, and an outage must
+ * not block a coach from adding a player.
+ */
+export async function findDuplicateNameMatch(
+  teamId: string,
+  name: string,
+): Promise<DuplicateNameMatch | null> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const rostered = await db.rosterEntry.findFirst({
+      where: {
+        teamId,
+        player: { name: { equals: trimmed, mode: "insensitive" } },
+      },
+      select: { player: { select: { id: true, name: true } } },
+    });
+
+    if (rostered) {
+      return {
+        kind: "rostered",
+        playerId: rostered.player.id,
+        name: rostered.player.name,
+      };
+    }
+
+    // Not on this team — but maybe on a past one, where the picker is the
+    // better route because it reuses the Player and its guardian links.
+    const candidates = await listReturningCandidates(teamId);
+    const returning = candidates.find(
+      (candidate) => candidate.name.trim().toLowerCase() === trimmed.toLowerCase(),
+    );
+
+    return returning
+      ? { kind: "returning", playerId: returning.playerId, name: returning.name }
+      : null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Duplicate-name check failed:", message);
+    return null;
+  }
+}

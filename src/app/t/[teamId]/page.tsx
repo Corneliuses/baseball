@@ -31,6 +31,7 @@ import { getChart } from "@/lib/roster";
 import { buildRsvpStateMapsByEvent } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listRsvpsForEvents } from "@/lib/rsvps";
 import { nextEvents, type ScheduleEvent } from "@/lib/schedule";
+import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -538,7 +539,7 @@ export default async function TeamHomePage({
                     <CardTitle className="text-base">
                       {coach.name ?? coach.email}{" "}
                       <span className="text-sm font-normal text-muted-foreground">
-                        · {coach.role === "OWNER" ? "Owner" : "Coach"}
+                        · {roleLabel(coach.role)}
                       </span>
                     </CardTitle>
                   </CardHeader>

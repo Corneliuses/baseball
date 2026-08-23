@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const requireTeamAccess = vi.fn();
 const getRosterEntry = vi.fn();
+const findDuplicateNameMatch = vi.fn();
 const addPlayerToRoster = vi.fn();
 const updateRosterEntry = vi.fn();
 const linkGuardian = vi.fn();
@@ -18,6 +19,7 @@ vi.mock("@/lib/team-access", () => ({
 vi.mock("@/lib/roster", () => ({
   getRosterEntry: (...args: unknown[]) => getRosterEntry(...args),
   addPlayerToRoster: (...args: unknown[]) => addPlayerToRoster(...args),
+  findDuplicateNameMatch: (...args: unknown[]) => findDuplicateNameMatch(...args),
   removeRosterEntry: vi.fn(),
   updateRosterEntry: (...args: unknown[]) => updateRosterEntry(...args),
 }));
@@ -125,6 +127,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
   getRosterEntry.mockResolvedValue(ENTRY);
+  // No name collision unless a test sets one up. The check is advisory and
+  // returns null both when nothing matches and when the lookup itself failed.
+  findDuplicateNameMatch.mockResolvedValue(null);
   linkGuardian.mockResolvedValue({
     userId: "user-2",
     email: "new@example.com",
@@ -449,5 +454,103 @@ describe("date of birth validation", () => {
 
     expect(url).toContain("error=invalid-dob");
     expect(updateRosterEntry).not.toHaveBeenCalled();
+  });
+});
+
+/// `addPlayerToRoster` always creates a brand-new global Player, and nothing
+/// used to stop it: adding "Jake Miller" twice silently produced two children
+/// who are, to the data model, different people. The unique indexes do not
+/// help — they constrain jersey numbers and roster membership, not names.
+describe("the same-kid check on a manual add", () => {
+  it("asks before creating a second player by the same name", async () => {
+    findDuplicateNameMatch.mockResolvedValue({
+      kind: "rostered",
+      playerId: "player-9",
+      name: "Jake Miller",
+    });
+
+    const state = await addPlayer(form({ teamId: "team-1", name: "Jake Miller" }));
+
+    expect(state.status).toBe("duplicate-name");
+    expect(addPlayerToRoster).not.toHaveBeenCalled();
+  });
+
+  it("keeps what was typed while it asks", async () => {
+    findDuplicateNameMatch.mockResolvedValue({
+      kind: "rostered",
+      playerId: "player-9",
+      name: "Jake Miller",
+    });
+
+    const state = await addPlayer(
+      form({ teamId: "team-1", name: "Jake Miller", jerseyNumber: "12" }),
+    );
+
+    if (state.status !== "duplicate-name") throw new Error("expected the question");
+    expect(state.values.name).toBe("Jake Miller");
+    expect(state.values.jerseyNumber).toBe("12");
+  });
+
+  it("says which kind of match it found, since the remedies differ", async () => {
+    // A returning player should usually be added through the picker, which
+    // reuses the existing Player and carries their guardians across.
+    findDuplicateNameMatch.mockResolvedValue({
+      kind: "returning",
+      playerId: "player-9",
+      name: "Jake Miller",
+    });
+
+    const state = await addPlayer(form({ teamId: "team-1", name: "Jake Miller" }));
+
+    if (state.status !== "duplicate-name") throw new Error("expected the question");
+    expect(state.match).toEqual({ kind: "returning", name: "Jake Miller" });
+  });
+
+  it("goes ahead when the coach says it really is a different kid", async () => {
+    // Two children on one team genuinely can share a name, so this is a
+    // question the coach can answer, never a rejection.
+    findDuplicateNameMatch.mockResolvedValue({
+      kind: "rostered",
+      playerId: "player-9",
+      name: "Jake Miller",
+    });
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-2",
+      jerseyNumber: null,
+      player: { id: "player-10", name: "Jake Miller", dateOfBirth: null },
+    });
+
+    const url = await redirectUrlOf(
+      addPlayer(form({ teamId: "team-1", name: "Jake Miller", force: "1" })),
+    );
+
+    expect(url).toBe("/t/team-1/roster?added=1");
+    expect(addPlayerToRoster).toHaveBeenCalled();
+  });
+
+  it("does not even ask once the check is waived", async () => {
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-2",
+      jerseyNumber: null,
+      player: { id: "player-10", name: "Jake Miller", dateOfBirth: null },
+    });
+
+    await redirectUrlOf(
+      addPlayer(form({ teamId: "team-1", name: "Jake Miller", force: "1" })),
+    );
+
+    expect(findDuplicateNameMatch).not.toHaveBeenCalled();
+  });
+
+  it("checks only after access is proven", async () => {
+    // The check reads this team's roster and the owner's past players, so it
+    // must never run for someone who has not been shown to be a coach here.
+    requireTeamAccess.mockRejectedValue(
+      new TeamAccessError("denied", "insufficient-role"),
+    );
+
+    await redirectUrlOf(addPlayer(form({ teamId: "team-1", name: "Jake Miller" })));
+
+    expect(findDuplicateNameMatch).not.toHaveBeenCalled();
   });
 });

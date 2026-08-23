@@ -27,9 +27,16 @@ export function TeamSwitcher({ teams, currentTeamId }: TeamSwitcherProps) {
         onChange={(event) => router.push(`/t/${event.target.value}`)}
         className="rounded-md border border-border bg-background px-2 py-1 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
       >
+        {/* The season is what tells two same-named teams apart, and this app
+            is built around coaching the same club across seasons — "Sharks"
+            and "Sharks" in a dropdown is a coin flip, on a control whose whole
+            job is picking the right one. `TEAM_SELECT` has always carried
+            `season`; the switcher simply never printed it. The landing page's
+            TeamCard already does. */}
         {teams.map((team) => (
           <option key={team.id} value={team.id}>
             {team.name}
+            {team.season ? ` · ${team.season}` : ""}
             {team.archivedAt ? " (Archived)" : ""}
           </option>
         ))}

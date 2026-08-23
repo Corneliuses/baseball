@@ -8,13 +8,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { StatusBanner } from "@/components/StatusBanner";
+import { formatEventDayLabel } from "@/lib/calendar";
 import { messageFor } from "@/lib/error-messages";
+import { ROLE_LABELS, roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { listTeamMembers } from "@/lib/memberships";
 import { listTeamInvitations } from "@/lib/invitations";
 import { isLiveInvitation } from "@/lib/invitation-token";
 
-import { setMemberRoleAction } from "./actions";
+import {
+  resendInvitationAction,
+  revokeInvitationAction,
+  setMemberRoleAction,
+} from "./actions";
 import { InviteMemberForm } from "./InviteMemberForm";
 import { MEMBER_ERROR_MESSAGES } from "./member-messages";
 
@@ -31,10 +38,22 @@ export default async function MembersPage({
   searchParams,
 }: {
   params: Promise<{ teamId: string }>;
-  searchParams: Promise<{ error?: string; invited?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    invited?: string;
+    "role-saved"?: string;
+    revoked?: string;
+    resent?: string;
+  }>;
 }) {
   const { teamId } = await params;
-  const { error, invited } = await searchParams;
+  const {
+    error,
+    invited,
+    "role-saved": roleSaved,
+    revoked,
+    resent,
+  } = await searchParams;
 
   try {
     await requireTeamAccess(teamId, { intent: "read", minRole: "OWNER" });
@@ -56,6 +75,20 @@ export default async function MembersPage({
   );
 
   const errorMessage = messageFor(MEMBER_ERROR_MESSAGES, error);
+  // Every write on this page now says whether it worked. The role change in
+  // particular used to redirect with no param at all, so a successful save
+  // looked exactly like a click that did nothing (C7).
+  const successMessage = errorMessage
+    ? null
+    : invited
+      ? "Invitation sent."
+      : roleSaved
+        ? "Role updated."
+        : revoked
+          ? "Invitation withdrawn."
+          : resent
+            ? "Invitation sent again — the previous link no longer works."
+            : null;
   const ownerCount = members.filter((member) => member.role === "OWNER").length;
 
   return (
@@ -63,15 +96,11 @@ export default async function MembersPage({
       <h3 className="text-xl font-semibold text-foreground">Members</h3>
 
       {errorMessage ? (
-        <p role="alert" className="text-sm text-destructive">
-          {errorMessage}
-        </p>
+        <StatusBanner tone="error">{errorMessage}</StatusBanner>
       ) : null}
 
-      {invited && !errorMessage ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Invitation sent.
-        </p>
+      {successMessage ? (
+        <StatusBanner tone="success">{successMessage}</StatusBanner>
       ) : null}
 
       <Card>
@@ -105,7 +134,7 @@ export default async function MembersPage({
                     >
                       {ROLE_OPTIONS.map((role) => (
                         <option key={role} value={role}>
-                          {role}
+                          {ROLE_LABELS[role]}
                         </option>
                       ))}
                     </select>
@@ -138,10 +167,52 @@ export default async function MembersPage({
               {pendingInvitations.map((invitation) => (
                 <li
                   key={invitation.id}
-                  className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3"
                 >
-                  <p className="text-sm font-medium text-foreground">{invitation.email}</p>
-                  <p className="text-xs text-muted-foreground">Invited as {invitation.role}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">
+                      {invitation.email}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Invited as {roleLabel(invitation.role)} ·{" "}
+                      {/* The row used to say nothing about time, so an owner
+                          had no way to know an invitation was about to lapse —
+                          or why one had silently vanished from this list. */}
+                      Expires {formatEventDayLabel(invitation.expiresAt)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <form action={resendInvitationAction}>
+                      <input type="hidden" name="teamId" value={teamId} />
+                      <input
+                        type="hidden"
+                        name="invitationId"
+                        value={invitation.id}
+                      />
+                      <SubmitButton
+                        variant="outline"
+                        size="sm"
+                        pendingLabel="Sending…"
+                      >
+                        Resend
+                      </SubmitButton>
+                    </form>
+                    <form action={revokeInvitationAction}>
+                      <input type="hidden" name="teamId" value={teamId} />
+                      <input
+                        type="hidden"
+                        name="invitationId"
+                        value={invitation.id}
+                      />
+                      <SubmitButton
+                        variant="outline"
+                        size="sm"
+                        pendingLabel="Withdrawing…"
+                      >
+                        Withdraw
+                      </SubmitButton>
+                    </form>
+                  </div>
                 </li>
               ))}
             </ul>

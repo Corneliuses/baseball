@@ -153,7 +153,56 @@ describe("addReturningPlayerAction", () => {
     expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: "mom@example.com" }),
     );
-    expect(url).toContain("added=1");
+    // The picker keeps the owner in place now, naming the player it just
+    // added rather than sending them off to the roster (#51 / C7).
+    expect(url).toBe("/t/team-1/roster/returning?added=player-1");
+  });
+
+  it("stays on the picker and keeps the filter, instead of leaving for the roster", async () => {
+    // Adding a returning roster used to be N round trips with a Back-button
+    // navigation between each: every add redirected away and dropped the
+    // filter, so a list narrowed to three names came back as all forty.
+    addReturningPlayer.mockResolvedValue({
+      entry: {
+        id: "entry-1",
+        jerseyNumber: 7,
+        player: { id: "player-1", name: "Ada", dateOfBirth: null },
+      },
+      notify: [],
+    });
+
+    const url = await redirectUrlOf(
+      addReturningPlayerAction(
+        form({ teamId: "team-1", playerId: "player-1", q: "ad" }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/roster/returning?q=ad&added=player-1");
+  });
+
+  it("keeps them on the picker even when a notice email fails", async () => {
+    // The roster spot and the memberships have already committed by then, so
+    // sending the owner somewhere else to read about an email would be doubly
+    // wrong — they would lose their place over something already done.
+    addReturningPlayer.mockResolvedValue({
+      entry: {
+        id: "entry-1",
+        jerseyNumber: 7,
+        player: { id: "player-1", name: "Ada", dateOfBirth: null },
+      },
+      notify: [{ userId: "user-1", email: "dad@example.com", name: "Dad" }],
+    });
+    sendEmail.mockResolvedValue({ ok: false });
+
+    const url = await redirectUrlOf(
+      addReturningPlayerAction(
+        form({ teamId: "team-1", playerId: "player-1" }),
+      ),
+    );
+
+    expect(url).toContain("/t/team-1/roster/returning?");
+    expect(url).toContain("error=email-failed");
+    expect(url).toContain("added=player-1");
   });
 
   it("maps a jersey collision to a friendly redirect", async () => {

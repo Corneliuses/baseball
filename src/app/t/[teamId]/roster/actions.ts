@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import {
   addPlayerToRoster,
+  findDuplicateNameMatch,
   getRosterEntry,
   removeRosterEntry,
   updateRosterEntry,
@@ -168,8 +169,25 @@ export async function addPlayerAction(
     return invalid("invalid-jersey", "jerseyNumber");
   }
 
+  // "Same kid?" — asked once, before a second global Player by the same name
+  // comes into existence. `force` is how the coach answers yes-it-is-someone-
+  // else, and it is only ever set by resubmitting the warning's own button.
+  const forced = formData.get("force") === "1";
+
   try {
     await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
+
+    if (!forced) {
+      const match = await findDuplicateNameMatch(teamId, parsed.data.name);
+      if (match) {
+        return {
+          status: "duplicate-name",
+          match: { kind: match.kind, name: match.name },
+          values,
+        };
+      }
+    }
+
     await addPlayerToRoster(teamId, {
       name: parsed.data.name,
       dateOfBirth: parseDateOfBirth(parsed.data.dateOfBirth),

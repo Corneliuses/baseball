@@ -34,6 +34,7 @@ import {
 } from "@/lib/chart";
 
 import { saveBattingOrderAction } from "./actions";
+import { stashDraft } from "./draft-stash";
 import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "./drag-activation";
 
 /// The editor's slice of a roster entry — chart-view's render model minus the
@@ -138,6 +139,21 @@ export function BattingOrderEditor({
         <form
           action={saveBattingOrderAction}
           className="flex items-center justify-end gap-2"
+          // Stash the board as text on the way out, so a `chart-changed`
+          // rejection — which redirects, unmounting this component and its
+          // draft — still leaves the coach something to re-apply from.
+          // Rendered here rather than resolved later: the roster it would be
+          // resolved against is exactly what just changed.
+          onSubmit={() =>
+            stashDraft(
+              teamId,
+              "order",
+              draft.slots.map((entryId, index) => {
+                const entry = entryId !== null ? byId.get(entryId) : undefined;
+                return `${index + 1}. ${entry?.playerName ?? "—"}`;
+              }),
+            )
+          }
         >
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="order" value={JSON.stringify(draft.slots)} />

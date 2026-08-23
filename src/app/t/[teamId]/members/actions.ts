@@ -6,7 +6,11 @@ import { z } from "zod";
 
 import type { Role } from "@/generated/prisma/enums";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
-import { createInvitation } from "@/lib/invitations";
+import {
+  createInvitation,
+  getTeamInvitation,
+  revokeInvitation,
+} from "@/lib/invitations";
 import { LastOwnerError, setMemberRole } from "@/lib/memberships";
 import { getTeamById } from "@/lib/teams";
 import { sendEmail } from "@/lib/email";
@@ -150,5 +154,117 @@ export async function setMemberRoleAction(formData: FormData) {
   }
 
   revalidatePath("/t/[teamId]/members", "page");
-  redirect(`/t/${teamId}/members`);
+  // Say so. A role change used to redirect with no param at all, so a
+  // successful save was indistinguishable from a click that did nothing — the
+  // select simply re-rendered showing the value it already showed (C7).
+  redirect(`/t/${teamId}/members?role-saved=1`);
+}
+
+function extractInvitationId(formData: FormData): string {
+  const invitationId = String(formData.get("invitationId") ?? "").trim();
+  if (!invitationId) {
+    throw new Error("Invalid invitation ID");
+  }
+  return invitationId;
+}
+
+/**
+ * Withdraw a pending invitation.
+ *
+ * There was no way to do this. Mistyping an address left a live token in
+ * somebody else's inbox with no undo, and "revoking" meant re-inviting the
+ * right person and relying on `createInvitation` sweeping the old row away —
+ * which sends yet another email to the address you are trying to stop.
+ *
+ * The id is resolved through the teamId scope inside `revokeInvitation`, so a
+ * forged id from another team deletes nothing.
+ */
+export async function revokeInvitationAction(formData: FormData) {
+  const teamId = extractTeamId(formData);
+  const invitationId = extractInvitationId(formData);
+
+  try {
+    await requireTeamAccess(teamId, { intent: "write", minRole: "OWNER" });
+    await revokeInvitation(teamId, invitationId);
+  } catch (error) {
+    unstable_rethrow(error);
+    if (error instanceof TeamAccessError) {
+      redirect(`/t/${teamId}/members?error=access`);
+    }
+    throw error;
+  }
+
+  revalidatePath("/t/[teamId]/members", "page");
+  redirect(`/t/${teamId}/members?revoked=1`);
+}
+
+/**
+ * Send a pending invitation again.
+ *
+ * Re-issues rather than re-mails the old token: `createInvitation` deletes the
+ * unaccepted row for this (teamId, email) and writes a fresh one, so the clock
+ * restarts and the previous link stops working. That is the behaviour worth
+ * having — an invitation resent because the first one expired should not
+ * arrive already expiring.
+ *
+ * The address and role come from the stored invitation, never from the form —
+ * the form carries only an id, and that id is resolved through the team scope.
+ * Otherwise this button would be a way to mail an arbitrary address from a
+ * signed-in POST.
+ */
+export async function resendInvitationAction(formData: FormData) {
+  const teamId = extractTeamId(formData);
+  const invitationId = extractInvitationId(formData);
+
+  try {
+    await requireTeamAccess(teamId, { intent: "write", minRole: "OWNER" });
+
+    const existing = await getTeamInvitation(teamId, invitationId);
+    if (!existing || existing.acceptedAt !== null) {
+      // Already accepted, or already gone. Nothing to resend, and nothing
+      // worth an error — the list will simply no longer show it.
+      redirect(`/t/${teamId}/members`);
+    }
+
+    const invitation = await createInvitation({
+      teamId,
+      email: existing.email,
+      role: existing.role,
+    });
+
+    const team = await getTeamById(teamId);
+    const teamName = team?.name ?? "your team";
+    const { subject, acceptUrl } = buildInvitationEmail({
+      teamName,
+      token: invitation.token,
+      env: {
+        AUTH_URL: process.env.AUTH_URL,
+        VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+        VERCEL_URL: process.env.VERCEL_URL,
+      },
+    });
+
+    const sent = await sendEmail({
+      to: existing.email,
+      subject,
+      react: InvitationEmail({
+        teamName,
+        acceptUrl,
+        expiresAt: invitation.expiresAt,
+      }),
+    });
+
+    if (!sent.ok) {
+      redirect(`/t/${teamId}/members?error=email-failed`);
+    }
+  } catch (error) {
+    unstable_rethrow(error);
+    if (error instanceof TeamAccessError) {
+      redirect(`/t/${teamId}/members?error=access`);
+    }
+    throw error;
+  }
+
+  revalidatePath("/t/[teamId]/members", "page");
+  redirect(`/t/${teamId}/members?resent=1`);
 }
