@@ -1,5 +1,6 @@
 import { endOfDayInZone } from "./calendar";
 import { db } from "./db";
+import { loadGuardianRostersByTeamId } from "./guardians";
 import { pickUnsubscribeContact, type ReminderEvent } from "./reminders";
 
 /// The database half of day-of reminders (#47) — the loader and the receipt
@@ -97,7 +98,7 @@ export async function loadTodaysReminderWork(
   // both times.
   const teamIds = [...new Set(events.map((event) => event.teamId))];
   const [rosterByTeamId, unsubscribeByTeamId] = await Promise.all([
-    loadRostersByTeamId(teamIds),
+    loadGuardianRostersByTeamId(teamIds),
     loadUnsubscribeContactsByTeamId(teamIds),
   ]);
 
@@ -122,7 +123,7 @@ export async function loadTodaysReminderWork(
 /**
  * One staff address per team, for the reminder's List-Unsubscribe header.
  *
- * Grouped across the run like `loadRostersByTeamId`, and for the same reason:
+ * Grouped across the run like `loadGuardianRostersByTeamId`, and for the same reason:
  * a doubleheader is two events on one team. `pickUnsubscribeContact` does the
  * choosing, so which coach gets named is a tested decision rather than a
  * side effect of query ordering.
@@ -162,48 +163,6 @@ async function loadUnsubscribeContactsByTeamId(
       ),
     ]),
   );
-}
-
-async function loadRostersByTeamId(
-  teamIds: readonly string[],
-): Promise<Map<string, ReminderEvent["roster"]>> {
-  const entries = await db.rosterEntry.findMany({
-    where: { teamId: { in: [...teamIds] } },
-    // Stable, human-meaningful order for the kid list inside one email.
-    orderBy: [{ jerseyNumber: "asc" }, { createdAt: "asc" }],
-    select: {
-      teamId: true,
-      player: {
-        select: {
-          id: true,
-          name: true,
-          guardians: {
-            select: {
-              user: { select: { id: true, email: true, name: true } },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  const byTeamId = new Map<string, ReminderEvent["roster"]>();
-
-  for (const entry of entries) {
-    const roster = byTeamId.get(entry.teamId) ?? [];
-    roster.push({
-      playerId: entry.player.id,
-      playerName: entry.player.name,
-      guardians: entry.player.guardians.map((link) => ({
-        userId: link.user.id,
-        email: link.user.email,
-        name: link.user.name,
-      })),
-    });
-    byTeamId.set(entry.teamId, roster);
-  }
-
-  return byTeamId;
 }
 
 export type ClaimResult = "claimed" | "already-sent";

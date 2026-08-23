@@ -44,7 +44,7 @@ export function buildEventReminderEmail({
   opponent,
   env,
 }: BuildEventReminderEmailInput): EventReminderEmailContent {
-  const headline = buildHeadline(type, opponent);
+  const headline = buildEventHeadline(type, opponent);
   const timeLabel = formatEventTime(startsAt);
 
   return {
@@ -57,7 +57,16 @@ export function buildEventReminderEmail({
   };
 }
 
-function buildHeadline(
+/**
+ * "Game vs Hawks" / "Game" / "Practice" — the one phrase every event email
+ * leads with.
+ *
+ * Exported rather than private because #45's announcement needs exactly the
+ * same phrase, and two copies would drift the moment one of them learned to
+ * say "Scrimmage". It lives here, in the older module, so the reminder keeps
+ * reading as one file; the announcement imports it.
+ */
+export function buildEventHeadline(
   type: "GAME" | "PRACTICE",
   opponent: string | null,
 ): string {
