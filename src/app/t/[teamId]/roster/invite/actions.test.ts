@@ -29,7 +29,8 @@ vi.mock("@/lib/teams", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 // redirect() throws in Next; reproduce that so control flow matches
-// production — same shape as ../actions.test.ts.
+// production — same shape as ../actions.test.ts. Only the access path still
+// redirects now, but that path is exactly the one worth keeping honest.
 const REDIRECT_PREFIX = "NEXT_REDIRECT:";
 
 vi.mock("next/navigation", () => ({
@@ -44,7 +45,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
-import { bulkInviteGuardiansAction } from "./actions";
+import {
+  bulkInviteGuardiansAction,
+  BULK_INVITE_INITIAL_STATE,
+  type BulkInviteState,
+} from "./actions";
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
@@ -52,6 +57,14 @@ function form(fields: Record<string, string>): FormData {
     data.set(key, value);
   }
   return data;
+}
+
+/// The action is shaped for `useActionState`, so every call carries the previous
+/// state. Nothing in it reads that argument today — the batch is decided
+/// entirely by the submitted form — but passing the real initial state keeps
+/// these calls the same shape React makes.
+function submit(data: FormData): Promise<BulkInviteState> {
+  return bulkInviteGuardiansAction(BULK_INVITE_INITIAL_STATE, data);
 }
 
 async function redirectUrlOf(promise: Promise<unknown>): Promise<string> {
@@ -66,11 +79,27 @@ async function redirectUrlOf(promise: Promise<unknown>): Promise<string> {
   throw new Error("expected a redirect");
 }
 
+/// Narrows to the finished shape, failing the test rather than the type checker
+/// when a call came back rejected instead.
+function outcomesOf(state: BulkInviteState) {
+  expect(state.status).toBe("done");
+  if (state.status !== "done") throw new Error("unreachable");
+  return state.outcomes;
+}
+
+function invalidOf(state: BulkInviteState) {
+  expect(state.status).toBe("invalid");
+  if (state.status !== "invalid") throw new Error("unreachable");
+  return state;
+}
+
 function entryFor(id: string, playerId: string) {
   return {
     id,
     jerseyNumber: null,
-    player: { id: playerId, name: "Kid", dateOfBirth: null },
+    // Named per entry so the outcome list can be checked for *which* kid, which
+    // is the entire point of the rewrite.
+    player: { id: playerId, name: `Kid ${id}`, dateOfBirth: null },
     guardians: [],
   };
 }
@@ -96,10 +125,10 @@ beforeEach(() => {
   sendEmail.mockResolvedValue({ ok: true });
 });
 
-describe("bulkInviteGuardiansAction", () => {
+describe("bulkInviteGuardiansAction sending", () => {
   it("links and emails every filled row, skipping blanks", async () => {
-    const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(
+    const outcomes = outcomesOf(
+      await submit(
         form({
           teamId: "team-1",
           "email-entry-1": "a@example.com",
@@ -109,7 +138,8 @@ describe("bulkInviteGuardiansAction", () => {
       ),
     );
 
-    expect(url).toBe("/t/team-1/roster/invite?sent=2");
+    expect(outcomes).toHaveLength(2);
+    expect(outcomes.every((row) => row.outcome === "sent")).toBe(true);
     expect(linkGuardian).toHaveBeenCalledTimes(2);
     expect(linkGuardian).toHaveBeenCalledWith({
       teamId: "team-1",
@@ -119,77 +149,45 @@ describe("bulkInviteGuardiansAction", () => {
     expect(sendEmail).toHaveBeenCalledTimes(2);
   });
 
-  it("derives playerId from the teamId-scoped entry, never the form", async () => {
-    await redirectUrlOf(
-      bulkInviteGuardiansAction(
-        form({ teamId: "team-1", "email-entry-1": "a@example.com" }),
-      ),
+  it("names the player on every row it reports", async () => {
+    // The whole complaint in C5: the old action returned three integers, and a
+    // coach reading "3 could not be invited" had no way to learn which three.
+    const outcomes = outcomesOf(
+      await submit(form({ teamId: "team-1", "email-entry-7": "a@example.com" })),
     );
+
+    expect(outcomes[0]).toMatchObject({
+      entryId: "entry-7",
+      playerName: "Kid entry-7",
+      email: "a@example.com",
+      outcome: "sent",
+    });
+  });
+
+  it("derives playerId from the teamId-scoped entry, never the form", async () => {
+    await submit(form({ teamId: "team-1", "email-entry-1": "a@example.com" }));
 
     expect(getRosterEntry).toHaveBeenCalledWith("team-1", "entry-1");
   });
 
   it("passes the coach's message into each email and omits it when blank", async () => {
-    await redirectUrlOf(
-      bulkInviteGuardiansAction(
-        form({
-          teamId: "team-1",
-          message: "  See you at the field!  ",
-          "email-entry-1": "a@example.com",
-        }),
-      ),
+    await submit(
+      form({
+        teamId: "team-1",
+        message: "  See you at the field!  ",
+        "email-entry-1": "a@example.com",
+      }),
     );
 
     const withMessage = sendEmail.mock.calls[0][0];
     expect(JSON.stringify(withMessage.react)).toContain("See you at the field!");
 
     sendEmail.mockClear();
-    await redirectUrlOf(
-      bulkInviteGuardiansAction(
-        form({ teamId: "team-1", message: "   ", "email-entry-1": "a@example.com" }),
-      ),
+    await submit(
+      form({ teamId: "team-1", message: "   ", "email-entry-1": "a@example.com" }),
     );
     const without = sendEmail.mock.calls[0][0];
     expect(JSON.stringify(without.react)).not.toContain("whiteSpace");
-  });
-
-  it("rejects the whole batch before writing when any address is invalid", async () => {
-    const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(
-        form({
-          teamId: "team-1",
-          "email-entry-1": "a@example.com",
-          "email-entry-2": "not-an-email",
-        }),
-      ),
-    );
-
-    expect(url).toBe("/t/team-1/roster/invite?error=invalid-email");
-    expect(linkGuardian).not.toHaveBeenCalled();
-    expect(sendEmail).not.toHaveBeenCalled();
-  });
-
-  it("rejects an over-long message before writing", async () => {
-    const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(
-        form({
-          teamId: "team-1",
-          message: "x".repeat(1001),
-          "email-entry-1": "a@example.com",
-        }),
-      ),
-    );
-
-    expect(url).toBe("/t/team-1/roster/invite?error=invalid-message");
-    expect(linkGuardian).not.toHaveBeenCalled();
-  });
-
-  it("redirects with no-emails when every row is blank", async () => {
-    const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(form({ teamId: "team-1", "email-entry-1": " " })),
-    );
-
-    expect(url).toBe("/t/team-1/roster/invite?error=no-emails");
   });
 
   it("keeps only the first row per entry, so a forged POST can't fan out", async () => {
@@ -198,29 +196,16 @@ describe("bulkInviteGuardiansAction", () => {
     data.append("email-entry-1", "a@example.com");
     data.append("email-entry-1", "attacker@example.com");
 
-    const url = await redirectUrlOf(bulkInviteGuardiansAction(data));
+    const outcomes = outcomesOf(await submit(data));
 
-    expect(url).toBe("/t/team-1/roster/invite?sent=1");
+    expect(outcomes).toHaveLength(1);
     expect(linkGuardian).toHaveBeenCalledTimes(1);
     expect(linkGuardian).toHaveBeenCalledWith(
       expect.objectContaining({ email: "a@example.com" }),
     );
   });
 
-  it("rejects an oversized batch before writing", async () => {
-    const data = new FormData();
-    data.set("teamId", "team-1");
-    for (let i = 0; i < 31; i += 1) {
-      data.set(`email-entry-${i}`, `parent${i}@example.com`);
-    }
-
-    const url = await redirectUrlOf(bulkInviteGuardiansAction(data));
-
-    expect(url).toBe("/t/team-1/roster/invite?error=too-many");
-    expect(linkGuardian).not.toHaveBeenCalled();
-  });
-
-  it("counts an already-member guardian as linked without emailing", async () => {
+  it("reports an already-member guardian as linked without emailing", async () => {
     linkGuardian.mockResolvedValueOnce({
       userId: "user-x",
       email: "a@example.com",
@@ -228,23 +213,114 @@ describe("bulkInviteGuardiansAction", () => {
       invitation: null,
     });
 
-    const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(
-        form({ teamId: "team-1", "email-entry-1": "a@example.com" }),
+    const outcomes = outcomesOf(
+      await submit(form({ teamId: "team-1", "email-entry-1": "a@example.com" })),
+    );
+
+    expect(outcomes[0].outcome).toBe("linked");
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("bulkInviteGuardiansAction validation", () => {
+  it("names the row whose address is malformed instead of failing the batch blindly", async () => {
+    const state = invalidOf(
+      await submit(
+        form({
+          teamId: "team-1",
+          "email-entry-1": "a@example.com",
+          "email-entry-2": "not-an-email",
+        }),
       ),
     );
 
-    expect(url).toBe("/t/team-1/roster/invite?linked=1");
+    expect(Object.keys(state.rowErrors)).toEqual(["entry-2"]);
+    expect(state.rowErrors["entry-2"]).toMatch(/email address/i);
+  });
+
+  it("sends nothing at all when one row is bad", async () => {
+    // All-or-nothing on purpose: sending the good rows would leave the coach
+    // resubmitting a form whose other rows may or may not have already gone
+    // out. "Nothing was sent" has to stay true for the retry to be safe.
+    await submit(
+      form({
+        teamId: "team-1",
+        "email-entry-1": "a@example.com",
+        "email-entry-2": "not-an-email",
+      }),
+    );
+
+    expect(linkGuardian).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it("one failed row doesn't lose the rest of the batch", async () => {
+  it("hands back everything typed, blank rows included", async () => {
+    // The old redirect blanked fifteen addresses to report one typo. This is
+    // the half that made the missing row name expensive.
+    const state = invalidOf(
+      await submit(
+        form({
+          teamId: "team-1",
+          message: "See you there",
+          "email-entry-1": "a@example.com",
+          "email-entry-2": "nope",
+          "email-entry-3": "",
+        }),
+      ),
+    );
+
+    expect(state.values.emails).toEqual({
+      "entry-1": "a@example.com",
+      "entry-2": "nope",
+      "entry-3": "",
+    });
+    expect(state.values.message).toBe("See you there");
+  });
+
+  it("rejects an over-long message and states the limit", async () => {
+    const state = invalidOf(
+      await submit(
+        form({
+          teamId: "team-1",
+          message: "x".repeat(1001),
+          "email-entry-1": "a@example.com",
+        }),
+      ),
+    );
+
+    expect(state.message).toContain("1,000");
+    expect(linkGuardian).not.toHaveBeenCalled();
+  });
+
+  it("rejects a batch with every row blank", async () => {
+    const state = invalidOf(await submit(form({ teamId: "team-1", "email-entry-1": " " })));
+
+    expect(state.message).toMatch(/blank/i);
+    expect(linkGuardian).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized batch and states the cap", async () => {
+    const data = new FormData();
+    data.set("teamId", "team-1");
+    for (let i = 0; i < 31; i += 1) {
+      data.set(`email-entry-${i}`, `parent${i}@example.com`);
+    }
+
+    const state = invalidOf(await submit(data));
+
+    expect(state.message).toContain("30");
+    expect(linkGuardian).not.toHaveBeenCalled();
+  });
+});
+
+describe("bulkInviteGuardiansAction partial failures", () => {
+  it("one failed send doesn't lose the rest of the batch", async () => {
     sendEmail
       .mockResolvedValueOnce({ ok: false })
       .mockResolvedValueOnce({ ok: true });
 
-    const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(
+    const outcomes = outcomesOf(
+      await submit(
         form({
           teamId: "team-1",
           "email-entry-1": "a@example.com",
@@ -253,16 +329,19 @@ describe("bulkInviteGuardiansAction", () => {
       ),
     );
 
-    expect(url).toBe("/t/team-1/roster/invite?sent=1&failed=1");
+    expect(outcomes.map((row) => row.outcome)).toEqual(["failed", "sent"]);
+    // The invitation row survives a failed send, so the fix is a resend from
+    // the player's page — the reason has to point there.
+    expect(outcomes[0].reason).toMatch(/player's page/i);
   });
 
-  it("counts a vanished entry as failed and continues", async () => {
+  it("reports a vanished entry by name-less row and continues", async () => {
     getRosterEntry
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(entryFor("entry-2", "player-2"));
 
-    const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(
+    const outcomes = outcomesOf(
+      await submit(
         form({
           teamId: "team-1",
           "email-entry-1": "a@example.com",
@@ -271,11 +350,17 @@ describe("bulkInviteGuardiansAction", () => {
       ),
     );
 
-    expect(url).toBe("/t/team-1/roster/invite?sent=1&failed=1");
+    expect(outcomes[0]).toMatchObject({
+      outcome: "failed",
+      playerName: null,
+      email: "a@example.com",
+    });
+    expect(outcomes[0].reason).toMatch(/no longer on the roster/i);
+    expect(outcomes[1].outcome).toBe("sent");
     expect(linkGuardian).toHaveBeenCalledTimes(1);
   });
 
-  it("a thrown row is counted as failed, not a 500", async () => {
+  it("a thrown row is reported as failed, not a 500", async () => {
     linkGuardian
       .mockRejectedValueOnce(new Error("db blinked"))
       .mockImplementationOnce(async ({ email }: { email: string }) => ({
@@ -285,8 +370,8 @@ describe("bulkInviteGuardiansAction", () => {
         invitation: INVITATION,
       }));
 
-    const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(
+    const outcomes = outcomesOf(
+      await submit(
         form({
           teamId: "team-1",
           "email-entry-1": "a@example.com",
@@ -295,16 +380,18 @@ describe("bulkInviteGuardiansAction", () => {
       ),
     );
 
-    expect(url).toBe("/t/team-1/roster/invite?sent=1&failed=1");
+    expect(outcomes.map((row) => row.outcome)).toEqual(["failed", "sent"]);
   });
+});
 
-  it("redirects to access error when the caller lacks coach access", async () => {
-    requireTeamAccess.mockRejectedValue(new TeamAccessError("denied", "insufficient-role"));
+describe("bulkInviteGuardiansAction access", () => {
+  it("redirects rather than answering inside a form the coach can no longer use", async () => {
+    requireTeamAccess.mockRejectedValue(
+      new TeamAccessError("denied", "insufficient-role"),
+    );
 
     const url = await redirectUrlOf(
-      bulkInviteGuardiansAction(
-        form({ teamId: "team-1", "email-entry-1": "a@example.com" }),
-      ),
+      submit(form({ teamId: "team-1", "email-entry-1": "a@example.com" })),
     );
 
     expect(url).toBe("/t/team-1/roster/invite?error=access");

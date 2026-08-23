@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -142,9 +143,9 @@ export default async function ReturningPlayersPage({
                         className="w-24 rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>
-                    <Button type="submit" variant="outline">
+                    <SubmitButton variant="outline" pendingLabel="Adding…">
                       Add to roster
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </CardContent>
               </Card>

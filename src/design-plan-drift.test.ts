@@ -158,6 +158,8 @@ describe("design-plan.md utility claims", () => {
     "text-halo",
     "animate-rise",
     "animate-step-up",
+    "animate-spin-ball",
+    "animate-tick",
   ];
 
   it.each(utilities)("%s is declared in globals.css and named in the plan", (name) => {
@@ -165,7 +167,12 @@ describe("design-plan.md utility claims", () => {
     expect(plan).toContain(name);
   });
 
-  it.each(["animate-rise", "animate-step-up"])(
+  it.each([
+    "animate-rise",
+    "animate-step-up",
+    "animate-spin-ball",
+    "animate-tick",
+  ])(
     "%s stays gated on prefers-reduced-motion",
     (name) => {
       // design-plan.md §8's hard rule, and #49's AC2. Both utilities carry the

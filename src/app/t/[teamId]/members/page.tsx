@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -115,9 +115,14 @@ export default async function MembersPage({
                         </option>
                       ))}
                     </select>
-                    <Button type="submit" variant="outline" size="sm" disabled={isLastOwner}>
+                    <SubmitButton
+                      variant="outline"
+                      size="sm"
+                      disabled={isLastOwner}
+                      pendingLabel="Saving…"
+                    >
                       Save
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </li>
               );
@@ -190,9 +195,9 @@ export default async function MembersPage({
               </select>
             </div>
 
-            <Button type="submit" className="w-full">
+            <SubmitButton className="w-full" pendingLabel="Sending…">
               Send invitation
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>

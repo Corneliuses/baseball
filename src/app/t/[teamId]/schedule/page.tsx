@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -568,9 +569,9 @@ function AddEventForm({ teamId }: { teamId: string }) {
             <textarea id="notes" name="notes" rows={2} className={inputClass} />
           </div>
 
-          <Button type="submit" className="w-full">
+          <SubmitButton className="w-full" pendingLabel="Adding…">
             Add event
-          </Button>
+          </SubmitButton>
         </form>
       </CardContent>
     </Card>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -160,9 +161,9 @@ export default async function NewMessagePage({
               />
             </div>
 
-            <Button type="submit" className="w-full">
+            <SubmitButton className="w-full" pendingLabel="Sending…">
               Send
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>

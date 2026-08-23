@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -124,9 +125,9 @@ export default async function TeamSettingsPage({
               </p>
             ) : null}
 
-            <Button type="submit" className="w-full">
+            <SubmitButton className="w-full" pendingLabel="Saving…">
               Save changes
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>
@@ -149,7 +150,7 @@ export default async function TeamSettingsPage({
           {team.archivedAt ? (
             <form action={unarchiveTeamAction}>
               <input type="hidden" name="teamId" value={teamId} />
-              <Button type="submit">Unarchive team</Button>
+              <SubmitButton pendingLabel="Unarchiving…">Unarchive team</SubmitButton>
             </form>
           ) : confirmingArchive ? (
             <div className="space-y-3">
@@ -160,9 +161,9 @@ export default async function TeamSettingsPage({
               <div className="flex gap-2">
                 <form action={archiveTeamAction}>
                   <input type="hidden" name="teamId" value={teamId} />
-                  <Button type="submit" variant="destructive">
+                  <SubmitButton variant="destructive" pendingLabel="Archiving…">
                     Yes, archive it
-                  </Button>
+                  </SubmitButton>
                 </form>
                 <Button asChild variant="outline">
                   <Link href={`/t/${teamId}/settings`}>Cancel</Link>

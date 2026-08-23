@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -210,28 +211,28 @@ export default async function EventPage({
                               accessible name — same argument as team home's
                               rsvpLabel; here one event is on screen, so the
                               name alone disambiguates. */}
-                          <Button
-                            type="submit"
+                          <SubmitButton
                             size="sm"
+                            pendingLabel="Saving…"
                             variant={state === "attending" ? "default" : "outline"}
                             aria-label={`${entry.player.name} is going`}
                           >
                             Going
-                          </Button>
+                          </SubmitButton>
                         </form>
                         <form action={rsvpAction}>
                           <input type="hidden" name="teamId" value={teamId} />
                           <input type="hidden" name="eventId" value={event.id} />
                           <input type="hidden" name="playerId" value={entry.player.id} />
                           <input type="hidden" name="response" value="declined" />
-                          <Button
-                            type="submit"
+                          <SubmitButton
                             size="sm"
+                            pendingLabel="Saving…"
                             variant={state === "declined" ? "destructive" : "outline"}
                             aria-label={`${entry.player.name} is not going`}
                           >
                             Not going
-                          </Button>
+                          </SubmitButton>
                         </form>
                         {canEdit && state !== "no-response" ? (
                           // Staff-only: back to "No response" when the coach
@@ -246,14 +247,14 @@ export default async function EventPage({
                               value={entry.player.id}
                             />
                             <input type="hidden" name="response" value="clear" />
-                            <Button
-                              type="submit"
+                            <SubmitButton
                               size="sm"
                               variant="ghost"
+                              pendingLabel="Clearing…"
                               aria-label={`Clear ${entry.player.name}'s response`}
                             >
                               Clear
-                            </Button>
+                            </SubmitButton>
                           </form>
                         ) : null}
                       </div>
@@ -362,9 +363,9 @@ export default async function EventPage({
                   />
                 </div>
 
-                <Button type="submit" className="w-full">
+                <SubmitButton className="w-full" pendingLabel="Saving…">
                   Save changes
-                </Button>
+                </SubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -387,9 +388,9 @@ export default async function EventPage({
                     <form action={deleteEventAction}>
                       <input type="hidden" name="teamId" value={teamId} />
                       <input type="hidden" name="eventId" value={event.id} />
-                      <Button type="submit" variant="destructive">
+                      <SubmitButton variant="destructive" pendingLabel="Deleting…">
                         Yes, delete it
-                      </Button>
+                      </SubmitButton>
                     </form>
                     <Button asChild variant="outline">
                       <Link href={`/t/${teamId}/schedule/${event.id}`}>Cancel</Link>

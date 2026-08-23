@@ -17,6 +17,13 @@ the view page) so each phase can be picked up and built without re-deriving anyt
 > need a confetti dependency and new client components respectively, and were left for a
 > follow-up rather than half-done. §13 explains how this document is kept from drifting
 > again.
+>
+> **Since then (#51).** The coach-flow work built the interaction-feedback layer §8 named
+> and the original pass left out: the **save-success tick** (`animate-tick`) and a
+> **pending indicator** (`animate-spin-ball`) on every mutating form, plus a bespoke icon
+> set (`src/components/icons.tsx`) drawn in the same felt-and-cardstock register as
+> `StitchDivider` and the pennant, rather than an icon dependency. The confetti, the RSVP
+> pop, and the sign-in illustration are still unbuilt.
 
 ![Palette](assets/palette.svg)
 
@@ -328,8 +335,21 @@ Via the existing `LazyMotion`/`m` setup only:
   so a fade ships `opacity: 0` in the HTML and the lineup stays blank until the bundle
   hydrates. At a field on one bar of signal the content has to be legible from the raw
   HTML, with the animation as polish on top.
-- Micro: RSVP pop, save-success tick, pennant hover tilt (±2°). **Not built** — see the
-  status note at the top.
+- `animate-tick`: the **save-success tick**, built in #51. `StatusBanner` draws
+  `CheckIcon`'s single polyline by sweeping `stroke-dashoffset` along it, so a confirmation
+  is *written* rather than appearing. This is the one animation here allowed to touch a
+  property other than `transform`, and the exception has a reason: nothing is hidden by it.
+  The tick is decoration inside a `role="status"` region whose text is the actual message,
+  so a tick that never draws — no CSS, reduced motion, an old engine — costs a reader
+  nothing. Keep the icon one path: two would draw both halves at once.
+- `animate-spin-ball`: the **pending indicator**, built in #51. `BaseballSpinner` rotates a
+  drawn baseball inside `SubmitButton` while a submission is in flight. It is the one
+  looping animation in the app, and it is legal because the loop is bounded by the thing it
+  reports — `useFormStatus` unmounts it the moment the action settles. Under reduced motion
+  the ball holds still and the button's swapped label ("Sending…") carries the news alone,
+  which is why that label is required copy and not decoration.
+- Micro: RSVP pop and pennant hover tilt (±2°). **Not built** — see the status note at the
+  top.
 - Celebration: one confetti burst (green/yellow/cream, ~1.2s) on chart save success only.
   **Not built** — needs a dependency, deferred rather than half-done.
 - Hard rules: nothing dnd-kit touches gets Motion or `animate-rise` (documented

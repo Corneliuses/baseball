@@ -228,6 +228,58 @@
   }
 }
 
+/* The pending indicator's rotation (BaseballSpinner). design-plan.md §8 bans
+   anything that loops forever; this one is bounded by the submission it
+   reports — useFormStatus unmounts it the moment the action settles — and the
+   button's label says "Sending…" beside it, so the news survives the
+   reduced-motion gate below, where the ball simply sits still. */
+@utility animate-spin-ball {
+  animation: spin-ball 0.9s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes spin-ball {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The save-success tick: design-plan.md §8 specified it in the original
+   redesign and it shipped unbuilt. StatusBanner draws CheckIcon's single
+   polyline by sweeping the dash offset along it, so the tick is *written*
+   rather than appearing.
+
+   Unlike animate-rise this one may touch a property other than transform:
+   nothing is hidden by it. The path is decoration inside a role="status"
+   region whose text is the actual message, so a tick that never draws — no
+   CSS, reduced motion, an old browser — costs a reader nothing. 30 is the
+   length of that polyline rounded up (√50 + √221 ≈ 21.9), which is all
+   pathLength normalisation would buy at the price of another attribute. */
+@utility animate-tick {
+  stroke-dasharray: 30;
+  animation: tick 0.4s ease-out both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    stroke-dasharray: none;
+  }
+}
+
+@keyframes tick {
+  from {
+    stroke-dashoffset: 30;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

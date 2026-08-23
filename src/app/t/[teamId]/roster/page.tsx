@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { JerseyDot } from "@/components/JerseyDot";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -174,9 +175,9 @@ export default async function RosterPage({
                 />
               </div>
 
-              <Button type="submit" className="w-full">
+              <SubmitButton className="w-full" pendingLabel="Adding…">
                 Add player
-              </Button>
+              </SubmitButton>
             </form>
           </CardContent>
         </Card>

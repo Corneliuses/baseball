@@ -22,6 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { JerseyDot } from "@/components/JerseyDot";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   buildBattingDraft,
   emptySlotId,
@@ -153,9 +154,13 @@ export function BattingOrderEditor({
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={!saveable}>
+          {/* The form's footer, not a chip — dnd-kit never touches this button,
+              so the spinner inside it is clear of the drag tree the way
+              AGENTS.md requires. `saveable` (draft vs. the stored chart) is
+              still the resting reason to be disabled; pending adds its own. */}
+          <SubmitButton disabled={!saveable} pendingLabel="Saving…">
             Save order
-          </Button>
+          </SubmitButton>
         </form>
       </div>
     </DndContext>

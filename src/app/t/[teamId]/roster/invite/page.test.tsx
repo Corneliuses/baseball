@@ -110,16 +110,31 @@ describe("Bulk invite page", () => {
     expect(markup).not.toContain("Every player already has a parent linked");
   });
 
-  it("summarizes the batch outcome from query params", async () => {
+  it("no longer summarizes the batch through query params", async () => {
+    // The outcome moved into the form's own returned state, where it can name
+    // the players instead of counting them (#51). The page keeping a parallel
+    // counter summary would mean two sources of truth for one submission —
+    // and the counters were the ones that could not say *which* rows failed.
     const markup = await renderPage({ sent: "3", linked: "1", failed: "2" });
 
-    expect(markup).toContain("3 invitations sent");
-    expect(markup).toContain("1 already-member parent linked");
-    expect(markup).toContain("2 could not be invited");
+    expect(markup).not.toContain("3 invitations sent");
+    expect(markup).not.toContain("could not be invited");
   });
 
-  it("renders a friendly error banner", async () => {
+  it("renders a friendly banner for lost access", async () => {
+    // The only code that still reaches this page: validation is answered
+    // inside the form now, but someone who is no longer a coach here is
+    // redirected out to read it as a page.
+    const markup = await renderPage({ error: "access" });
+    expect(markup).toContain("no longer have access");
+    expect(markup).toContain('role="alert"');
+  });
+
+  it("falls back safely for a code that is no longer handled here", async () => {
+    // messageFor refuses to return a non-string and defaults unknown keys, so
+    // a stale bookmark to ?error=invalid-email degrades to the generic line
+    // rather than rendering nothing or crashing.
     const markup = await renderPage({ error: "invalid-email" });
-    expect(markup).toContain("isn&#x27;t valid");
+    expect(markup).toContain("Something went wrong.");
   });
 });

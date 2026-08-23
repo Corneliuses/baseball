@@ -6,6 +6,7 @@ import { JerseyDot } from "@/components/JerseyDot";
 import { MiniDiamondHero } from "@/components/MiniDiamondHero";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -446,16 +447,16 @@ export default async function TeamHomePage({
                                         whole point of one-tap. An enum, never
                                         a URL; see actions.ts. */}
                                     <input type="hidden" name="from" value="home" />
-                                    <Button
-                                      type="submit"
+                                    <SubmitButton
                                       size="sm"
                                       variant={
                                         state === "attending" ? "default" : "outline"
                                       }
                                       aria-label={rsvpLabel(entry.playerName, event, true)}
+                                      pendingLabel="Saving…"
                                     >
                                       Going
-                                    </Button>
+                                    </SubmitButton>
                                   </form>
                                   <form action={rsvpAction}>
                                     <input
@@ -479,16 +480,16 @@ export default async function TeamHomePage({
                                       value="declined"
                                     />
                                     <input type="hidden" name="from" value="home" />
-                                    <Button
-                                      type="submit"
+                                    <SubmitButton
                                       size="sm"
                                       variant={
                                         state === "declined" ? "destructive" : "outline"
                                       }
                                       aria-label={rsvpLabel(entry.playerName, event, false)}
+                                      pendingLabel="Saving…"
                                     >
                                       Not going
-                                    </Button>
+                                    </SubmitButton>
                                   </form>
                                 </div>
                               ) : null}

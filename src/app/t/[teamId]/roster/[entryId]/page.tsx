@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -166,9 +167,9 @@ export default async function RosterEntryPage({
               </p>
             ) : null}
 
-            <Button type="submit" className="w-full">
+            <SubmitButton className="w-full" pendingLabel="Saving…">
               Save changes
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>
@@ -213,9 +214,13 @@ export default async function RosterEntryPage({
                           <input type="hidden" name="teamId" value={teamId} />
                           <input type="hidden" name="entryId" value={entryId} />
                           <input type="hidden" name="userId" value={guardian.id} />
-                          <Button type="submit" variant="outline" size="sm">
+                          <SubmitButton
+                            variant="outline"
+                            size="sm"
+                            pendingLabel="Sending…"
+                          >
                             Resend
-                          </Button>
+                          </SubmitButton>
                         </form>
                       ) : null}
                       {unlinkingGuardianId !== guardian.id ? (
@@ -241,9 +246,13 @@ export default async function RosterEntryPage({
                           <input type="hidden" name="teamId" value={teamId} />
                           <input type="hidden" name="entryId" value={entryId} />
                           <input type="hidden" name="userId" value={guardian.id} />
-                          <Button type="submit" variant="destructive" size="sm">
+                          <SubmitButton
+                            variant="destructive"
+                            size="sm"
+                            pendingLabel="Unlinking…"
+                          >
                             Yes, unlink
-                          </Button>
+                          </SubmitButton>
                         </form>
                         <Button asChild variant="outline" size="sm">
                           <Link href={`/t/${teamId}/roster/${entryId}`}>
@@ -276,9 +285,13 @@ export default async function RosterEntryPage({
                         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>
-                    <Button type="submit" variant="outline" size="sm">
+                    <SubmitButton
+                      variant="outline"
+                      size="sm"
+                      pendingLabel="Saving…"
+                    >
                       Save phone
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </li>
               ))}
@@ -301,9 +314,9 @@ export default async function RosterEntryPage({
                 placeholder="parent@example.com"
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <Button type="submit" variant="outline">
+              <SubmitButton variant="outline" pendingLabel="Adding…">
                 Add
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         </CardContent>
@@ -331,9 +344,9 @@ export default async function RosterEntryPage({
                 <form action={removeRosterEntryAction}>
                   <input type="hidden" name="teamId" value={teamId} />
                   <input type="hidden" name="entryId" value={entryId} />
-                  <Button type="submit" variant="destructive">
+                  <SubmitButton variant="destructive" pendingLabel="Removing…">
                     Yes, remove them
-                  </Button>
+                  </SubmitButton>
                 </form>
                 <Button asChild variant="outline">
                   <Link href={`/t/${teamId}/roster/${entryId}`}>Cancel</Link>

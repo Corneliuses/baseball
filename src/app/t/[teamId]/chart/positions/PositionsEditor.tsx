@@ -30,6 +30,7 @@ import {
   NoCatcherMarker,
 } from "@/components/NoCatcherMarker";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import type { Position } from "@/generated/prisma/enums";
 import {
   buildPositionsDraft,
@@ -220,9 +221,13 @@ export function PositionsEditor({
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={!saveable}>
+          {/* Footer, not a chip: dnd-kit owns the dragged markers and this
+              button is outside that tree entirely (AGENTS.md's collision rule).
+              `saveable` compares the draft against the stored chart and stays
+              the resting reason to be disabled. */}
+          <SubmitButton disabled={!saveable} pendingLabel="Saving…">
             Save positions
-          </Button>
+          </SubmitButton>
         </form>
       </div>
     </DndContext>
