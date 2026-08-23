@@ -37,7 +37,50 @@ export type ReminderEvent = {
   roster: ReminderRosterEntry[];
   /// This event's RSVP rows. A player with no row is no-response.
   rsvps: { playerId: string; attending: boolean }[];
+  /// Where a parent's "stop sending me these" should land — see
+  /// `pickUnsubscribeContact`. Null when the team has no staff address, in
+  /// which case the reminder goes out with no List-Unsubscribe at all rather
+  /// than one pointing nowhere.
+  unsubscribeEmail: string | null;
 };
+
+/// A team's staff member, as far as picking an unsubscribe contact cares.
+export type ReminderCoachContact = {
+  userId: string;
+  role: "OWNER" | "COACH";
+  email: string;
+};
+
+/**
+ * Which human hears about it when a parent unsubscribes from reminders.
+ *
+ * Unlike a broadcast — which has an actual sender to point at — the reminder
+ * cron runs as the system, so the header needs a contact chosen rather than
+ * carried. The owner is preferred over an assistant coach because the request
+ * is really "take my family off this", which is a roster decision.
+ *
+ * Deterministic on purpose: a team can hold up to four staff, and the tie is
+ * broken on `userId` so two runs of the same day name the same person. An
+ * address that is empty is skipped rather than framed into a header that
+ * mails nowhere.
+ */
+export function pickUnsubscribeContact(
+  contacts: readonly ReminderCoachContact[],
+): string | null {
+  const usable = contacts.filter((contact) => contact.email);
+  if (usable.length === 0) {
+    return null;
+  }
+
+  const ranked = [...usable].sort((a, b) => {
+    if (a.role !== b.role) {
+      return a.role === "OWNER" ? -1 : 1;
+    }
+    return a.userId < b.userId ? -1 : 1;
+  });
+
+  return ranked[0].email;
+}
 
 export type ReminderRosterEntry = {
   playerId: string;
@@ -75,6 +118,9 @@ export type ReminderPayload = {
   opponent: string | null;
   notes: string | null;
   kids: ReminderKid[];
+  /// Carried through from the event so the cron can set List-Unsubscribe
+  /// without a second lookup per recipient.
+  unsubscribeEmail: string | null;
 };
 
 /**
@@ -153,5 +199,6 @@ function buildEventPayloads(event: ReminderEvent): ReminderPayload[] {
     opponent: event.opponent,
     notes: event.notes,
     kids,
+    unsubscribeEmail: event.unsubscribeEmail,
   }));
 }

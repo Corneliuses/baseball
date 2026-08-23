@@ -40,6 +40,7 @@ function event(overrides: Partial<ReminderEvent> = {}): ReminderEvent {
     notes: null,
     roster: [{ playerId: "player-1", playerName: "Jimmy", guardians: [ANNA] }],
     rsvps: [],
+    unsubscribeEmail: "coach@example.com",
     ...overrides,
   };
 }
@@ -151,6 +152,35 @@ describe("GET /api/cron/reminders — sending", () => {
     expect(claimReminder).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
     expect(await response.json()).toMatchObject({ events: 0, sent: 0 });
+  });
+});
+
+describe("GET /api/cron/reminders — List-Unsubscribe", () => {
+  it("points the header at the team's staff contact", async () => {
+    loadTodaysReminderWork.mockResolvedValue(
+      work([event({ unsubscribeEmail: "owner@example.com" })]),
+    );
+
+    await get();
+
+    // Reminders are recurring every-family mail, so unlike the one-to-one
+    // sends they carry the header. email.ts frames it; the route passes an
+    // address.
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ listUnsubscribe: "owner@example.com" }),
+    );
+  });
+
+  it("omits the key when the team has no staff address", async () => {
+    loadTodaysReminderWork.mockResolvedValue(
+      work([event({ unsubscribeEmail: null })]),
+    );
+
+    await get();
+
+    // A header mailing nowhere is worse than none — and the email still goes.
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail.mock.calls[0][0]).not.toHaveProperty("listUnsubscribe");
   });
 });
 

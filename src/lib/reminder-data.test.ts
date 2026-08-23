@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const eventFindMany = vi.fn();
 const rosterFindMany = vi.fn();
+const membershipFindMany = vi.fn();
 const receiptCreate = vi.fn();
 const receiptDeleteMany = vi.fn();
 
@@ -9,6 +10,9 @@ vi.mock("@/lib/db", () => ({
   db: {
     event: { findMany: (...args: unknown[]) => eventFindMany(...args) },
     rosterEntry: { findMany: (...args: unknown[]) => rosterFindMany(...args) },
+    membership: {
+      findMany: (...args: unknown[]) => membershipFindMany(...args),
+    },
     reminderReceipt: {
       create: (...args: unknown[]) => receiptCreate(...args),
       deleteMany: (...args: unknown[]) => receiptDeleteMany(...args),
@@ -48,6 +52,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   eventFindMany.mockResolvedValue([]);
   rosterFindMany.mockResolvedValue([]);
+  membershipFindMany.mockResolvedValue([]);
   receiptCreate.mockResolvedValue({ id: "receipt-1" });
   receiptDeleteMany.mockResolvedValue({ count: 1 });
 });
@@ -199,5 +204,64 @@ describe("releaseReminder", () => {
     expect(logged).toHaveBeenCalled();
 
     logged.mockRestore();
+  });
+});
+
+describe("loadTodaysReminderWork — unsubscribe contact", () => {
+  it("resolves one staff address per team and attaches it to each event", async () => {
+    eventFindMany.mockResolvedValue([
+      { ...row("evt-1"), teamId: "team-1" },
+      { ...row("evt-2"), teamId: "team-2" },
+    ]);
+    membershipFindMany.mockResolvedValue([
+      {
+        teamId: "team-1",
+        userId: "u-coach",
+        role: "COACH",
+        user: { email: "coach@example.com" },
+      },
+      {
+        teamId: "team-1",
+        userId: "u-owner",
+        role: "OWNER",
+        user: { email: "owner@example.com" },
+      },
+      {
+        teamId: "team-2",
+        userId: "u-other",
+        role: "COACH",
+        user: { email: "other@example.com" },
+      },
+    ]);
+
+    const { events } = await loadTodaysReminderWork(NOW);
+
+    // Owner wins on team-1 even though the coach row came back first —
+    // pickUnsubscribeContact decides, not query order.
+    expect(events[0].unsubscribeEmail).toBe("owner@example.com");
+    expect(events[1].unsubscribeEmail).toBe("other@example.com");
+  });
+
+  it("reads only OWNER and COACH rows — a parent is never the contact", async () => {
+    eventFindMany.mockResolvedValue([row("evt-1")]);
+
+    await loadTodaysReminderWork(NOW);
+
+    expect(membershipFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          role: { in: ["OWNER", "COACH"] },
+        }),
+      }),
+    );
+  });
+
+  it("leaves the contact null when a team has no staff address", async () => {
+    eventFindMany.mockResolvedValue([row("evt-1")]);
+    membershipFindMany.mockResolvedValue([]);
+
+    const { events } = await loadTodaysReminderWork(NOW);
+
+    expect(events[0].unsubscribeEmail).toBeNull();
   });
 });
