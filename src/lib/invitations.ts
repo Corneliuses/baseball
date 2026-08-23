@@ -376,3 +376,57 @@ export async function setGuardianPhone(
     data: { phone },
   });
 }
+
+/**
+ * Withdraw one pending invitation.
+ *
+ * Until now the only way to take an invitation back was to re-invite the same
+ * address, leaning on `createInvitation`'s delete-then-create to sweep the old
+ * row away — which sends another email to someone the owner is trying to
+ * *stop* inviting. Mistyped an address? There was no way to undo it at all.
+ *
+ * Scoped by `teamId` in the where clause, and matched on `acceptedAt: null`:
+ *
+ * - The team scope is this module's standing rule (every function takes the
+ *   teamId), and it is what makes a forged or stale invitation id from another
+ *   team a no-op rather than a cross-team delete.
+ * - The accepted check keeps this from erasing the record of an invitation
+ *   somebody already used. Accepting grants the membership, so deleting the
+ *   accepted row would not revoke anything — it would only lose the history.
+ *
+ * `deleteMany` rather than `delete` for both reasons: it matches on the
+ * compound condition rather than the id alone, and it reports zero rather than
+ * throwing when nothing matches, which is exactly right for a button someone
+ * may double-tap.
+ *
+ * Returns whether a row was actually removed, so the caller can tell "revoked"
+ * from "it was already gone".
+ */
+export async function revokeInvitation(
+  teamId: string,
+  invitationId: string,
+): Promise<boolean> {
+  const { count } = await db.invitation.deleteMany({
+    where: { id: invitationId, teamId, acceptedAt: null },
+  });
+  return count > 0;
+}
+
+/// One pending invitation, resolved through the teamId scope so a caller can
+/// act on it without ever trusting a form's idea of which team it belongs to.
+export async function getTeamInvitation(
+  teamId: string,
+  invitationId: string,
+): Promise<TeamInvitation | null> {
+  return db.invitation.findFirst({
+    where: { id: invitationId, teamId },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      expiresAt: true,
+      acceptedAt: true,
+      createdAt: true,
+    },
+  });
+}

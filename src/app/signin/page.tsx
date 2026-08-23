@@ -1,5 +1,5 @@
 import { PageContainer } from "@/components/layout/PageContainer";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -89,12 +89,12 @@ export default async function SignInPage({
               </div>
 
               {/* This screen's one banana (design-plan.md §2). */}
-              <Button
-                type="submit"
+              <SubmitButton
                 className="w-full bg-banana text-banana-foreground hover:bg-banana/90"
+                pendingLabel="Sending the link…"
               >
                 Email me a sign-in link
-              </Button>
+              </SubmitButton>
             </form>
           </CardContent>
         </Card>

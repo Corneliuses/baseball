@@ -186,6 +186,13 @@ Practices have RSVPs but no chart. Later games are ignored.
   so there is one place to audit for `teamId` filtering.
 - **Positions**: `C` is Catcher and `CF` is Center Field. Use `POSITION_LABELS` from
   `src/lib/positions.ts` rather than writing labels by hand.
+- **Mutating forms get a pending state and typed feedback, never a bare
+  `<form action={...}>`.** `SubmitButton` (`useFormStatus`) and `StatusBanner` are the
+  shared components; every mutating form in the app uses them. A form where people
+  actually type — as opposed to a one-tap RSVP or a role-select — converts its action to
+  `useActionState`: a validation failure returns `{status: "invalid", ...}` with the typed
+  values intact, instead of redirecting with `?error=` and losing them.
+  `roster/AddPlayerForm.tsx` + `roster/actions.ts` is the annotated reference.
 
 ## Setup & Prerequisites
 
@@ -230,6 +237,13 @@ production — the dev command can prompt, generate new migrations, and reset th
 - **Prisma 7 ships no bundled query engine.** `new PrismaClient()` with no argument is a
   type error. It needs an explicit driver adapter — see `src/lib/db.ts`. Nearly every
   Prisma example predating v7 is wrong on this point.
+- **A `"use server"` file may only export async functions.** The directive marks *every*
+  export as a server function, so a runtime constant — a `useActionState` initial value, a
+  shared type — cannot live in an actions file. It fails at `next build`, not at
+  `pnpm check`, which is easy to miss until a deploy breaks. The convention is a sibling
+  `<feature>-state.ts` module holding the state type and its `*_INITIAL_STATE` constant
+  (see `add-player-state.ts`, `event-form-state.ts`, `bulk-invite-state.ts`); the action
+  file imports from it, never the other way around.
 - **Middleware is called `proxy.ts` in Next.js 16.** It was renamed from
   `middleware.ts` — same functionality, `export function proxy(request: NextRequest)`.
   Training data will confidently tell you otherwise. See

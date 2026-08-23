@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -102,9 +102,9 @@ export default async function NewTeamPage({
               </p>
             ) : null}
 
-            <Button type="submit" className="w-full">
+            <SubmitButton className="w-full" pendingLabel="Creating…">
               Create team
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>

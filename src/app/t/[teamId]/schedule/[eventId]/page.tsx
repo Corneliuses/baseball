@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { RSVP_STYLE } from "@/components/rsvp-style";
+import { TicketIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -12,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
-import { messageFor, messageTable } from "@/lib/error-messages";
+import { messageFor } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -23,22 +25,17 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
 import { deleteEventAction, rsvpAction, updateEventAction } from "../actions";
+import { SCHEDULE_ERROR_MESSAGES } from "../schedule-messages";
+import {
+  eventUrl,
+  scheduleContextFrom,
+  scheduleQuery,
+  scheduleUrl,
+} from "../schedule-context";
 
 export const metadata = {
   title: "Event — Youth Baseball Team Manager",
 };
-
-const ERROR_MESSAGES = messageTable({
-  "invalid-type": "Choose either a game or a practice.",
-  "invalid-datetime": "Enter a valid date and time.",
-  "invalid-location": "Location is too long.",
-  "invalid-opponent": "Opponent is too long.",
-  "invalid-notes": "Notes are too long.",
-  "invalid-rsvp": "Choose a valid response.",
-  "not-your-player": "You can only RSVP for your own kids.",
-  "not-on-team": "That player is not on this team's roster.",
-  access: "You no longer have access to make this change.",
-});
 
 const inputClass =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
@@ -52,10 +49,31 @@ export default async function EventPage({
   searchParams,
 }: {
   params: Promise<{ teamId: string; eventId: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; confirm?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    saved?: string;
+    confirm?: string;
+    view?: string;
+    month?: string;
+    past?: string;
+  }>;
 }) {
   const { teamId, eventId } = await params;
-  const { error, saved, confirm } = await searchParams;
+  const {
+    error,
+    saved,
+    confirm,
+    view: rawView,
+    month: rawMonth,
+    past,
+  } = await searchParams;
+  // Which schedule the coach opened this event from, so the back link and
+  // every redirect out of here return there rather than dumping a coach who
+  // was working down a list back onto this month's grid.
+  const context = scheduleContextFrom(
+    { view: rawView, month: rawMonth, past },
+    new Date(),
+  );
 
   let role: Role;
   let userId;
@@ -97,7 +115,7 @@ export default async function EventPage({
   // Archived teams reject every write server-side; hiding the buttons rather
   // than showing-and-refusing matches team home (its `teamIsWritable`).
   const teamIsWritable = team.archivedAt === null;
-  const errorMessage = messageFor(ERROR_MESSAGES, error);
+  const errorMessage = messageFor(SCHEDULE_ERROR_MESSAGES, error);
   const confirmingDelete = confirm === "delete";
   const heading =
     event.type === "GAME"
@@ -109,13 +127,15 @@ export default async function EventPage({
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
       <Button asChild variant="outline" size="sm">
-        <Link href={`/t/${teamId}/schedule`}>← Schedule</Link>
+        <Link href={scheduleUrl(teamId, context)}>← Schedule</Link>
       </Button>
 
       <Card>
         <CardHeader>
           <CardTitle>{heading}</CardTitle>
-          <CardDescription>{formatEventDateTime(event.startsAt)}</CardDescription>
+          <CardDescription>
+            {formatEventDateTime(event.startsAt)}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {event.location ? (
@@ -135,7 +155,9 @@ export default async function EventPage({
             <p className="text-muted-foreground">No location set.</p>
           )}
           {event.notes ? (
-            <p className="whitespace-pre-line text-muted-foreground">{event.notes}</p>
+            <p className="whitespace-pre-line text-muted-foreground">
+              {event.notes}
+            </p>
           ) : null}
         </CardContent>
       </Card>
@@ -156,17 +178,20 @@ export default async function EventPage({
         <CardHeader>
           <CardTitle className="text-lg">Attendance</CardTitle>
           <CardDescription>
-            RSVP is just for planning — every kid stays on the roster and in the chart
-            either way.
+            RSVP is just for planning — every kid stays on the roster and in the
+            chart either way.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {roster.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No players on the roster yet.</p>
+            <p className="text-sm text-muted-foreground">
+              No players on the roster yet.
+            </p>
           ) : (
             <ul className="space-y-2">
               {roster.map((entry) => {
-                const state = rsvpStateByPlayerId.get(entry.player.id) ?? "no-response";
+                const state =
+                  rsvpStateByPlayerId.get(entry.player.id) ?? "no-response";
                 // `no-response` is styled distinct from `declined` — it means
                 // the family hasn't answered, not that they said no. See rsvp.ts.
                 const badge = RSVP_STYLE[state];
@@ -202,36 +227,94 @@ export default async function EventPage({
                       <div className="flex shrink-0 gap-2">
                         <form action={rsvpAction}>
                           <input type="hidden" name="teamId" value={teamId} />
-                          <input type="hidden" name="eventId" value={event.id} />
-                          <input type="hidden" name="playerId" value={entry.player.id} />
-                          <input type="hidden" name="response" value="attending" />
+                          <input
+                            type="hidden"
+                            name="eventId"
+                            value={event.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="playerId"
+                            value={entry.player.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="response"
+                            value="attending"
+                          />
+                          <input
+                            type="hidden"
+                            name="view"
+                            value={context.view}
+                          />
+                          <input
+                            type="hidden"
+                            name="month"
+                            value={context.month}
+                          />
+                          <input
+                            type="hidden"
+                            name="past"
+                            value={context.past ? "1" : "0"}
+                          />
                           {/* A coach's list renders these controls on every
                               row, so each needs the player's name in its
                               accessible name — same argument as team home's
                               rsvpLabel; here one event is on screen, so the
                               name alone disambiguates. */}
-                          <Button
-                            type="submit"
+                          <SubmitButton
                             size="sm"
-                            variant={state === "attending" ? "default" : "outline"}
+                            pendingLabel="Saving…"
+                            variant={
+                              state === "attending" ? "default" : "outline"
+                            }
                             aria-label={`${entry.player.name} is going`}
                           >
                             Going
-                          </Button>
+                          </SubmitButton>
                         </form>
                         <form action={rsvpAction}>
                           <input type="hidden" name="teamId" value={teamId} />
-                          <input type="hidden" name="eventId" value={event.id} />
-                          <input type="hidden" name="playerId" value={entry.player.id} />
-                          <input type="hidden" name="response" value="declined" />
-                          <Button
-                            type="submit"
+                          <input
+                            type="hidden"
+                            name="eventId"
+                            value={event.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="playerId"
+                            value={entry.player.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="response"
+                            value="declined"
+                          />
+                          <input
+                            type="hidden"
+                            name="view"
+                            value={context.view}
+                          />
+                          <input
+                            type="hidden"
+                            name="month"
+                            value={context.month}
+                          />
+                          <input
+                            type="hidden"
+                            name="past"
+                            value={context.past ? "1" : "0"}
+                          />
+                          <SubmitButton
                             size="sm"
-                            variant={state === "declined" ? "destructive" : "outline"}
+                            pendingLabel="Saving…"
+                            variant={
+                              state === "declined" ? "destructive" : "outline"
+                            }
                             aria-label={`${entry.player.name} is not going`}
                           >
                             Not going
-                          </Button>
+                          </SubmitButton>
                         </form>
                         {canEdit && state !== "no-response" ? (
                           // Staff-only: back to "No response" when the coach
@@ -239,21 +322,44 @@ export default async function EventPage({
                           // undoing their own entry. No row → nothing to clear.
                           <form action={rsvpAction}>
                             <input type="hidden" name="teamId" value={teamId} />
-                            <input type="hidden" name="eventId" value={event.id} />
+                            <input
+                              type="hidden"
+                              name="eventId"
+                              value={event.id}
+                            />
                             <input
                               type="hidden"
                               name="playerId"
                               value={entry.player.id}
                             />
-                            <input type="hidden" name="response" value="clear" />
-                            <Button
-                              type="submit"
+                            <input
+                              type="hidden"
+                              name="response"
+                              value="clear"
+                            />
+                            <input
+                              type="hidden"
+                              name="view"
+                              value={context.view}
+                            />
+                            <input
+                              type="hidden"
+                              name="month"
+                              value={context.month}
+                            />
+                            <input
+                              type="hidden"
+                              name="past"
+                              value={context.past ? "1" : "0"}
+                            />
+                            <SubmitButton
                               size="sm"
                               variant="ghost"
+                              pendingLabel="Clearing…"
                               aria-label={`Clear ${entry.player.name}'s response`}
                             >
                               Clear
-                            </Button>
+                            </SubmitButton>
                           </form>
                         ) : null}
                       </div>
@@ -277,6 +383,16 @@ export default async function EventPage({
               <form action={updateEventAction} className="space-y-4">
                 <input type="hidden" name="teamId" value={teamId} />
                 <input type="hidden" name="eventId" value={event.id} />
+                {/* Which schedule to return to. Re-parsed server-side —
+                    three validated fields, never a destination URL; see
+                    schedule-context.ts. */}
+                <input type="hidden" name="view" value={context.view} />
+                <input type="hidden" name="month" value={context.month} />
+                <input
+                  type="hidden"
+                  name="past"
+                  value={context.past ? "1" : "0"}
+                />
 
                 <div className="space-y-2">
                   <label
@@ -325,6 +441,7 @@ export default async function EventPage({
                     id="location"
                     name="location"
                     type="text"
+                    maxLength={200}
                     defaultValue={event.location ?? ""}
                     className={inputClass}
                   />
@@ -341,6 +458,7 @@ export default async function EventPage({
                     id="opponent"
                     name="opponent"
                     type="text"
+                    maxLength={200}
                     defaultValue={event.opponent ?? ""}
                     className={inputClass}
                   />
@@ -356,16 +474,46 @@ export default async function EventPage({
                   <textarea
                     id="notes"
                     name="notes"
+                    maxLength={2000}
                     rows={2}
                     defaultValue={event.notes ?? ""}
                     className={inputClass}
                   />
                 </div>
 
-                <Button type="submit" className="w-full">
+                <SubmitButton className="w-full" pendingLabel="Saving…">
                   Save changes
-                </Button>
+                </SubmitButton>
               </form>
+            </CardContent>
+          </Card>
+
+          {/* Entering a season is the same fixture over and over — six home
+              games at one field, the same opponent twice in a fortnight — so
+              the fastest new event is usually a copy of an old one (#51 / C1).
+              A link, not a mutation: it opens the add form pre-filled and lets
+              the coach choose the date. Cloning on the spot would put a
+              wrongly-dated event on the real schedule, pushing RSVPs and the
+              calendar feed, until somebody noticed. */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Duplicate this event</CardTitle>
+              <CardDescription>
+                Opens the add form with the type, location, opponent and notes
+                already filled in. You pick the new date.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="outline">
+                <Link
+                  href={`/t/${teamId}/schedule?${scheduleQuery(context, {
+                    duplicate: event.id,
+                  })}#add-event`}
+                >
+                  <TicketIcon />
+                  Duplicate event
+                </Link>
+              </Button>
             </CardContent>
           </Card>
 
@@ -387,18 +535,34 @@ export default async function EventPage({
                     <form action={deleteEventAction}>
                       <input type="hidden" name="teamId" value={teamId} />
                       <input type="hidden" name="eventId" value={event.id} />
-                      <Button type="submit" variant="destructive">
+                      <input type="hidden" name="view" value={context.view} />
+                      <input type="hidden" name="month" value={context.month} />
+                      <input
+                        type="hidden"
+                        name="past"
+                        value={context.past ? "1" : "0"}
+                      />
+                      <SubmitButton
+                        variant="destructive"
+                        pendingLabel="Deleting…"
+                      >
                         Yes, delete it
-                      </Button>
+                      </SubmitButton>
                     </form>
                     <Button asChild variant="outline">
-                      <Link href={`/t/${teamId}/schedule/${event.id}`}>Cancel</Link>
+                      <Link href={eventUrl(teamId, event.id, context)}>
+                        Cancel
+                      </Link>
                     </Button>
                   </div>
                 </div>
               ) : (
                 <Button asChild variant="destructive">
-                  <Link href={`/t/${teamId}/schedule/${event.id}?confirm=delete`}>
+                  <Link
+                    href={eventUrl(teamId, event.id, context, {
+                      confirm: "delete",
+                    })}
+                  >
                     Delete event
                   </Link>
                 </Button>

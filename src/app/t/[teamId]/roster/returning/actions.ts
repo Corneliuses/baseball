@@ -64,15 +64,36 @@ async function notifyNewGuardians(
   return results.every((result) => result.status === "fulfilled" && result.value.ok);
 }
 
+/// The picker's filter, carried across the add so the owner keeps their place
+/// in a list they may have narrowed to three names out of forty. Plain text
+/// and re-encoded on the way out — it only ever becomes a `q` value on this
+/// one page, never a destination.
+function returningUrl(
+  teamId: string,
+  query: string,
+  extra: Record<string, string> = {},
+): string {
+  const params = new URLSearchParams();
+  if (query) {
+    params.set("q", query);
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    params.set(key, value);
+  }
+  const search = params.toString();
+  return `/t/${teamId}/roster/returning${search ? `?${search}` : ""}`;
+}
+
 export async function addReturningPlayerAction(formData: FormData) {
   const teamId = extractTeamId(formData);
+  const query = String(formData.get("q") ?? "").trim();
   const playerId = extractPlayerId(formData);
 
   let jerseyNumber: number | null;
   try {
     jerseyNumber = parseJerseyNumber(formData.get("jerseyNumber"));
   } catch {
-    redirect(`/t/${teamId}/roster/returning?error=invalid-jersey`);
+    redirect(returningUrl(teamId, query, { error: "invalid-jersey" }));
   }
 
   let notify: GuardianLink[];
@@ -90,7 +111,7 @@ export async function addReturningPlayerAction(formData: FormData) {
     // database errors and returns [], which here would report an addable
     // player as unavailable and silently skip the write during an outage.
     if (!(await isReturningCandidate(teamId, playerId))) {
-      redirect(`/t/${teamId}/roster/returning?error=not-a-candidate`);
+      redirect(returningUrl(teamId, query, { error: "not-a-candidate" }));
     }
 
     const result = await addReturningPlayer({ teamId, playerId, jerseyNumber });
@@ -98,11 +119,11 @@ export async function addReturningPlayerAction(formData: FormData) {
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
-      redirect(`/t/${teamId}/roster/returning?error=access`);
+      redirect(returningUrl(teamId, query, { error: "access" }));
     }
     const failure = rosterWriteFailure(error);
     if (failure) {
-      redirect(`/t/${teamId}/roster/returning?error=${failure}`);
+      redirect(returningUrl(teamId, query, { error: failure }));
     }
     throw error;
   }
@@ -124,8 +145,19 @@ export async function addReturningPlayerAction(formData: FormData) {
   revalidatePath("/t/[teamId]/roster", "page");
   revalidatePath("/t/[teamId]/roster/returning", "page");
 
+  // Stay on the picker.
+  //
+  // Adding a returning roster used to be N round trips with a Back-button
+  // navigation between each: every successful add redirected away to the
+  // roster, dropping the filter, so building a twelve-player squad meant
+  // twelve trips back to a list that had forgotten where the owner was (C7).
+  // The row for the player just added flips to "Added ✓" in place instead.
+  //
+  // A failed *notice* keeps them here too, with the warning attached — the
+  // roster spot and the memberships have already committed, so sending them
+  // somewhere else to read about an email would be doubly wrong.
   if (!allSent) {
-    redirect(`/t/${teamId}/roster?error=email-failed`);
+    redirect(returningUrl(teamId, query, { error: "email-failed", added: playerId }));
   }
-  redirect(`/t/${teamId}/roster?added=1`);
+  redirect(returningUrl(teamId, query, { added: playerId }));
 }

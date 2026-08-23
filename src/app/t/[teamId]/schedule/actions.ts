@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
-import { wallClockToInstant } from "@/lib/calendar";
+import { formatEventDateTime, wallClockToInstant } from "@/lib/calendar";
 import {
   clearRsvp,
   guardedRosteredPlayerIds,
@@ -19,6 +19,21 @@ import {
   type EventInput,
 } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+
+import {
+  stickyValues,
+  type AddEventField,
+  type AddEventState,
+  type EventFormValues,
+} from "./event-form-state";
+import {
+  eventUrl,
+  optionalScheduleContextFromForm,
+  scheduleContextFromForm,
+  scheduleQuery,
+  scheduleUrl,
+  type ScheduleContext,
+} from "./schedule-context";
 
 /// Event mutations. All three are COACH+; reads are open to any member and
 /// live in the page loaders.
@@ -95,6 +110,25 @@ function eventValidationErrorCode(error: z.ZodError): EventErrorCode {
   }
 }
 
+/// The one form field each error code is actually about. `invalid-datetime`
+/// reaches here two ways — a blank/malformed string caught by the schema, or
+/// a syntactically valid one `wallClockToInstant` still rejects — and both
+/// belong to `startsAt`.
+function eventErrorField(code: EventErrorCode): AddEventField {
+  switch (code) {
+    case "invalid-type":
+      return "type";
+    case "invalid-location":
+      return "location";
+    case "invalid-opponent":
+      return "opponent";
+    case "invalid-notes":
+      return "notes";
+    case "invalid-datetime":
+      return "startsAt";
+  }
+}
+
 type ParsedEventForm = { input: EventInput } | { errorCode: EventErrorCode };
 
 /**
@@ -146,23 +180,70 @@ function parseEventForm(formData: FormData): ParsedEventForm {
  * form body names an event on team B. Deleting that event would cascade team
  * B's RSVPs. Same argument as `requireRosterEntry` in the roster actions.
  */
-async function requireEvent(teamId: string, eventId: string) {
+async function requireEvent(
+  teamId: string,
+  eventId: string,
+  context?: ScheduleContext,
+) {
   await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
 
   const event = await getEvent(teamId, eventId);
   if (!event) {
-    redirect(`/t/${teamId}/schedule`);
+    redirect(
+      context
+        ? scheduleUrl(teamId, context)
+        : `/t/${teamId}/schedule`,
+    );
   }
 
   return event;
 }
 
-export async function createEventAction(formData: FormData) {
+/**
+ * Add one event to the schedule.
+ *
+ * This is the action the Aug 2026 audit costed at ~60 interactions a season
+ * (C1), and every part of that cost was in what happened *after* a successful
+ * submit rather than in the submit itself: the redirect reloaded the page,
+ * reset all five fields — including type and location, which barely change
+ * from game to game — dropped the `view`/`month` params, and scrolled the
+ * coach back to the top, away from the form they were about to use again.
+ *
+ * So it no longer redirects on success. `revalidatePath` refreshes the list in
+ * place and the action returns, which leaves the page where it was, the view
+ * where it was, and the form filled in with everything worth keeping for the
+ * next event. Only the date and the notes clear (see `stickyValues` — a stale
+ * start time is the one field it would be dangerous to keep).
+ *
+ * A validation failure returns too, with what was typed, so a mistyped time
+ * costs a correction rather than the whole form.
+ *
+ * Losing access still redirects, and now lands on the schedule the coach was
+ * actually looking at.
+ */
+export async function createEventAction(
+  _prevState: AddEventState,
+  formData: FormData,
+): Promise<AddEventState> {
   const teamId = extractTeamId(formData);
+  const context = scheduleContextFromForm(formData, new Date());
+
+  const values: EventFormValues = {
+    type: String(formData.get("type") ?? ""),
+    startsAt: String(formData.get("startsAt") ?? ""),
+    location: String(formData.get("location") ?? ""),
+    opponent: String(formData.get("opponent") ?? ""),
+    notes: String(formData.get("notes") ?? ""),
+  };
 
   const parsed = parseEventForm(formData);
   if ("errorCode" in parsed) {
-    redirect(`/t/${teamId}/schedule?error=${parsed.errorCode}`);
+    return {
+      status: "invalid",
+      code: parsed.errorCode,
+      field: eventErrorField(parsed.errorCode),
+      values,
+    };
   }
 
   try {
@@ -171,38 +252,49 @@ export async function createEventAction(formData: FormData) {
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
-      redirect(`/t/${teamId}/schedule?error=access`);
+      redirect(scheduleUrl(teamId, context, { error: "access" }));
     }
     throw error;
   }
 
   revalidatePath("/t/[teamId]/schedule", "page");
-  redirect(`/t/${teamId}/schedule?added=1`);
+
+  return {
+    status: "added",
+    keep: stickyValues(values),
+    // Named, not counted: after three quick adds the coach needs to know
+    // *which* one just landed, and the date is the only thing distinguishing
+    // them. Formatted through calendar.ts so it reads in the team's zone.
+    summary: `${parsed.input.type === "GAME" ? "Game" : "Practice"} on ${formatEventDateTime(parsed.input.startsAt)}`,
+  };
 }
 
 export async function updateEventAction(formData: FormData) {
   const teamId = extractTeamId(formData);
   const eventId = extractEventId(formData);
+  // Which schedule the coach came from, so saving an event doesn't quietly
+  // move them from their list back to this month's grid.
+  const context = scheduleContextFromForm(formData, new Date());
 
   const parsed = parseEventForm(formData);
   if ("errorCode" in parsed) {
-    redirect(`/t/${teamId}/schedule/${eventId}?error=${parsed.errorCode}`);
+    redirect(eventUrl(teamId, eventId, context, { error: parsed.errorCode }));
   }
 
   try {
-    await requireEvent(teamId, eventId);
+    await requireEvent(teamId, eventId, context);
     await updateEvent(teamId, eventId, parsed.input);
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
-      redirect(`/t/${teamId}/schedule/${eventId}?error=access`);
+      redirect(eventUrl(teamId, eventId, context, { error: "access" }));
     }
     throw error;
   }
 
   revalidatePath("/t/[teamId]/schedule", "page");
   revalidatePath("/t/[teamId]/schedule/[eventId]", "page");
-  redirect(`/t/${teamId}/schedule/${eventId}?saved=1`);
+  redirect(eventUrl(teamId, eventId, context, { saved: "1" }));
 }
 
 /// Irreversible: `Rsvp.event` cascades, so the event's RSVPs go with it. The
@@ -210,20 +302,23 @@ export async function updateEventAction(formData: FormData) {
 export async function deleteEventAction(formData: FormData) {
   const teamId = extractTeamId(formData);
   const eventId = extractEventId(formData);
+  const context = scheduleContextFromForm(formData, new Date());
 
   try {
-    await requireEvent(teamId, eventId);
+    await requireEvent(teamId, eventId, context);
     await deleteEvent(teamId, eventId);
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
-      redirect(`/t/${teamId}/schedule/${eventId}?error=access`);
+      redirect(eventUrl(teamId, eventId, context, { error: "access" }));
     }
     throw error;
   }
 
   revalidatePath("/t/[teamId]/schedule", "page");
-  redirect(`/t/${teamId}/schedule`);
+  // The event is gone, so there is no event page to return to — but there is
+  // still the schedule the coach was reading, and that is where they were.
+  redirect(scheduleUrl(teamId, context));
 }
 
 /// `clear` (#54) deletes the row, returning the player to "no response" —
@@ -260,10 +355,23 @@ function rsvpReturnUrl(
   teamId: string,
   eventId: string,
   query: string,
+  context: ScheduleContext | null,
 ): string {
-  return origin === "home"
-    ? `/t/${teamId}${query}`
-    : `/t/${teamId}/schedule/${eventId}${query}`;
+  if (origin === "home") {
+    return `/t/${teamId}${query}`;
+  }
+  // Back to the event page — and, when the coach opened it from a particular
+  // schedule, back to an event page that still remembers which. Without this
+  // the very next RSVP silently drops the context every other action on this
+  // page now carries, and the "← Schedule" link reverts to the month grid.
+  if (!context) {
+    return `/t/${teamId}/schedule/${eventId}${query}`;
+  }
+  const params = new URLSearchParams(scheduleQuery(context));
+  for (const [key, value] of new URLSearchParams(query.replace(/^\?/, ""))) {
+    params.set(key, value);
+  }
+  return `/t/${teamId}/schedule/${eventId}?${params.toString()}`;
 }
 
 /**
@@ -302,6 +410,7 @@ async function requireRsvpWriter(
   eventId: string,
   playerId: string,
   origin: RsvpOrigin,
+  context: ScheduleContext | null,
 ) {
   const { role, userId } = await requireTeamAccess(teamId, { intent: "write" });
 
@@ -312,7 +421,11 @@ async function requireRsvpWriter(
     // home there is no such page to land on, so say it instead of returning a
     // silently unchanged dashboard the parent will tap again.
     redirect(
-      origin === "home" ? `/t/${teamId}?error=event-gone` : `/t/${teamId}/schedule`,
+      origin === "home"
+        ? `/t/${teamId}?error=event-gone`
+        : context
+          ? scheduleUrl(teamId, context)
+          : `/t/${teamId}/schedule`,
     );
   }
 
@@ -320,12 +433,12 @@ async function requireRsvpWriter(
   const guardedPlayerIds = await guardedRosteredPlayerIds(teamId, userId);
   if (!guardedPlayerIds.has(playerId)) {
     if (role === "PARENT") {
-      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-your-player"));
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-your-player", context));
     }
     if (!(await isPlayerRostered(teamId, playerId))) {
       // Only reachable from a crafted form — the page renders rows from the
       // roster — so the copy is for the coach who somehow got here, not a flow.
-      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-on-team"));
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-on-team", context));
     }
     recordedById = userId;
   }
@@ -364,10 +477,16 @@ export async function rsvpAction(formData: FormData) {
   const eventId = extractEventId(formData);
   const playerId = extractPlayerId(formData);
   const origin = parseRsvpOrigin(formData);
+  // Only meaningful for the event-page origin; team home has its own
+  // destination. Optional, so a post that carried no context keeps the bare
+  // URL it had rather than being handed a month grid it never asked for.
+  // Re-parsed like every other context read — see schedule-context.ts on why
+  // these are validated fields and never a URL.
+  const context = optionalScheduleContextFromForm(formData, new Date());
 
   const parsedResponse = rsvpResponseSchema.safeParse(formData.get("response"));
   if (!parsedResponse.success) {
-    redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=invalid-rsvp"));
+    redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=invalid-rsvp", context));
   }
 
   try {
@@ -378,6 +497,7 @@ export async function rsvpAction(formData: FormData) {
       eventId,
       playerId,
       origin,
+      context,
     );
     if (parsedResponse.data === "clear") {
       await clearRsvp(event.id, playerId);
@@ -392,7 +512,7 @@ export async function rsvpAction(formData: FormData) {
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
-      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=access"));
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=access", context));
     }
     throw error;
   }
@@ -402,5 +522,5 @@ export async function rsvpAction(formData: FormData) {
   // so revalidating only the page that was posted from leaves the other stale.
   revalidatePath("/t/[teamId]/schedule/[eventId]", "page");
   revalidatePath("/t/[teamId]", "page");
-  redirect(rsvpReturnUrl(origin, teamId, eventId, "?saved=1"));
+  redirect(rsvpReturnUrl(origin, teamId, eventId, "?saved=1", context));
 }

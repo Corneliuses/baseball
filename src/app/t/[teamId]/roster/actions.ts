@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import {
   addPlayerToRoster,
+  findDuplicateNameMatch,
   getRosterEntry,
   removeRosterEntry,
   updateRosterEntry,
@@ -23,6 +24,12 @@ import { sendEmail } from "@/lib/email";
 import { InvitationEmail } from "@/emails/InvitationEmail";
 import { buildInvitationEmail } from "@/emails/invitation-email";
 import { getTeamById } from "@/lib/teams";
+
+import type {
+  AddPlayerField,
+  AddPlayerState,
+  AddPlayerValues,
+} from "./add-player-state";
 
 function extractTeamId(formData: FormData): string {
   const teamId = String(formData.get("teamId")).trim();
@@ -103,27 +110,96 @@ function playerValidationErrorCode(error: z.ZodError): "invalid-name" | "invalid
     : "invalid-name";
 }
 
-export async function addPlayerAction(formData: FormData) {
+/**
+ * Add a brand-new player to this team's roster.
+ *
+ * Shaped for `useActionState`, so a rejection *returns* rather than redirects:
+ * a coach who mistyped a date keeps the name and jersey number they already
+ * entered instead of getting the form back blank (Dugout Report C5). Which
+ * field to mark comes back with the code, so the message lands beside the box
+ * that caused it rather than floating above the card.
+ *
+ * The two write-time constraints — a jersey already worn, a player already
+ * rostered — come back the same way. They are as much "fix this and resubmit"
+ * as a malformed date is; the only reason they used to redirect is that they
+ * surface late, from a Prisma P2002 (`rosterWriteFailure`).
+ *
+ * Success still redirects, and now says so: `?added=1` lights the "Player
+ * added." banner the page has always rendered and, until this change, nothing
+ * ever set. A blank form is the right next state here — the coach's next act is
+ * usually another kid.
+ *
+ * Losing access still redirects too: someone who is no longer a coach here
+ * should land on the page's own message, not read it inside a form they can no
+ * longer submit.
+ */
+export async function addPlayerAction(
+  _prevState: AddPlayerState,
+  formData: FormData,
+): Promise<AddPlayerState> {
   const teamId = extractTeamId(formData);
 
+  const values: AddPlayerValues = {
+    name: String(formData.get("name") ?? ""),
+    dateOfBirth: String(formData.get("dateOfBirth") ?? ""),
+    jerseyNumber: String(formData.get("jerseyNumber") ?? ""),
+  };
+
+  const invalid = (code: string, field: AddPlayerField): AddPlayerState => ({
+    status: "invalid",
+    code,
+    field,
+    values,
+  });
+
   const parsed = playerSchema.safeParse({
-    name: formData.get("name") ?? "",
-    dateOfBirth: formData.get("dateOfBirth") ?? "",
+    name: values.name,
+    dateOfBirth: values.dateOfBirth,
   });
 
   if (!parsed.success) {
-    redirect(`/t/${teamId}/roster?error=${playerValidationErrorCode(parsed.error)}`);
+    const code = playerValidationErrorCode(parsed.error);
+    return invalid(code, code === "invalid-dob" ? "dateOfBirth" : "name");
   }
 
   let jerseyNumber: number | null;
   try {
     jerseyNumber = parseJerseyNumber(formData.get("jerseyNumber"));
   } catch {
-    redirect(`/t/${teamId}/roster?error=invalid-jersey`);
+    return invalid("invalid-jersey", "jerseyNumber");
   }
 
+  // "Same kid?" — asked once, before a second global Player by the same name
+  // comes into existence. `force` is how the coach answers yes-it-is-someone-
+  // else, and it is only ever set by resubmitting the warning's own button.
+  const forced = formData.get("force") === "1";
+
   try {
-    await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
+    const { role } = await requireTeamAccess(teamId, {
+      intent: "write",
+      minRole: "COACH",
+    });
+
+    if (!forced) {
+      // The cross-team half of the check is the app's one global Player read
+      // and is documented as OWNER-gated in its caller; adding a player is
+      // COACH+, so the role has to travel or a coach gains an existence
+      // oracle over every team in the database. The picker it would point at
+      // is owner-only anyway.
+      const match = await findDuplicateNameMatch(
+        teamId,
+        parsed.data.name,
+        role === "OWNER",
+      );
+      if (match) {
+        return {
+          status: "duplicate-name",
+          match: { kind: match.kind, name: match.name },
+          values,
+        };
+      }
+    }
+
     await addPlayerToRoster(teamId, {
       name: parsed.data.name,
       dateOfBirth: parseDateOfBirth(parsed.data.dateOfBirth),
@@ -136,13 +212,18 @@ export async function addPlayerAction(formData: FormData) {
     }
     const failure = rosterWriteFailure(error);
     if (failure) {
-      redirect(`/t/${teamId}/roster?error=${failure}`);
+      // `jersey-taken` points at the jersey box; `already-rostered` is about
+      // the player as a whole and has no one box to blame.
+      return invalid(
+        failure,
+        failure === "jersey-taken" ? "jerseyNumber" : null,
+      );
     }
     throw error;
   }
 
   revalidatePath("/t/[teamId]/roster", "page");
-  redirect(`/t/${teamId}/roster`);
+  redirect(`/t/${teamId}/roster?added=1`);
 }
 
 export async function updateRosterEntryAction(formData: FormData) {

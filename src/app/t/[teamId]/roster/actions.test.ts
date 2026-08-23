@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const requireTeamAccess = vi.fn();
 const getRosterEntry = vi.fn();
+const findDuplicateNameMatch = vi.fn();
 const addPlayerToRoster = vi.fn();
 const updateRosterEntry = vi.fn();
 const linkGuardian = vi.fn();
@@ -18,6 +19,7 @@ vi.mock("@/lib/team-access", () => ({
 vi.mock("@/lib/roster", () => ({
   getRosterEntry: (...args: unknown[]) => getRosterEntry(...args),
   addPlayerToRoster: (...args: unknown[]) => addPlayerToRoster(...args),
+  findDuplicateNameMatch: (...args: unknown[]) => findDuplicateNameMatch(...args),
   removeRosterEntry: vi.fn(),
   updateRosterEntry: (...args: unknown[]) => updateRosterEntry(...args),
 }));
@@ -65,6 +67,25 @@ import {
   unlinkGuardianAction,
   updateRosterEntryAction,
 } from "./actions";
+import {
+  ADD_PLAYER_INITIAL_STATE,
+  type AddPlayerState,
+} from "./add-player-state";
+
+/// `addPlayerAction` is shaped for `useActionState`, so it takes the previous
+/// state ahead of the form. It rejects by *returning* rather than redirecting,
+/// which is the whole point: the coach keeps what they typed.
+function addPlayer(data: FormData): Promise<AddPlayerState> {
+  return addPlayerAction(ADD_PLAYER_INITIAL_STATE, data);
+}
+
+/// Narrows to the rejected shape, failing the test rather than the type
+/// checker when a call unexpectedly succeeded.
+function rejection(state: AddPlayerState) {
+  expect(state.status).toBe("invalid");
+  if (state.status !== "invalid") throw new Error("unreachable");
+  return state;
+}
 
 const ENTRY = {
   id: "entry-1",
@@ -106,6 +127,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
   getRosterEntry.mockResolvedValue(ENTRY);
+  // No name collision unless a test sets one up. The check is advisory and
+  // returns null both when nothing matches and when the lookup itself failed.
+  findDuplicateNameMatch.mockResolvedValue(null);
   linkGuardian.mockResolvedValue({
     userId: "user-2",
     email: "new@example.com",
@@ -312,25 +336,56 @@ describe("setGuardianPhoneAction", () => {
 /// src/app/t/[teamId]/roster/actions.ts's playerSchema.
 describe("date of birth validation", () => {
   it("rejects a calendar-invalid date and does not write anything", async () => {
-    const url = await redirectUrlOf(
-      addPlayerAction(
+    const state = rejection(
+      await addPlayer(
         form({ teamId: "team-1", name: "Ada", dateOfBirth: "2026-02-30" }),
       ),
     );
 
-    expect(url).toContain("error=invalid-dob");
+    expect(state.code).toBe("invalid-dob");
     expect(addPlayerToRoster).not.toHaveBeenCalled();
   });
 
   it("rejects a non-date string", async () => {
-    const url = await redirectUrlOf(
-      addPlayerAction(
+    const state = rejection(
+      await addPlayer(
         form({ teamId: "team-1", name: "Ada", dateOfBirth: "not-a-date" }),
       ),
     );
 
-    expect(url).toContain("error=invalid-dob");
+    expect(state.code).toBe("invalid-dob");
     expect(addPlayerToRoster).not.toHaveBeenCalled();
+  });
+
+  it("hands the rejected name and jersey back rather than blanking them", async () => {
+    // The old flow redirected, so one mistyped digit in the date cost the
+    // coach the name and the number they had already entered (C5).
+    const state = rejection(
+      await addPlayer(
+        form({
+          teamId: "team-1",
+          name: "Ada",
+          dateOfBirth: "not-a-date",
+          jerseyNumber: "7",
+        }),
+      ),
+    );
+
+    expect(state.values).toEqual({
+      name: "Ada",
+      dateOfBirth: "not-a-date",
+      jerseyNumber: "7",
+    });
+  });
+
+  it("points the rejection at the box that caused it", async () => {
+    const state = rejection(
+      await addPlayer(
+        form({ teamId: "team-1", name: "Ada", dateOfBirth: "not-a-date" }),
+      ),
+    );
+
+    expect(state.field).toBe("dateOfBirth");
   });
 
   it("accepts a real calendar date, including a leap day", async () => {
@@ -341,15 +396,31 @@ describe("date of birth validation", () => {
     });
 
     await redirectUrlOf(
-      addPlayerAction(
-        form({ teamId: "team-1", name: "Ada", dateOfBirth: "2024-02-29" }),
-      ),
+      addPlayer(form({ teamId: "team-1", name: "Ada", dateOfBirth: "2024-02-29" })),
     );
 
     expect(addPlayerToRoster).toHaveBeenCalledWith(
       "team-1",
       expect.objectContaining({ dateOfBirth: new Date("2024-02-29") }),
     );
+  });
+
+  it("redirects on success with the param that lights the added banner", async () => {
+    // The roster page has always rendered "Player added." for ?added=1 and
+    // nothing ever set it — the banner was only reachable from the returning
+    // -player flow. A blank form is the right next state here: the coach's
+    // next act is usually another kid.
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-1",
+      jerseyNumber: null,
+      player: { id: "player-1", name: "Ada", dateOfBirth: null },
+    });
+
+    const url = await redirectUrlOf(
+      addPlayer(form({ teamId: "team-1", name: "Ada" })),
+    );
+
+    expect(url).toBe("/t/team-1/roster?added=1");
   });
 
   it("treats a blank date of birth as absent, not invalid", async () => {
@@ -360,7 +431,7 @@ describe("date of birth validation", () => {
     });
 
     await redirectUrlOf(
-      addPlayerAction(form({ teamId: "team-1", name: "Ada", dateOfBirth: "" })),
+      addPlayer(form({ teamId: "team-1", name: "Ada", dateOfBirth: "" })),
     );
 
     expect(addPlayerToRoster).toHaveBeenCalledWith(
@@ -383,5 +454,145 @@ describe("date of birth validation", () => {
 
     expect(url).toContain("error=invalid-dob");
     expect(updateRosterEntry).not.toHaveBeenCalled();
+  });
+});
+
+/// `addPlayerToRoster` always creates a brand-new global Player, and nothing
+/// used to stop it: adding "Jake Miller" twice silently produced two children
+/// who are, to the data model, different people. The unique indexes do not
+/// help — they constrain jersey numbers and roster membership, not names.
+describe("the same-kid check on a manual add", () => {
+  it("asks before creating a second player by the same name", async () => {
+    findDuplicateNameMatch.mockResolvedValue({
+      kind: "rostered",
+      playerId: "player-9",
+      name: "Jake Miller",
+    });
+
+    const state = await addPlayer(form({ teamId: "team-1", name: "Jake Miller" }));
+
+    expect(state.status).toBe("duplicate-name");
+    expect(addPlayerToRoster).not.toHaveBeenCalled();
+  });
+
+  it("keeps what was typed while it asks", async () => {
+    findDuplicateNameMatch.mockResolvedValue({
+      kind: "rostered",
+      playerId: "player-9",
+      name: "Jake Miller",
+    });
+
+    const state = await addPlayer(
+      form({ teamId: "team-1", name: "Jake Miller", jerseyNumber: "12" }),
+    );
+
+    if (state.status !== "duplicate-name") throw new Error("expected the question");
+    expect(state.values.name).toBe("Jake Miller");
+    expect(state.values.jerseyNumber).toBe("12");
+  });
+
+  it("says which kind of match it found, since the remedies differ", async () => {
+    // A returning player should usually be added through the picker, which
+    // reuses the existing Player and carries their guardians across.
+    findDuplicateNameMatch.mockResolvedValue({
+      kind: "returning",
+      playerId: "player-9",
+      name: "Jake Miller",
+    });
+
+    const state = await addPlayer(form({ teamId: "team-1", name: "Jake Miller" }));
+
+    if (state.status !== "duplicate-name") throw new Error("expected the question");
+    expect(state.match).toEqual({ kind: "returning", name: "Jake Miller" });
+  });
+
+  it("goes ahead when the coach says it really is a different kid", async () => {
+    // Two children on one team genuinely can share a name, so this is a
+    // question the coach can answer, never a rejection.
+    findDuplicateNameMatch.mockResolvedValue({
+      kind: "rostered",
+      playerId: "player-9",
+      name: "Jake Miller",
+    });
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-2",
+      jerseyNumber: null,
+      player: { id: "player-10", name: "Jake Miller", dateOfBirth: null },
+    });
+
+    const url = await redirectUrlOf(
+      addPlayer(form({ teamId: "team-1", name: "Jake Miller", force: "1" })),
+    );
+
+    expect(url).toBe("/t/team-1/roster?added=1");
+    expect(addPlayerToRoster).toHaveBeenCalled();
+  });
+
+  it("does not even ask once the check is waived", async () => {
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-2",
+      jerseyNumber: null,
+      player: { id: "player-10", name: "Jake Miller", dateOfBirth: null },
+    });
+
+    await redirectUrlOf(
+      addPlayer(form({ teamId: "team-1", name: "Jake Miller", force: "1" })),
+    );
+
+    expect(findDuplicateNameMatch).not.toHaveBeenCalled();
+  });
+
+  it("withholds the cross-team half from a coach", async () => {
+    // `listReturningCandidates` is the app's one global Player read
+    // (Decision 13) and is documented as OWNER-gated in its caller. Adding a
+    // player is COACH+, so running it for every caller would hand a coach an
+    // existence oracle across every team in the database: type a name, learn
+    // from the answer whether a child by that name is rostered anywhere, and
+    // get the canonical spelling back.
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-2",
+      jerseyNumber: null,
+      player: { id: "player-10", name: "Jake Miller", dateOfBirth: null },
+    });
+
+    await redirectUrlOf(addPlayer(form({ teamId: "team-1", name: "Jake Miller" })));
+
+    expect(findDuplicateNameMatch).toHaveBeenCalledWith(
+      "team-1",
+      "Jake Miller",
+      false,
+    );
+  });
+
+  it("allows it for an owner, who can act on the answer", async () => {
+    // The picker the "returning" branch points at is owner-only too, so
+    // offering it to a coach would be a dead end even setting the leak aside.
+    requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "owner-1" });
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-2",
+      jerseyNumber: null,
+      player: { id: "player-10", name: "Jake Miller", dateOfBirth: null },
+    });
+
+    await redirectUrlOf(addPlayer(form({ teamId: "team-1", name: "Jake Miller" })));
+
+    expect(findDuplicateNameMatch).toHaveBeenCalledWith(
+      "team-1",
+      "Jake Miller",
+      true,
+    );
+  });
+
+  it("checks only after access is proven", async () => {
+    // The check reads this team's roster and the owner's past players, so it
+    // must never run for someone who has not been shown to be a coach here.
+    requireTeamAccess.mockRejectedValue(
+      new TeamAccessError("denied", "insufficient-role"),
+    );
+
+    await redirectUrlOf(addPlayer(form({ teamId: "team-1", name: "Jake Miller" })));
+
+    expect(findDuplicateNameMatch).not.toHaveBeenCalled();
   });
 });

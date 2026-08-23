@@ -111,13 +111,15 @@ describe("TeamNav active tab", () => {
     expect(chart).toContain('aria-current="true"');
   });
 
-  // /members is owner-only and reached from Settings, but sits at a sibling
-  // URL — without an explicit claim the persistent nav goes completely dark
-  // on the one page that links to it.
-  it("lights Settings on the members page it links to", () => {
+  // /members used to be reachable only through a button on Settings, and the
+  // Settings tab borrowed its URL via `alsoMatch` so the nav didn't go dark
+  // there. Now Members has a tab of its own (#51 / C4), so it lights that one
+  // — and Settings must *stop* claiming a section it no longer owns.
+  it("lights Members on its own page, not Settings", () => {
     const html = render("OWNER", "/t/team-1/members");
 
-    expect(linkFor(html, "/t/team-1/settings")).toContain("aria-current");
+    expect(linkFor(html, "/t/team-1/members")).toContain('aria-current="page"');
+    expect(linkFor(html, "/t/team-1/settings")).not.toContain("aria-current");
   });
 
   it("never lights two tabs at once", () => {
@@ -158,5 +160,63 @@ describe("TeamNav focus styling", () => {
     expect(linkFor(html, "/t/team-1/schedule")).toContain(
       "focus-visible:ring-ring",
     );
+  });
+});
+
+describe("TeamNav labels", () => {
+  // The audit's C4 in one assertion: "Lineup" was the read-only view and
+  // "Chart" was the editor, so the tab that sounded like a document was the
+  // one that wrote to the database. The pair now states which is which.
+  it("names the viewer and the editor so they cannot be confused", () => {
+    const html = render("COACH");
+
+    expect(linkFor(html, "/t/team-1/view")).toBeTruthy();
+    expect(html).toContain("Game Day");
+    expect(html).toContain("Edit Lineup");
+    expect(html).not.toContain(">Lineup<");
+    expect(html).not.toContain(">Chart<");
+  });
+
+  it("gives Members a tab instead of hiding it under Settings", () => {
+    const html = render("OWNER");
+
+    expect(html).toContain('href="/t/team-1/members"');
+    expect(html).toContain("Members");
+  });
+
+  it("keeps Members owner-only", () => {
+    expect(render("COACH")).not.toContain('href="/t/team-1/members"');
+    expect(render("PARENT")).not.toContain('href="/t/team-1/members"');
+  });
+});
+
+describe("TeamNav grouping", () => {
+  it("separates the coach's rack from the shared tabs", () => {
+    // Nine ungrouped pills mixed coach tools with parent pages with nothing to
+    // tell them apart (C4). The seam is decoration for a boundary the pages
+    // themselves enforce, so it is aria-hidden rather than announced.
+    const html = render("COACH");
+
+    expect(html).toContain('aria-hidden="true"');
+    expect(linkFor(html, "/t/team-1/readiness")).toContain("bg-secondary");
+    expect(linkFor(html, "/t/team-1/schedule")).toContain("bg-card");
+  });
+
+  it("draws no seam for a parent, who has no coach tabs", () => {
+    const html = render("PARENT");
+
+    // Every icon is aria-hidden, so count the seam by its own dash pattern
+    // rather than by that attribute.
+    expect(html).not.toContain('stroke-dasharray="3 3"');
+  });
+
+  it("puts an icon beside every label, never instead of one", () => {
+    // design-plan.md §10: meaning is never carried by shape or colour alone.
+    const html = render("OWNER");
+
+    expect(html).toContain("<svg");
+    for (const label of ["Home", "Schedule", "Game Day", "Roster", "Settings"]) {
+      expect(html).toContain(label);
+    }
   });
 });

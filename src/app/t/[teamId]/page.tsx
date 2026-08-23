@@ -6,6 +6,7 @@ import { JerseyDot } from "@/components/JerseyDot";
 import { MiniDiamondHero } from "@/components/MiniDiamondHero";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -30,6 +31,7 @@ import { getChart } from "@/lib/roster";
 import { buildRsvpStateMapsByEvent } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listRsvpsForEvents } from "@/lib/rsvps";
 import { nextEvents, type ScheduleEvent } from "@/lib/schedule";
+import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -446,16 +448,16 @@ export default async function TeamHomePage({
                                         whole point of one-tap. An enum, never
                                         a URL; see actions.ts. */}
                                     <input type="hidden" name="from" value="home" />
-                                    <Button
-                                      type="submit"
+                                    <SubmitButton
                                       size="sm"
                                       variant={
                                         state === "attending" ? "default" : "outline"
                                       }
                                       aria-label={rsvpLabel(entry.playerName, event, true)}
+                                      pendingLabel="Saving…"
                                     >
                                       Going
-                                    </Button>
+                                    </SubmitButton>
                                   </form>
                                   <form action={rsvpAction}>
                                     <input
@@ -479,16 +481,16 @@ export default async function TeamHomePage({
                                       value="declined"
                                     />
                                     <input type="hidden" name="from" value="home" />
-                                    <Button
-                                      type="submit"
+                                    <SubmitButton
                                       size="sm"
                                       variant={
                                         state === "declined" ? "destructive" : "outline"
                                       }
                                       aria-label={rsvpLabel(entry.playerName, event, false)}
+                                      pendingLabel="Saving…"
                                     >
                                       Not going
-                                    </Button>
+                                    </SubmitButton>
                                   </form>
                                 </div>
                               ) : null}
@@ -537,7 +539,7 @@ export default async function TeamHomePage({
                     <CardTitle className="text-base">
                       {coach.name ?? coach.email}{" "}
                       <span className="text-sm font-normal text-muted-foreground">
-                        · {coach.role === "OWNER" ? "Owner" : "Coach"}
+                        · {roleLabel(coach.role)}
                       </span>
                     </CardTitle>
                   </CardHeader>

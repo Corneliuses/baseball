@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PushOptInCard } from "@/components/PushOptInCard";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -143,9 +144,9 @@ export default async function ProfilePage({
                 </p>
               ) : null}
 
-              <Button type="submit" className="w-full">
+              <SubmitButton className="w-full" pendingLabel="Saving…">
                 Save changes
-              </Button>
+              </SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -155,9 +156,13 @@ export default async function ProfilePage({
         ) : null}
 
         <form action={signOutAction} className="space-y-2">
-          <Button type="submit" variant="outline" className="w-full">
+          <SubmitButton
+            variant="outline"
+            className="w-full"
+            pendingLabel="Signing out…"
+          >
             Sign out
-          </Button>
+          </SubmitButton>
           <p className="text-center text-xs text-muted-foreground">
             Signs you out on this device only. Sign back in any time with an
             email link.

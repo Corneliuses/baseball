@@ -261,8 +261,28 @@ describe("SchedulePage feedback", () => {
     expect(await render({ error: "wat" })).toContain("Something went wrong.");
   });
 
-  it("confirms a successful add", async () => {
-    expect(await render({ added: "1" })).toContain("Event added.");
+  it("no longer confirms an add through a query param", async () => {
+    // `createEventAction` stopped redirecting on success (#51 / C1) — the
+    // reload was most of what made schedule entry cost ~60 interactions a
+    // season. Confirmation now comes back as form state, where it can also
+    // name the event and say which fields were kept, so nothing sets ?added=1
+    // any more and the page must not pretend otherwise.
+    const markup = await render({ added: "1" });
+
+    expect(markup).not.toContain("Event added.");
+  });
+
+  it("anchors the add card so a Duplicate link can jump to it", async () => {
+    const markup = await render();
+
+    expect(markup).toContain('id="add-event"');
+  });
+
+  it("carries the current view into the form, for the one path that navigates", async () => {
+    const markup = await render({ view: "list", past: "1" });
+
+    expect(markup).toContain('name="view" value="list"');
+    expect(markup).toContain('name="past" value="1"');
   });
 });
 

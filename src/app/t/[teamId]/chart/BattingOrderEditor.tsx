@@ -22,6 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { JerseyDot } from "@/components/JerseyDot";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   buildBattingDraft,
   emptySlotId,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/chart";
 
 import { saveBattingOrderAction } from "./actions";
+import { stashDraft } from "./draft-stash";
 import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "./drag-activation";
 
 /// The editor's slice of a roster entry — chart-view's render model minus the
@@ -137,6 +139,21 @@ export function BattingOrderEditor({
         <form
           action={saveBattingOrderAction}
           className="flex items-center justify-end gap-2"
+          // Stash the board as text on the way out, so a `chart-changed`
+          // rejection — which redirects, unmounting this component and its
+          // draft — still leaves the coach something to re-apply from.
+          // Rendered here rather than resolved later: the roster it would be
+          // resolved against is exactly what just changed.
+          onSubmit={() =>
+            stashDraft(
+              teamId,
+              "order",
+              draft.slots.map((entryId, index) => {
+                const entry = entryId !== null ? byId.get(entryId) : undefined;
+                return `${index + 1}. ${entry?.playerName ?? "—"}`;
+              }),
+            )
+          }
         >
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="order" value={JSON.stringify(draft.slots)} />
@@ -153,9 +170,13 @@ export function BattingOrderEditor({
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={!saveable}>
+          {/* The form's footer, not a chip — dnd-kit never touches this button,
+              so the spinner inside it is clear of the drag tree the way
+              AGENTS.md requires. `saveable` (draft vs. the stored chart) is
+              still the resting reason to be disabled; pending adds its own. */}
+          <SubmitButton disabled={!saveable} pendingLabel="Saving…">
             Save order
-          </Button>
+          </SubmitButton>
         </form>
       </div>
     </DndContext>

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -107,9 +108,9 @@ export default async function InvitePage({
 
             <form action={acceptInvitationAction}>
               <input type="hidden" name="token" value={token} />
-              <Button type="submit" className="w-full">
+              <SubmitButton className="w-full" pendingLabel="Joining…">
                 Accept invitation
-              </Button>
+              </SubmitButton>
             </form>
 
             <p className="text-sm text-muted-foreground">

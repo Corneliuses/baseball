@@ -436,3 +436,53 @@ describe("EventPage location", () => {
     expect(html).not.toContain("maps.google.com");
   });
 });
+
+describe("EventPage duplicate", () => {
+  it("offers a coach a Duplicate link into the add form's anchor", async () => {
+    // Entering a season is the same fixture over and over, so the fastest new
+    // event is a copy of an old one (#51 / C1). A link, not a mutation: a
+    // clone would put a wrongly-dated fixture on the real schedule — pushing
+    // RSVPs and the calendar feed — until somebody noticed.
+    const html = await render();
+
+    expect(html).toContain("duplicate=event-1");
+    expect(html).toContain("#add-event");
+    expect(html).toContain("Duplicate event");
+  });
+
+  it("hides it from a parent, who cannot add events", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "u-1" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Duplicate event");
+  });
+
+  it("carries the schedule the coach came from into the copy", async () => {
+    const html = await render({ view: "list", past: "1" });
+
+    expect(html).toContain("view=list");
+  });
+});
+
+describe("EventPage return context", () => {
+  it("sends the back link to the view the event was opened from", async () => {
+    // Without this a coach working down a list is dropped onto this month's
+    // grid the moment they open an event and come back.
+    const html = await render({ view: "list" });
+
+    expect(html).toContain('href="/t/team-1/schedule?view=list"');
+  });
+
+  it("posts that context with the edit and delete forms", async () => {
+    const html = await render({ view: "list", confirm: "delete" });
+
+    expect(html).toContain('name="view" value="list"');
+  });
+
+  it("falls back to the month grid when it was opened without context", async () => {
+    const html = await render();
+
+    expect(html).toContain('href="/t/team-1/schedule?view=month&amp;month=');
+  });
+});

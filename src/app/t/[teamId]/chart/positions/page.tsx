@@ -16,9 +16,11 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
 import { PositionsEditor } from "./PositionsEditor";
+import { ClearDraftStash, DraftStash } from "../DraftStash";
+import { EditorTabs } from "../EditorTabs";
 
 export const metadata = {
-  title: "Positions — Youth Baseball Team Manager",
+  title: "Edit lineup: positions — Youth Baseball Team Manager",
 };
 
 const ERROR_MESSAGES = messageTable({
@@ -96,16 +98,9 @@ export default async function PositionsPage({
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h3 className="text-xl font-semibold text-foreground">Positions</h3>
-        <div className="flex gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/t/${teamId}/chart`}>Batting order</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/t/${teamId}/view`}>View chart</Link>
-          </Button>
-        </div>
+      <div className="space-y-3">
+        <h3 className="text-xl font-semibold text-foreground">Edit lineup</h3>
+        <EditorTabs teamId={teamId} active="positions" />
       </div>
 
       {errorMessage ? (
@@ -165,6 +160,17 @@ export default async function PositionsPage({
             allPlay={team.allPlay}
             entries={entries}
           />
+          {/* The board this coach just lost, if another coach's save landed
+              first. Read-only reference — see DraftStash. */}
+          {/* A save landed, so whatever the submit stashed is provably stale. */}
+          {saved ? <ClearDraftStash teamId={teamId} kind="positions" /> : null}
+          {error === "chart-changed" ? (
+            <DraftStash
+              teamId={teamId}
+              kind="positions"
+              title="Your unsaved positions"
+            />
+          ) : null}
         </>
       )}
     </div>

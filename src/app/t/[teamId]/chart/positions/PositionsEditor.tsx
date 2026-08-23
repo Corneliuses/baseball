@@ -30,6 +30,7 @@ import {
   NoCatcherMarker,
 } from "@/components/NoCatcherMarker";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import type { Position } from "@/generated/prisma/enums";
 import {
   buildPositionsDraft,
@@ -45,6 +46,7 @@ import { POSITION_LABELS } from "@/lib/positions";
 
 import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "../drag-activation";
 import { savePositionsAction } from "./actions";
+import { stashDraft } from "../draft-stash";
 
 /// The editor's slice of a roster entry. RSVP state is deliberately absent —
 /// the page never loads RSVPs, so the assignable pool structurally cannot be
@@ -200,6 +202,22 @@ export function PositionsEditor({
         <form
           action={savePositionsAction}
           className="flex items-center justify-end gap-2"
+          // Same reasoning as the batting editor: a chart-changed rejection
+          // discards this component, so the board goes out as text first.
+          // POSITION_LABELS is the only source of position abbreviations
+          // (AGENTS.md), so the stash reads the way the diamond does.
+          onSubmit={() =>
+            stashDraft(
+              teamId,
+              "positions",
+              Object.entries(draft.assigned).map(
+                ([position, entryId]) =>
+                  `${POSITION_LABELS[position as Position]} — ${
+                    byId.get(entryId as string)?.playerName ?? "—"
+                  }`,
+              ),
+            )
+          }
         >
           <input type="hidden" name="teamId" value={teamId} />
           <input
@@ -220,9 +238,13 @@ export function PositionsEditor({
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={!saveable}>
+          {/* Footer, not a chip: dnd-kit owns the dragged markers and this
+              button is outside that tree entirely (AGENTS.md's collision rule).
+              `saveable` compares the draft against the stored chart and stays
+              the resting reason to be disabled. */}
+          <SubmitButton disabled={!saveable} pendingLabel="Saving…">
             Save positions
-          </Button>
+          </SubmitButton>
         </form>
       </div>
     </DndContext>

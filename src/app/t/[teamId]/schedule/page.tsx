@@ -26,9 +26,10 @@ import {
   WEEKDAY_LABELS,
   type CalendarMonth,
 } from "@/lib/calendar";
-import { messageFor, messageTable } from "@/lib/error-messages";
+import { messageFor } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import {
+  getEvent,
   listEventsInMonthGrid,
   listPastEvents,
   listUpcomingEvents,
@@ -36,25 +37,18 @@ import {
 } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 
-import { createEventAction } from "./actions";
+import { AddEventForm } from "./AddEventForm";
+import { SCHEDULE_ERROR_MESSAGES } from "./schedule-messages";
+import {
+  scheduleContextFrom,
+  scheduleQuery,
+  type ScheduleContext,
+} from "./schedule-context";
+import { EMPTY_EVENT_VALUES, type EventFormValues } from "./event-form-state";
 
 export const metadata = {
   title: "Schedule — Youth Baseball Team Manager",
 };
-
-const ERROR_MESSAGES = messageTable({
-  "invalid-type": "Choose either a game or a practice.",
-  "invalid-datetime": "Enter a valid date and time.",
-  "invalid-location": "Location is too long.",
-  "invalid-opponent": "Opponent is too long.",
-  "invalid-notes": "Notes are too long.",
-  access: "You no longer have access to make this change.",
-});
-
-const TYPE_LABELS = { GAME: "Game", PRACTICE: "Practice" } as const;
-
-const inputClass =
-  "w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 function eventTitle(event: ScheduleEvent): string {
   if (event.type === "GAME") {
@@ -75,11 +69,17 @@ export default async function SchedulePage({
     month?: string;
     past?: string;
     error?: string;
-    added?: string;
+    duplicate?: string;
   }>;
 }) {
   const { teamId } = await params;
-  const { view: rawView, month: rawMonth, past, error, added } = await searchParams;
+  const {
+    view: rawView,
+    month: rawMonth,
+    past,
+    error,
+    duplicate,
+  } = await searchParams;
 
   let role: Role;
   try {
@@ -108,8 +108,32 @@ export default async function SchedulePage({
       : [];
 
   const canEdit = role !== "PARENT";
-  const errorMessage = messageFor(ERROR_MESSAGES, error);
+  const errorMessage = messageFor(SCHEDULE_ERROR_MESSAGES, error);
   const calendarToken = await getCalendarToken(teamId);
+  const context = scheduleContextFrom({ view: rawView, month: rawMonth, past }, now);
+
+  // "Duplicate event" is a link to this page, not a mutation: it loads the
+  // source event and pre-fills the add form with everything but the date, and
+  // the coach picks the new one. Cloning outright would put a wrongly-dated
+  // event on the real schedule — pushing RSVPs and the calendar feed — until
+  // someone fixed it.
+  //
+  // Team-scoped, so a foreign or stale event id simply renders an empty form
+  // rather than leaking another team's fixture.
+  const duplicateSource =
+    canEdit && duplicate ? await getEvent(teamId, duplicate) : null;
+  const initialValues: EventFormValues = duplicateSource
+    ? {
+        type: duplicateSource.type,
+        // Never the date. Two events cannot share a start time, and a copied
+        // one silently creating a duplicate of the original is exactly the
+        // mistake this flow exists to avoid.
+        startsAt: "",
+        location: duplicateSource.location ?? "",
+        opponent: duplicateSource.opponent ?? "",
+        notes: duplicateSource.notes ?? "",
+      }
+    : EMPTY_EVENT_VALUES;
 
   return (
     <div className="space-y-6">
@@ -133,23 +157,36 @@ export default async function SchedulePage({
         </p>
       ) : null}
 
-      {added && !errorMessage ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Event added.
-        </p>
-      ) : null}
-
       {view === "month" ? (
-        <MonthView teamId={teamId} month={month} events={monthEvents} />
+        <MonthView
+          teamId={teamId}
+          month={month}
+          events={monthEvents}
+          context={context}
+        />
       ) : (
         <ListView
           teamId={teamId}
           events={listEvents}
           showPast={showPast}
+          context={context}
         />
       )}
 
-      {canEdit ? <AddEventForm teamId={teamId} /> : null}
+      {canEdit ? (
+        <AddEventCard
+          // Remounts when the coach follows a different "Duplicate" link, so
+          // the freshly loaded values replace the form's own state instead of
+          // being ignored by a component that already seeded itself.
+          key={duplicateSource?.id ?? "new"}
+          teamId={teamId}
+          context={context}
+          initialValues={initialValues}
+          duplicatedFrom={
+            duplicateSource ? eventTitle(duplicateSource) : null
+          }
+        />
+      ) : null}
 
       {calendarToken ? <SeasonPassCard token={calendarToken} /> : null}
     </div>
@@ -238,10 +275,12 @@ function MonthView({
   teamId,
   month,
   events,
+  context,
 }: {
   teamId: string;
   month: CalendarMonth;
   events: ScheduleEvent[];
+  context: ScheduleContext;
 }) {
   const weeks = buildMonthGrid(month);
   const buckets = bucketEventsByDay(events);
@@ -326,7 +365,7 @@ function MonthView({
                         {dayEvents.map((event) => (
                           <li key={event.id}>
                             <Link
-                              href={`/t/${teamId}/schedule/${event.id}`}
+                              href={`/t/${teamId}/schedule/${event.id}?${scheduleQuery(context)}`}
                               className={`block truncate rounded px-1 py-0.5 text-xs text-foreground hover:bg-accent ${
                                 event.type === "GAME"
                                   ? "bg-primary/15"
@@ -363,10 +402,12 @@ function ListView({
   teamId,
   events,
   showPast,
+  context,
 }: {
   teamId: string;
   events: ScheduleEvent[];
   showPast: boolean;
+  context: ScheduleContext;
 }) {
   return (
     <div className="space-y-3">
@@ -397,9 +438,19 @@ function ListView({
         <ul className="space-y-2">
           {events.map((event) =>
             event.type === "GAME" ? (
-              <GameTicket key={event.id} teamId={teamId} event={event} />
+              <GameTicket
+                key={event.id}
+                teamId={teamId}
+                event={event}
+                context={context}
+              />
             ) : (
-              <PracticeCard key={event.id} teamId={teamId} event={event} />
+              <PracticeCard
+                key={event.id}
+                teamId={teamId}
+                event={event}
+                context={context}
+              />
             ),
           )}
         </ul>
@@ -414,16 +465,18 @@ function ListView({
 function GameTicket({
   teamId,
   event,
+  context,
 }: {
   teamId: string;
   event: ScheduleEvent;
+  context: ScheduleContext;
 }) {
   return (
     <li>
       <Card className="overflow-hidden border-2 border-dirt/60 p-0">
         <div className="flex items-stretch">
           <Link
-            href={`/t/${teamId}/schedule/${event.id}`}
+            href={`/t/${teamId}/schedule/${event.id}?${scheduleQuery(context)}`}
             className="min-w-0 flex-1 p-4"
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-destructive">
@@ -462,16 +515,18 @@ function GameTicket({
 function PracticeCard({
   teamId,
   event,
+  context,
 }: {
   teamId: string;
   event: ScheduleEvent;
+  context: ScheduleContext;
 }) {
   return (
     <li>
       <Card className="border-dashed shadow-none">
         <CardContent className="p-4">
           <Link
-            href={`/t/${teamId}/schedule/${event.id}`}
+            href={`/t/${teamId}/schedule/${event.id}?${scheduleQuery(context)}`}
             className="flex flex-wrap items-baseline justify-between gap-2"
           >
             <span className="font-medium text-foreground">
@@ -502,76 +557,39 @@ function PracticeCard({
   );
 }
 
-function AddEventForm({ teamId }: { teamId: string }) {
+/// The card the client form sits in. Split so the heading, the description and
+/// the anchor stay server-rendered — only the form itself needs to be a client
+/// component, and only because it has to survive its own submit.
+function AddEventCard({
+  teamId,
+  context,
+  initialValues,
+  duplicatedFrom,
+}: {
+  teamId: string;
+  context: ScheduleContext;
+  initialValues: EventFormValues;
+  duplicatedFrom: string | null;
+}) {
   return (
-    <Card>
+    // The anchor "Duplicate event" links to. scroll-mt keeps the card's own
+    // heading clear of the top edge when the browser jumps here.
+    <Card id="add-event" className="scroll-mt-4">
       <CardHeader>
-        <CardTitle className="text-lg">Add an event</CardTitle>
+        <CardTitle className="text-lg">
+          {duplicatedFrom ? "Add another like it" : "Add an event"}
+        </CardTitle>
         <CardDescription>
           Times are US Central. Only the type and start time are required.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={createEventAction} className="space-y-4">
-          <input type="hidden" name="teamId" value={teamId} />
-
-          <div className="space-y-2">
-            <label htmlFor="type" className="block text-sm font-medium text-foreground">
-              Type
-            </label>
-            <select id="type" name="type" required defaultValue="GAME" className={inputClass}>
-              <option value="GAME">{TYPE_LABELS.GAME}</option>
-              <option value="PRACTICE">{TYPE_LABELS.PRACTICE}</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label
-              htmlFor="startsAt"
-              className="block text-sm font-medium text-foreground"
-            >
-              Starts at
-            </label>
-            <input
-              id="startsAt"
-              name="startsAt"
-              type="datetime-local"
-              required
-              className={inputClass}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label
-              htmlFor="location"
-              className="block text-sm font-medium text-foreground"
-            >
-              Location (optional)
-            </label>
-            <input id="location" name="location" type="text" className={inputClass} />
-          </div>
-
-          <div className="space-y-2">
-            <label
-              htmlFor="opponent"
-              className="block text-sm font-medium text-foreground"
-            >
-              Opponent (optional)
-            </label>
-            <input id="opponent" name="opponent" type="text" className={inputClass} />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="notes" className="block text-sm font-medium text-foreground">
-              Notes (optional)
-            </label>
-            <textarea id="notes" name="notes" rows={2} className={inputClass} />
-          </div>
-
-          <Button type="submit" className="w-full">
-            Add event
-          </Button>
-        </form>
+        <AddEventForm
+          teamId={teamId}
+          context={context}
+          initialValues={initialValues}
+          duplicatedFrom={duplicatedFrom}
+        />
       </CardContent>
     </Card>
   );
