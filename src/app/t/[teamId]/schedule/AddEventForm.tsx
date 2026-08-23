@@ -106,7 +106,17 @@ export function AddEventForm({
     state.status === "invalid"
       ? messageFor(SCHEDULE_ERROR_MESSAGES, state.code)
       : null;
+  const errorField = state.status === "invalid" ? state.field : null;
   const errorId = "add-event-error";
+
+  /// Marks only the field the error actually names — same pattern as
+  /// AddPlayerForm's `marks`. Every code maps to exactly one field, so an
+  /// over-long location no longer tells a screen reader the date and time
+  /// are the problem.
+  const marks = (which: keyof EventFormValues) =>
+    errorField === which
+      ? { "aria-invalid": true as const, "aria-describedby": errorId }
+      : {};
 
   return (
     <form action={formAction} className="space-y-4">
@@ -154,6 +164,7 @@ export function AddEventForm({
             value={values.type}
             onChange={(event) => set("type", event.target.value)}
             className={inputClass}
+            {...marks("type")}
           >
             <option value="GAME">Game</option>
             <option value="PRACTICE">Practice</option>
@@ -174,9 +185,8 @@ export function AddEventForm({
             required
             value={values.startsAt}
             onChange={(event) => set("startsAt", event.target.value)}
-            aria-invalid={errorMessage ? true : undefined}
-            aria-describedby={errorMessage ? errorId : undefined}
             className={inputClass}
+            {...marks("startsAt")}
           />
         </div>
 
@@ -195,6 +205,7 @@ export function AddEventForm({
             value={values.location}
             onChange={(event) => set("location", event.target.value)}
             className={inputClass}
+            {...marks("location")}
           />
         </div>
 
@@ -213,6 +224,7 @@ export function AddEventForm({
             value={values.opponent}
             onChange={(event) => set("opponent", event.target.value)}
             className={inputClass}
+            {...marks("opponent")}
           />
         </div>
 
@@ -231,6 +243,7 @@ export function AddEventForm({
             value={values.notes}
             onChange={(event) => set("notes", event.target.value)}
             className={inputClass}
+            {...marks("notes")}
           />
         </div>
       </fieldset>

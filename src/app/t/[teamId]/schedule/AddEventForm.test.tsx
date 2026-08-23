@@ -128,6 +128,7 @@ describe("AddEventForm after a rejection", () => {
   const rejected: AddEventState = {
     status: "invalid",
     code: "invalid-datetime",
+    field: "startsAt",
     values: {
       type: "PRACTICE",
       startsAt: "not-a-time",
@@ -151,6 +152,32 @@ describe("AddEventForm after a rejection", () => {
     expect(html).toContain("Enter a valid date and time.");
     expect(html).toContain('role="alert"');
     expect(fieldFor(html, "startsAt")).toContain('aria-describedby="add-event-error"');
+    expect(fieldFor(html, "startsAt")).toContain('aria-invalid="true"');
+  });
+
+  it("does not blame the date box for a different field's mistake", () => {
+    // Every rejection used to mark startsAt as invalid regardless of which
+    // field actually failed — a screen reader user told to fix the date and
+    // time when the real problem was an over-long location.
+    const html = render({
+      status: "invalid",
+      code: "invalid-location",
+      field: "location",
+      values: {
+        type: "GAME",
+        startsAt: "2026-08-15T18:00",
+        location: "x".repeat(201),
+        opponent: "",
+        notes: "",
+      },
+    });
+
+    expect(fieldFor(html, "location")).toContain('aria-invalid="true"');
+    expect(fieldFor(html, "location")).toContain(
+      'aria-describedby="add-event-error"',
+    );
+    expect(fieldFor(html, "startsAt")).not.toContain("aria-invalid");
+    expect(fieldFor(html, "startsAt")).not.toContain("aria-describedby");
   });
 });
 

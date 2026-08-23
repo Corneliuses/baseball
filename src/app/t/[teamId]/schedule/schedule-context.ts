@@ -89,8 +89,11 @@ export function optionalScheduleContextFromForm(
   return carriesContext ? scheduleContextFromForm(formData, now) : null;
 }
 
-/// The query string for a context, omitting what the page would default to
-/// anyway so the common URL stays short and shareable.
+/// The query string for a context. `view` and `month` are always written for
+/// a month view — `view=month` is the parser's own default, but stating it
+/// keeps a copied URL self-explanatory rather than relying on an absent param
+/// to mean the right thing. `past` is the one field actually omitted, and only
+/// when it doesn't apply — see the branch below.
 export function scheduleQuery(
   context: ScheduleContext,
   extra: Record<string, string> = {},

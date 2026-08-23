@@ -210,6 +210,7 @@ describe("createEventAction", () => {
     const state = rejected(await addEvent(form({ ...validEvent, startsAt: "" })));
 
     expect(state.code).toBe("invalid-datetime");
+    expect(state.field).toBe("startsAt");
     // The rest of the form survives — that is the point of returning.
     expect(state.values.location).toBe("Field 3");
     expect(state.values.opponent).toBe("Hawks");
@@ -239,6 +240,7 @@ describe("createEventAction", () => {
     const state = rejected(await addEvent(form({ ...validEvent, type: "SCRIMMAGE" })));
 
     expect(state.code).toBe("invalid-type");
+    expect(state.field).toBe("type");
     expect(createEvent).not.toHaveBeenCalled();
   });
 
@@ -248,7 +250,23 @@ describe("createEventAction", () => {
     );
 
     expect(state.code).toBe("invalid-location");
+    // The field the error is marked against, not just its code — this is what
+    // keeps a screen reader from being told the date and time are the problem
+    // when the location was what failed.
+    expect(state.field).toBe("location");
     expect(createEvent).not.toHaveBeenCalled();
+  });
+
+  it("names the field for every error code, not only the ones exercised above", async () => {
+    const opponent = rejected(
+      await addEvent(form({ ...validEvent, opponent: "x".repeat(201) })),
+    );
+    expect(opponent.field).toBe("opponent");
+
+    const notes = rejected(
+      await addEvent(form({ ...validEvent, notes: "x".repeat(2001) })),
+    );
+    expect(notes.field).toBe("notes");
   });
 
   it("redirects with ?error=access when the caller is a parent or the team is archived", async () => {

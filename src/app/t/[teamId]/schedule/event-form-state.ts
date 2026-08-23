@@ -21,12 +21,23 @@ export const EMPTY_EVENT_VALUES: EventFormValues = {
   notes: "",
 };
 
+/// Which input the error belongs to. Unlike the roster's `AddPlayerField`,
+/// this is never null: every `EventErrorCode` maps to exactly one of the
+/// form's five fields — there is no error here that blames the submission as
+/// a whole rather than one box.
+export type AddEventField = "type" | "startsAt" | "location" | "opponent" | "notes";
+
 export type AddEventState =
   | { status: "idle" }
   | {
       status: "invalid";
       /// A key into the schedule page's message table, not a sentence.
       code: string;
+      /// Which field to mark `aria-invalid` and point at the message. Without
+      /// this every rejection was attributed to `startsAt` regardless of which
+      /// field actually failed — a location that was too long would tell a
+      /// screen reader the date and time were the problem.
+      field: AddEventField;
       values: EventFormValues;
     }
   /// The event was created. Carries what should stay in the form for the next

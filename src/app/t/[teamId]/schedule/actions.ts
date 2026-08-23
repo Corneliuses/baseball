@@ -22,6 +22,7 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 
 import {
   stickyValues,
+  type AddEventField,
   type AddEventState,
   type EventFormValues,
 } from "./event-form-state";
@@ -106,6 +107,25 @@ function eventValidationErrorCode(error: z.ZodError): EventErrorCode {
       return "invalid-notes";
     default:
       return "invalid-datetime";
+  }
+}
+
+/// The one form field each error code is actually about. `invalid-datetime`
+/// reaches here two ways — a blank/malformed string caught by the schema, or
+/// a syntactically valid one `wallClockToInstant` still rejects — and both
+/// belong to `startsAt`.
+function eventErrorField(code: EventErrorCode): AddEventField {
+  switch (code) {
+    case "invalid-type":
+      return "type";
+    case "invalid-location":
+      return "location";
+    case "invalid-opponent":
+      return "opponent";
+    case "invalid-notes":
+      return "notes";
+    case "invalid-datetime":
+      return "startsAt";
   }
 }
 
@@ -218,7 +238,12 @@ export async function createEventAction(
 
   const parsed = parseEventForm(formData);
   if ("errorCode" in parsed) {
-    return { status: "invalid", code: parsed.errorCode, values };
+    return {
+      status: "invalid",
+      code: parsed.errorCode,
+      field: eventErrorField(parsed.errorCode),
+      values,
+    };
   }
 
   try {
