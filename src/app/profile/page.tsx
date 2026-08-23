@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PageContainer } from "@/components/layout/PageContainer";
+import { PushOptInCard } from "@/components/PushOptInCard";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/SubmitButton";
 import {
@@ -59,6 +60,14 @@ export default async function ProfilePage({
   }
 
   const errorMessage = messageFor(ERROR_MESSAGES, error);
+
+  // Read at request time and handed down as a prop rather than declared as a
+  // NEXT_PUBLIC_ variable: the key is not a secret (every subscriber receives
+  // it), but inlining it would make the build depend on the environment, which
+  // src/lib/email.ts and src/auth.ts both deliberately avoid. Null on a
+  // deployment with no VAPID keys, and the card simply does not render —
+  // reminder emails are unaffected either way.
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || null;
 
   return (
     <PageContainer>
@@ -141,6 +150,10 @@ export default async function ProfilePage({
             </form>
           </CardContent>
         </Card>
+
+        {vapidPublicKey ? (
+          <PushOptInCard vapidPublicKey={vapidPublicKey} />
+        ) : null}
 
         <form action={signOutAction} className="space-y-2">
           <SubmitButton
