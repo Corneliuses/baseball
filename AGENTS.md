@@ -47,7 +47,9 @@ history) and `messages/new` (the compose form every role uses) plus `/t/new` for
 owner-gated team creation. Outside `/t/` entirely — because `proxy.ts` would bounce a
 cookie-less calendar app to sign-in — `/api/calendar/[token]` serves each team's ICS
 feed, authorized by the capability token in the URL (`Team.calendarToken`) rather than a
-session; the subscribe URL is surfaced on the schedule page.
+session; the subscribe URL is surfaced on the schedule page. `/api/cron/reminders` is the
+other cookie-less endpoint — a Vercel Cron target that mails day-of reminders, authorized
+by a `CRON_SECRET` bearer token.
 
 **Contact details are staff-facing.** A parent never sees another family's phone or
 email: `/directory` and `roster/[entryId]` are both COACH+, and the team home page gives
@@ -416,10 +418,29 @@ production — the dev command can prompt, generate new migrations, and reset th
   whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
-- **The bulk invite action is the only place that sends in a loop, and three constants are
-  coupled across two files.** `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS`
-  (600ms) apart to stay under Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and
-  the page — not the action — declares `maxDuration = 60`, since that is the level governing
-  a Server Action's timeout. `MAX_ROWS × MIN_SEND_INTERVAL_MS` must stay well under
-  `maxDuration`, or an oversized batch times out half-finished instead of being rejected
-  cleanly. Raising the cap or the interval means revisiting the ceiling too.
+- **Three places send in a loop, and each couples a cap, an interval and a timeout.**
+  `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS` (600ms) apart to stay under
+  Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and the page — not the action —
+  declares `maxDuration = 60`, since that is the level governing a Server Action's timeout.
+  `MAX_ROWS × MIN_SEND_INTERVAL_MS` must stay well under `maxDuration`, or an oversized batch
+  times out half-finished instead of being rejected cleanly. Raising the cap or the interval
+  means revisiting the ceiling too. `sendTeamMessageAction` repeats the pattern with
+  `MAX_RECIPIENTS` (30, deliberately equal to `MAX_ROWS`), and the reminder cron with
+  `MAX_SENDS_PER_RUN` (200) against its own `maxDuration = 300` — a Route Handler declares
+  that itself, unlike a Server Action. Same rule in all three: cap × interval well under the
+  ceiling, and the two move together.
+- **Day-of reminders are a cron, and their duplicate protection is a claim, not a check.**
+  `/api/cron/reminders` (schedule in `vercel.json`, authorized by a `CRON_SECRET` bearer
+  token, failing closed when that variable is unset) mails every guardian on the morning of
+  each game or practice. `ReminderReceipt` is the ledger: `claimReminder` **inserts** the
+  `(eventId, userId)` row before the send and `releaseReminder` deletes it if the send
+  fails, so the unique index — not application logic — is what stops a re-run double-sending,
+  and two overlapping invocations race at Postgres. Read-then-write would not hold. The
+  accepted cost is the other way round: a crash between claim and send loses one reminder,
+  which is the right trade against mailing every family twice. Recipients come from the
+  **roster** (`RosterEntry → Player → GuardianPlayer → User`), never from `Membership` — a
+  coach with no kid on the team has no RSVP state to be told about — and one household with
+  two kids gets one email naming both. The cron runs as the system with no
+  `requireTeamAccess`, so the archived-team exclusion (`team: { archivedAt: null }`) lives in
+  `loadTodaysReminderWork`'s query and must stay there. "Today" is
+  `[now, endOfDayInZone(now)]`, never a UTC day.

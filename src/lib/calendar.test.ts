@@ -6,6 +6,7 @@ import {
   buildMonthGrid,
   currentMonth,
   dayKey,
+  endOfDayInZone,
   formatEventDateTime,
   formatMonthLabel,
   GAME_GRACE_MS,
@@ -305,6 +306,52 @@ describe("startOfDayInZone", () => {
     expect(startOfDayInZone(iso("2026-01-15T20:00:00Z")).toISOString()).toBe(
       "2026-01-15T06:00:00.000Z",
     );
+  });
+});
+
+describe("endOfDayInZone", () => {
+  it("ends the day at midnight Central, not midnight UTC", () => {
+    // 7:00 AM Central on 15 July — when the reminder cron runs.
+    expect(endOfDayInZone(iso("2026-07-15T12:00:00Z")).toISOString()).toBe(
+      "2026-07-16T04:59:59.999Z",
+    );
+  });
+
+  it("still covers a Central evening game that is already tomorrow in UTC", () => {
+    // The bug this exists to prevent: a 7:30 PM Central game on 15 July is
+    // 00:30Z on the 16th, so a UTC-day window run that morning would miss it.
+    const morningRun = iso("2026-07-15T12:00:00Z");
+    const eveningGame = iso("2026-07-16T00:30:00Z");
+
+    expect(eveningGame.getTime()).toBeLessThanOrEqual(
+      endOfDayInZone(morningRun).getTime(),
+    );
+    expect(eveningGame.getTime()).toBeGreaterThan(
+      startOfDayInZone(morningRun).getTime(),
+    );
+  });
+
+  it("excludes the next day's morning practice", () => {
+    // 9:00 AM Central on 16 July is outside the 15th's window.
+    expect(iso("2026-07-16T14:00:00Z").getTime()).toBeGreaterThan(
+      endOfDayInZone(iso("2026-07-15T12:00:00Z")).getTime(),
+    );
+  });
+
+  it("uses the winter offset in winter", () => {
+    expect(endOfDayInZone(iso("2026-01-15T20:00:00Z")).toISOString()).toBe(
+      "2026-01-16T05:59:59.999Z",
+    );
+  });
+
+  it("spans a 23-hour spring-forward day correctly", () => {
+    // 8 March 2026: clocks jump 2 AM -> 3 AM Central, so the day is 23 hours.
+    const springForward = iso("2026-03-08T18:00:00Z");
+    const spanMs =
+      endOfDayInZone(springForward).getTime() -
+      startOfDayInZone(springForward).getTime();
+
+    expect(spanMs).toBe(23 * 60 * 60 * 1000 - 1);
   });
 });
 
