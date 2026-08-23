@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -11,12 +10,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
-import { messageFor, messageTable } from "@/lib/error-messages";
+import { messageFor } from "@/lib/error-messages";
 import { listTeamMembers } from "@/lib/memberships";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 
-import { AudienceFields } from "./AudienceFields";
-import { sendTeamMessageAction } from "./actions";
+import { ComposeForm } from "./ComposeForm";
+import { COMPOSE_ERROR_MESSAGES } from "./message-messages";
 
 export const metadata = {
   title: "New message — Youth Baseball Team Manager",
@@ -30,20 +29,6 @@ export const metadata = {
 /// docs — the same coupling as roster/invite.
 export const maxDuration = 60;
 
-// messageTable, never a bare literal — see src/lib/error-messages.ts.
-const ERROR_MESSAGES = messageTable({
-  "invalid-audience": "Choose who this message goes to. Nothing was sent.",
-  "invalid-subject": "Enter a subject — keep it under 200 characters.",
-  "invalid-body": "Enter a message — keep it under 5,000 characters.",
-  "forbidden-audience": "You can't message that group. Nothing was sent.",
-  // Covers both "no parent chosen" and "chosen parent isn't on this team" —
-  // resolveRecipients returns the same reason for both, so the copy commits
-  // to neither.
-  "invalid-target": "Choose a parent to message. Nothing was sent.",
-  "no-recipients": "There's nobody in that group to email yet.",
-  "too-many": "That's too many recipients for one send. Nothing was sent.",
-  access: "You no longer have access to send this.",
-});
 
 /// Any member may open this page — a parent's audience is fixed to the
 /// coaching staff, a coach picks between the whole parent group and one
@@ -75,7 +60,7 @@ export default async function NewMessagePage({
     ? (await listTeamMembers(teamId)).filter((m) => m.role === "PARENT")
     : [];
 
-  const errorMessage = messageFor(ERROR_MESSAGES, error);
+  const errorMessage = messageFor(COMPOSE_ERROR_MESSAGES, error);
   const statusParts = [
     sent ? `Sent to ${sent} ${sent === "1" ? "person" : "people"}` : null,
     failed
@@ -118,53 +103,7 @@ export default async function NewMessagePage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={sendTeamMessageAction} className="space-y-4">
-            <input type="hidden" name="teamId" value={teamId} />
-
-            {isCoach ? (
-              <AudienceFields parents={parents} />
-            ) : (
-              <input type="hidden" name="audience" value="ALL_COACHES" />
-            )}
-
-            <div className="space-y-2">
-              <label
-                htmlFor="subject"
-                className="block text-sm font-medium text-foreground"
-              >
-                Subject
-              </label>
-              <input
-                id="subject"
-                name="subject"
-                type="text"
-                required
-                maxLength={200}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label
-                htmlFor="body"
-                className="block text-sm font-medium text-foreground"
-              >
-                Message
-              </label>
-              <textarea
-                id="body"
-                name="body"
-                rows={6}
-                required
-                maxLength={5000}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-
-            <SubmitButton className="w-full" pendingLabel="Sending…">
-              Send
-            </SubmitButton>
-          </form>
+          <ComposeForm teamId={teamId} isCoach={isCoach} parents={parents} />
         </CardContent>
       </Card>
     </div>

@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 
 import { JerseyDot } from "@/components/JerseyDot";
 import { Button } from "@/components/ui/button";
-import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -12,26 +11,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
-import { messageFor, messageTable } from "@/lib/error-messages";
+import { messageFor } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
 
-import { addPlayerAction } from "./actions";
+import { AddPlayerForm } from "./AddPlayerForm";
+import { ROSTER_ERROR_MESSAGES } from "./roster-messages";
 
 export const metadata = {
   title: "Roster — Youth Baseball Team Manager",
 };
-
-const ERROR_MESSAGES = messageTable({
-  "invalid-name": "Player name is required.",
-  "invalid-dob": "Enter a valid date, or leave it blank.",
-  "invalid-jersey": "Jersey number must be a whole number between 0 and 99.",
-  "jersey-taken": "That jersey number is already in use on this team.",
-  "already-rostered": "That player is already on this team's roster.",
-  "email-failed": "The player was added, but a notice email could not be sent.",
-  access: "You no longer have access to make this change.",
-});
 
 /// Calls requireTeamAccess itself, independent of the layout — every page
 /// under /t/[teamId] does, since layouts don't re-run on client navigation.
@@ -58,7 +48,10 @@ export default async function RosterPage({
   const roster = sortRoster(await getRoster(teamId));
   const canEdit = role !== "PARENT";
   const isOwner = role === "OWNER";
-  const errorMessage = messageFor(ERROR_MESSAGES, error);
+  // Add-player failures answer inside the form now (AddPlayerForm), so what
+  // still arrives here is lost access and the returning-player flow, which
+  // redirects to this page with its own codes.
+  const errorMessage = messageFor(ROSTER_ERROR_MESSAGES, error);
 
   return (
     <div className="space-y-6">
@@ -133,52 +126,7 @@ export default async function RosterPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={addPlayerAction} className="space-y-4">
-              <input type="hidden" name="teamId" value={teamId} />
-
-              <div className="space-y-2">
-                <label htmlFor="name" className="block text-sm font-medium text-foreground">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="dateOfBirth" className="block text-sm font-medium text-foreground">
-                  Date of birth (optional)
-                </label>
-                <input
-                  id="dateOfBirth"
-                  name="dateOfBirth"
-                  type="date"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="jerseyNumber" className="block text-sm font-medium text-foreground">
-                  Jersey number (optional)
-                </label>
-                <input
-                  id="jerseyNumber"
-                  name="jerseyNumber"
-                  type="number"
-                  min={0}
-                  max={99}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-
-              <SubmitButton className="w-full" pendingLabel="Adding…">
-                Add player
-              </SubmitButton>
-            </form>
+            <AddPlayerForm teamId={teamId} />
           </CardContent>
         </Card>
       ) : null}

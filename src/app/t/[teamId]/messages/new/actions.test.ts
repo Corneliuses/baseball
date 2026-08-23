@@ -52,6 +52,22 @@ vi.mock("next/navigation", () => ({
 
 import { TeamAccessError } from "@/lib/team-access";
 import { sendTeamMessageAction } from "./actions";
+import { COMPOSE_INITIAL_STATE, type ComposeState } from "./compose-state";
+
+/// The action is shaped for `useActionState`, so it takes the previous state
+/// ahead of the form. A refusal now *returns* that state rather than
+/// redirecting, so a five-thousand-character body survives a bad subject.
+function send(data: FormData): Promise<ComposeState> {
+  return sendTeamMessageAction(COMPOSE_INITIAL_STATE, data);
+}
+
+/// Narrows to the refused shape, failing the test rather than the type checker
+/// when a call unexpectedly went through.
+function refusal(state: ComposeState) {
+  expect(state.status).toBe("invalid");
+  if (state.status !== "invalid") throw new Error("unreachable");
+  return state;
+}
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
@@ -121,7 +137,7 @@ beforeEach(() => {
 
 describe("sendTeamMessageAction — coach broadcast", () => {
   it("persists the Message row and emails every parent individually", async () => {
-    const url = await redirectUrlOf(sendTeamMessageAction(form(BROADCAST)));
+    const url = await redirectUrlOf(send(form(BROADCAST)));
 
     expect(url).toBe("/t/team-1/messages/new?sent=2");
     expect(createMessage).toHaveBeenCalledWith(
@@ -138,7 +154,7 @@ describe("sendTeamMessageAction — coach broadcast", () => {
   });
 
   it("gates the coach audiences behind minRole COACH and intent write", async () => {
-    await redirectUrlOf(sendTeamMessageAction(form(BROADCAST)));
+    await redirectUrlOf(send(form(BROADCAST)));
 
     // team-access.test.ts proves a PARENT fails this gate and an archived
     // team rejects the write; this pins that the action actually asks.
@@ -149,7 +165,7 @@ describe("sendTeamMessageAction — coach broadcast", () => {
   });
 
   it("prefixes the subject with the team name and sets Reply-To to the sender", async () => {
-    await redirectUrlOf(sendTeamMessageAction(form(BROADCAST)));
+    await redirectUrlOf(send(form(BROADCAST)));
 
     const first = sendEmail.mock.calls[0][0];
     expect(first.subject).toBe("[Cubs] Game moved");
@@ -161,7 +177,7 @@ describe("sendTeamMessageAction — coach broadcast", () => {
       .mockResolvedValueOnce({ ok: true })
       .mockResolvedValueOnce({ ok: false, reason: "rate limited" });
 
-    const url = await redirectUrlOf(sendTeamMessageAction(form(BROADCAST)));
+    const url = await redirectUrlOf(send(form(BROADCAST)));
 
     expect(url).toBe("/t/team-1/messages/new?sent=1&failed=1");
     expect(createMessage).toHaveBeenCalledTimes(1);
@@ -172,9 +188,12 @@ describe("sendTeamMessageAction — coach broadcast", () => {
       MEMBERS.filter((m) => m.role !== "PARENT"),
     );
 
-    const url = await redirectUrlOf(sendTeamMessageAction(form(BROADCAST)));
+    const state = refusal(await send(form(BROADCAST)));
 
-    expect(url).toBe("/t/team-1/messages/new?error=no-recipients");
+    expect(state.code).toBe("no-recipients");
+    // Still holding the coach's words: "there's nobody to email yet" is a
+    // reason to come back later, not a reason to lose the message.
+    expect(state.values.body).toBe(BROADCAST.body);
     expect(createMessage).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });
@@ -183,7 +202,7 @@ describe("sendTeamMessageAction — coach broadcast", () => {
 describe("sendTeamMessageAction — coach to one parent", () => {
   it("emails only the target and persists nothing", async () => {
     const url = await redirectUrlOf(
-      sendTeamMessageAction(
+      send(
         form({
           ...BROADCAST,
           audience: "INDIVIDUAL_PARENT",
@@ -202,13 +221,13 @@ describe("sendTeamMessageAction — coach to one parent", () => {
     for (const targetUserId of ["u-owner", "u-stranger"]) {
       sendEmail.mockClear();
 
-      const url = await redirectUrlOf(
-        sendTeamMessageAction(
+      const state = refusal(
+        await send(
           form({ ...BROADCAST, audience: "INDIVIDUAL_PARENT", targetUserId }),
         ),
       );
 
-      expect(url).toBe("/t/team-1/messages/new?error=invalid-target");
+      expect(state.code).toBe("invalid-target");
       expect(sendEmail).not.toHaveBeenCalled();
     }
   });
@@ -221,7 +240,7 @@ describe("sendTeamMessageAction — parent to the coaching staff", () => {
 
   it("emails every coach, persists nothing, and only needs PARENT access", async () => {
     const url = await redirectUrlOf(
-      sendTeamMessageAction(form({ ...BROADCAST, audience: "ALL_COACHES" })),
+      send(form({ ...BROADCAST, audience: "ALL_COACHES" })),
     );
 
     expect(url).toBe("/t/team-1/messages/new?sent=2");
@@ -242,13 +261,13 @@ describe("sendTeamMessageAction — parent to the coaching staff", () => {
   // the no-parent-to-parent rule does not depend on a single check.
   it("refuses a forged parent-audience POST at the resolver too", async () => {
     for (const audience of ["ALL_PARENTS", "INDIVIDUAL_PARENT"] as const) {
-      const url = await redirectUrlOf(
-        sendTeamMessageAction(
+      const state = refusal(
+        await send(
           form({ ...BROADCAST, audience, targetUserId: "u-parent-b" }),
         ),
       );
 
-      expect(url).toBe("/t/team-1/messages/new?error=forbidden-audience");
+      expect(state.code).toBe("forbidden-audience");
     }
     expect(sendEmail).not.toHaveBeenCalled();
     expect(createMessage).not.toHaveBeenCalled();
@@ -258,30 +277,29 @@ describe("sendTeamMessageAction — parent to the coaching staff", () => {
 describe("sendTeamMessageAction — validation and access", () => {
   it("rejects a missing or over-long subject before any lookup", async () => {
     for (const subject of ["   ", "x".repeat(201)]) {
-      const url = await redirectUrlOf(
-        sendTeamMessageAction(form({ ...BROADCAST, subject })),
-      );
-      expect(url).toBe("/t/team-1/messages/new?error=invalid-subject");
+      const state = refusal(await send(form({ ...BROADCAST, subject })));
+      expect(state.code).toBe("invalid-subject");
+      expect(state.field).toBe("subject");
+      // The body comes back untouched — the whole point of returning rather
+      // than redirecting.
+      expect(state.values.body).toBe(BROADCAST.body);
     }
     expect(requireTeamAccess).not.toHaveBeenCalled();
   });
 
   it("rejects a missing or over-long body before any lookup", async () => {
     for (const body of ["", "x".repeat(5001)]) {
-      const url = await redirectUrlOf(
-        sendTeamMessageAction(form({ ...BROADCAST, body })),
-      );
-      expect(url).toBe("/t/team-1/messages/new?error=invalid-body");
+      const state = refusal(await send(form({ ...BROADCAST, body })));
+      expect(state.code).toBe("invalid-body");
+      expect(state.field).toBe("body");
     }
     expect(requireTeamAccess).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown audience value", async () => {
-    const url = await redirectUrlOf(
-      sendTeamMessageAction(form({ ...BROADCAST, audience: "EVERYONE" })),
-    );
+    const state = refusal(await send(form({ ...BROADCAST, audience: "EVERYONE" })));
 
-    expect(url).toBe("/t/team-1/messages/new?error=invalid-audience");
+    expect(state.code).toBe("invalid-audience");
     expect(requireTeamAccess).not.toHaveBeenCalled();
   });
 
@@ -294,7 +312,7 @@ describe("sendTeamMessageAction — validation and access", () => {
   it("throws rather than misreporting a listTeamMembers failure as no-recipients", async () => {
     listTeamMembers.mockResolvedValue([]);
 
-    await expect(sendTeamMessageAction(form(BROADCAST))).rejects.toThrow(
+    await expect(send(form(BROADCAST))).rejects.toThrow(
       "Failed to load team members for messaging",
     );
     expect(createMessage).not.toHaveBeenCalled();
@@ -306,7 +324,7 @@ describe("sendTeamMessageAction — validation and access", () => {
       new TeamAccessError("denied", "archived"),
     );
 
-    const url = await redirectUrlOf(sendTeamMessageAction(form(BROADCAST)));
+    const url = await redirectUrlOf(send(form(BROADCAST)));
 
     expect(url).toBe("/t/team-1/messages/new?error=access");
     expect(createMessage).not.toHaveBeenCalled();

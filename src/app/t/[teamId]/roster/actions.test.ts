@@ -65,6 +65,25 @@ import {
   unlinkGuardianAction,
   updateRosterEntryAction,
 } from "./actions";
+import {
+  ADD_PLAYER_INITIAL_STATE,
+  type AddPlayerState,
+} from "./add-player-state";
+
+/// `addPlayerAction` is shaped for `useActionState`, so it takes the previous
+/// state ahead of the form. It rejects by *returning* rather than redirecting,
+/// which is the whole point: the coach keeps what they typed.
+function addPlayer(data: FormData): Promise<AddPlayerState> {
+  return addPlayerAction(ADD_PLAYER_INITIAL_STATE, data);
+}
+
+/// Narrows to the rejected shape, failing the test rather than the type
+/// checker when a call unexpectedly succeeded.
+function rejection(state: AddPlayerState) {
+  expect(state.status).toBe("invalid");
+  if (state.status !== "invalid") throw new Error("unreachable");
+  return state;
+}
 
 const ENTRY = {
   id: "entry-1",
@@ -312,25 +331,56 @@ describe("setGuardianPhoneAction", () => {
 /// src/app/t/[teamId]/roster/actions.ts's playerSchema.
 describe("date of birth validation", () => {
   it("rejects a calendar-invalid date and does not write anything", async () => {
-    const url = await redirectUrlOf(
-      addPlayerAction(
+    const state = rejection(
+      await addPlayer(
         form({ teamId: "team-1", name: "Ada", dateOfBirth: "2026-02-30" }),
       ),
     );
 
-    expect(url).toContain("error=invalid-dob");
+    expect(state.code).toBe("invalid-dob");
     expect(addPlayerToRoster).not.toHaveBeenCalled();
   });
 
   it("rejects a non-date string", async () => {
-    const url = await redirectUrlOf(
-      addPlayerAction(
+    const state = rejection(
+      await addPlayer(
         form({ teamId: "team-1", name: "Ada", dateOfBirth: "not-a-date" }),
       ),
     );
 
-    expect(url).toContain("error=invalid-dob");
+    expect(state.code).toBe("invalid-dob");
     expect(addPlayerToRoster).not.toHaveBeenCalled();
+  });
+
+  it("hands the rejected name and jersey back rather than blanking them", async () => {
+    // The old flow redirected, so one mistyped digit in the date cost the
+    // coach the name and the number they had already entered (C5).
+    const state = rejection(
+      await addPlayer(
+        form({
+          teamId: "team-1",
+          name: "Ada",
+          dateOfBirth: "not-a-date",
+          jerseyNumber: "7",
+        }),
+      ),
+    );
+
+    expect(state.values).toEqual({
+      name: "Ada",
+      dateOfBirth: "not-a-date",
+      jerseyNumber: "7",
+    });
+  });
+
+  it("points the rejection at the box that caused it", async () => {
+    const state = rejection(
+      await addPlayer(
+        form({ teamId: "team-1", name: "Ada", dateOfBirth: "not-a-date" }),
+      ),
+    );
+
+    expect(state.field).toBe("dateOfBirth");
   });
 
   it("accepts a real calendar date, including a leap day", async () => {
@@ -341,15 +391,31 @@ describe("date of birth validation", () => {
     });
 
     await redirectUrlOf(
-      addPlayerAction(
-        form({ teamId: "team-1", name: "Ada", dateOfBirth: "2024-02-29" }),
-      ),
+      addPlayer(form({ teamId: "team-1", name: "Ada", dateOfBirth: "2024-02-29" })),
     );
 
     expect(addPlayerToRoster).toHaveBeenCalledWith(
       "team-1",
       expect.objectContaining({ dateOfBirth: new Date("2024-02-29") }),
     );
+  });
+
+  it("redirects on success with the param that lights the added banner", async () => {
+    // The roster page has always rendered "Player added." for ?added=1 and
+    // nothing ever set it — the banner was only reachable from the returning
+    // -player flow. A blank form is the right next state here: the coach's
+    // next act is usually another kid.
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-1",
+      jerseyNumber: null,
+      player: { id: "player-1", name: "Ada", dateOfBirth: null },
+    });
+
+    const url = await redirectUrlOf(
+      addPlayer(form({ teamId: "team-1", name: "Ada" })),
+    );
+
+    expect(url).toBe("/t/team-1/roster?added=1");
   });
 
   it("treats a blank date of birth as absent, not invalid", async () => {
@@ -360,7 +426,7 @@ describe("date of birth validation", () => {
     });
 
     await redirectUrlOf(
-      addPlayerAction(form({ teamId: "team-1", name: "Ada", dateOfBirth: "" })),
+      addPlayer(form({ teamId: "team-1", name: "Ada", dateOfBirth: "" })),
     );
 
     expect(addPlayerToRoster).toHaveBeenCalledWith(

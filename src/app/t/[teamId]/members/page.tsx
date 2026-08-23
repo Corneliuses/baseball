@@ -8,25 +8,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { messageFor, messageTable } from "@/lib/error-messages";
+import { messageFor } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { listTeamMembers } from "@/lib/memberships";
 import { listTeamInvitations } from "@/lib/invitations";
 import { isLiveInvitation } from "@/lib/invitation-token";
 
-import { inviteMemberAction, setMemberRoleAction } from "./actions";
+import { setMemberRoleAction } from "./actions";
+import { InviteMemberForm } from "./InviteMemberForm";
+import { MEMBER_ERROR_MESSAGES } from "./member-messages";
 
 export const metadata = {
   title: "Members — Youth Baseball Team Manager",
 };
-
-const ERROR_MESSAGES = messageTable({
-  "invalid-invite": "Enter a valid email and choose a role.",
-  "invalid-role": "Choose a valid role.",
-  "email-failed": "The invitation could not be sent. Try again.",
-  "last-owner": "This team must always have at least one owner.",
-  access: "You no longer have access to make this change.",
-});
 
 const ROLE_OPTIONS = ["OWNER", "COACH", "PARENT"] as const;
 
@@ -61,7 +55,7 @@ export default async function MembersPage({
     isLiveInvitation(invitation, now),
   );
 
-  const errorMessage = messageFor(ERROR_MESSAGES, error);
+  const errorMessage = messageFor(MEMBER_ERROR_MESSAGES, error);
   const ownerCount = members.filter((member) => member.role === "OWNER").length;
 
   return (
@@ -163,42 +157,7 @@ export default async function MembersPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={inviteMemberAction} className="space-y-4">
-            <input type="hidden" name="teamId" value={teamId} />
-
-            <div className="space-y-2">
-              <label htmlFor="email" className="block text-sm font-medium text-foreground">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                placeholder="coach@example.com"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="role" className="block text-sm font-medium text-foreground">
-                Role
-              </label>
-              <select
-                id="role"
-                name="role"
-                defaultValue="PARENT"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="PARENT">Parent</option>
-                <option value="COACH">Coach</option>
-              </select>
-            </div>
-
-            <SubmitButton className="w-full" pendingLabel="Sending…">
-              Send invitation
-            </SubmitButton>
-          </form>
+          <InviteMemberForm teamId={teamId} />
         </CardContent>
       </Card>
     </div>

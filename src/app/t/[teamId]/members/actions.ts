@@ -13,6 +13,11 @@ import { sendEmail } from "@/lib/email";
 import { InvitationEmail } from "@/emails/InvitationEmail";
 import { buildInvitationEmail } from "@/emails/invitation-email";
 
+import type {
+  InviteMemberState,
+  InviteMemberValues,
+} from "./invite-member-state";
+
 function extractTeamId(formData: FormData): string {
   const teamId = String(formData.get("teamId")).trim();
   if (!teamId || teamId === "null" || teamId === "undefined") {
@@ -29,8 +34,29 @@ const inviteSchema = z.object({
   role: z.enum(["COACH", "PARENT"]),
 });
 
-export async function inviteMemberAction(formData: FormData) {
+/**
+ * Invite one person onto this team as a coach or a parent.
+ *
+ * Shaped for `useActionState`, so a bad address comes back as form state with
+ * the address still in the box (Dugout Report C5) rather than as a redirect
+ * that blanks it. A failed *send* comes back the same way: the invitation row
+ * exists either way, so the useful next step is "check the address and try
+ * again", which needs the address still on screen.
+ *
+ * Success and lost access still redirect — the first because a fresh blank
+ * form is the right next state, the second because the person can no longer
+ * use the form at all.
+ */
+export async function inviteMemberAction(
+  _prevState: InviteMemberState,
+  formData: FormData,
+): Promise<InviteMemberState> {
   const teamId = extractTeamId(formData);
+
+  const values: InviteMemberValues = {
+    email: String(formData.get("email") ?? ""),
+    role: String(formData.get("role") ?? ""),
+  };
 
   const parsed = inviteSchema.safeParse({
     email: formData.get("email") ?? "",
@@ -38,7 +64,7 @@ export async function inviteMemberAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    redirect(`/t/${teamId}/members?error=invalid-invite`);
+    return { status: "invalid", code: "invalid-invite", values };
   }
 
   try {
@@ -73,7 +99,11 @@ export async function inviteMemberAction(formData: FormData) {
     });
 
     if (!sent.ok) {
-      redirect(`/t/${teamId}/members?error=email-failed`);
+      // The Invitation row survives a failed send, and re-inviting the same
+      // address replaces it (createInvitation deletes prior unaccepted rows),
+      // so retrying from this form is safe — which is why the address has to
+      // still be in it.
+      return { status: "invalid", code: "email-failed", values };
     }
   } catch (error) {
     unstable_rethrow(error);

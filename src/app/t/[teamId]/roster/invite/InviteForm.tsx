@@ -6,11 +6,11 @@ import { useActionState } from "react";
 import { SubmitButton } from "@/components/SubmitButton";
 import { StatusBanner } from "@/components/StatusBanner";
 import { CheckCircleIcon } from "@/components/icons";
+import { bulkInviteGuardiansAction } from "./actions";
 import {
-  bulkInviteGuardiansAction,
   BULK_INVITE_INITIAL_STATE,
   type BulkInviteOutcome,
-} from "./actions";
+} from "./bulk-invite-state";
 
 export interface InviteRow {
   entryId: string;

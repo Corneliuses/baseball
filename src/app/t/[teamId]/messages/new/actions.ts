@@ -18,6 +18,12 @@ import { getTeamById } from "@/lib/teams";
 import { TeamMessageEmail } from "@/emails/TeamMessageEmail";
 import { buildTeamMessageEmail } from "@/emails/team-message-email";
 
+import type {
+  ComposeField,
+  ComposeState,
+  ComposeValues,
+} from "./compose-state";
+
 function extractTeamId(formData: FormData): string {
   const teamId = String(formData.get("teamId")).trim();
   if (!teamId || teamId === "null" || teamId === "undefined") {
@@ -62,14 +68,40 @@ const MIN_SEND_INTERVAL_MS = 600;
  * a half-failed send), and each recipient gets their own email — never a
  * shared To line, which would hand every parent the rest of the parents'
  * addresses. Reply-To is the sender, so answering works from the inbox.
+ *
+ * Shaped for `useActionState`: a refusal *returns* rather than redirecting, so
+ * a five-thousand-character message survives a mistyped subject. That was the
+ * most expensive instance of C5 in the app — the old flow redirected, and every
+ * word of the body went with it.
+ *
+ * A completed send still redirects, and should: the next compose starts empty.
+ * So does losing access, for the reason it always has — the person is no
+ * longer able to use the form they would be reading the message inside.
  */
-export async function sendTeamMessageAction(formData: FormData) {
+export async function sendTeamMessageAction(
+  _prevState: ComposeState,
+  formData: FormData,
+): Promise<ComposeState> {
   const teamId = extractTeamId(formData);
   const composeUrl = `/t/${teamId}/messages/new`;
 
+  const values: ComposeValues = {
+    audience: String(formData.get("audience") ?? ""),
+    targetUserId: String(formData.get("targetUserId") ?? ""),
+    subject: String(formData.get("subject") ?? ""),
+    body: String(formData.get("body") ?? ""),
+  };
+
+  const invalid = (code: string, field: ComposeField): ComposeState => ({
+    status: "invalid",
+    code,
+    field,
+    values,
+  });
+
   const parsedAudience = audienceSchema.safeParse(formData.get("audience"));
   if (!parsedAudience.success) {
-    redirect(`${composeUrl}?error=invalid-audience`);
+    return invalid("invalid-audience", "audience");
   }
   const audience = parsedAudience.data;
 
@@ -77,13 +109,13 @@ export async function sendTeamMessageAction(formData: FormData) {
     formData.get("subject") ?? "",
   );
   if (!parsedSubject.success) {
-    redirect(`${composeUrl}?error=invalid-subject`);
+    return invalid("invalid-subject", "subject");
   }
   const subject = parsedSubject.data;
 
   const parsedBody = messageBodySchema.safeParse(formData.get("body") ?? "");
   if (!parsedBody.success) {
-    redirect(`${composeUrl}?error=invalid-body`);
+    return invalid("invalid-body", "body");
   }
   const body = parsedBody.data;
 
@@ -122,11 +154,13 @@ export async function sendTeamMessageAction(formData: FormData) {
       targetUserId,
       members,
     });
+    // Every one of these is "change who this goes to and send again", so they
+    // come back as form state with the body intact rather than as a redirect.
     if (!resolved.ok) {
-      redirect(`${composeUrl}?error=${resolved.reason}`);
+      return invalid(resolved.reason, "audience");
     }
     if (resolved.recipients.length > MAX_RECIPIENTS) {
-      redirect(`${composeUrl}?error=too-many`);
+      return invalid("too-many", "audience");
     }
 
     // requireTeamAccess just proved the sender holds a membership, so they

@@ -32,9 +32,15 @@ export const metadata = {
 const ERROR_MESSAGES = messageTable({
   "invalid-type": "Choose either a game or a practice.",
   "invalid-datetime": "Enter a valid date and time.",
-  "invalid-location": "Location is too long.",
-  "invalid-opponent": "Opponent is too long.",
-  "invalid-notes": "Notes are too long.",
+  // The limits are named, not implied. These three were reachable purely by
+  // typing — the inputs carried no maxLength — so a coach could be told "too
+  // long" with no idea by how much (#51). Both halves are fixed: the fields
+  // now stop at the same numbers the action enforces, and the sentence says
+  // what the number is for anything that still gets through (a paste, a
+  // forged POST).
+  "invalid-location": "Location is too long — keep it under 200 characters.",
+  "invalid-opponent": "Opponent is too long — keep it under 200 characters.",
+  "invalid-notes": "Notes are too long — keep them under 2,000 characters.",
   "invalid-rsvp": "Choose a valid response.",
   "not-your-player": "You can only RSVP for your own kids.",
   "not-on-team": "That player is not on this team's roster.",
@@ -326,6 +332,7 @@ export default async function EventPage({
                     id="location"
                     name="location"
                     type="text"
+              maxLength={200}
                     defaultValue={event.location ?? ""}
                     className={inputClass}
                   />
@@ -342,6 +349,7 @@ export default async function EventPage({
                     id="opponent"
                     name="opponent"
                     type="text"
+              maxLength={200}
                     defaultValue={event.opponent ?? ""}
                     className={inputClass}
                   />
@@ -357,6 +365,7 @@ export default async function EventPage({
                   <textarea
                     id="notes"
                     name="notes"
+              maxLength={2000}
                     rows={2}
                     defaultValue={event.notes ?? ""}
                     className={inputClass}

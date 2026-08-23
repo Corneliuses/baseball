@@ -46,9 +46,15 @@ export const metadata = {
 const ERROR_MESSAGES = messageTable({
   "invalid-type": "Choose either a game or a practice.",
   "invalid-datetime": "Enter a valid date and time.",
-  "invalid-location": "Location is too long.",
-  "invalid-opponent": "Opponent is too long.",
-  "invalid-notes": "Notes are too long.",
+  // The limits are named, not implied. These three were reachable purely by
+  // typing — the inputs carried no maxLength — so a coach could be told "too
+  // long" with no idea by how much (#51). Both halves are fixed: the fields
+  // now stop at the same numbers the action enforces, and the sentence says
+  // what the number is for anything that still gets through (a paste, a
+  // forged POST).
+  "invalid-location": "Location is too long — keep it under 200 characters.",
+  "invalid-opponent": "Opponent is too long — keep it under 200 characters.",
+  "invalid-notes": "Notes are too long — keep them under 2,000 characters.",
   access: "You no longer have access to make this change.",
 });
 
@@ -549,7 +555,13 @@ function AddEventForm({ teamId }: { teamId: string }) {
             >
               Location (optional)
             </label>
-            <input id="location" name="location" type="text" className={inputClass} />
+            <input
+              id="location"
+              name="location"
+              type="text"
+              maxLength={200}
+              className={inputClass}
+            />
           </div>
 
           <div className="space-y-2">
@@ -559,14 +571,26 @@ function AddEventForm({ teamId }: { teamId: string }) {
             >
               Opponent (optional)
             </label>
-            <input id="opponent" name="opponent" type="text" className={inputClass} />
+            <input
+              id="opponent"
+              name="opponent"
+              type="text"
+              maxLength={200}
+              className={inputClass}
+            />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="notes" className="block text-sm font-medium text-foreground">
               Notes (optional)
             </label>
-            <textarea id="notes" name="notes" rows={2} className={inputClass} />
+            <textarea
+              id="notes"
+              name="notes"
+              rows={2}
+              maxLength={2000}
+              className={inputClass}
+            />
           </div>
 
           <SubmitButton className="w-full" pendingLabel="Adding…">

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { BulkInviteState } from "./actions";
+import type { BulkInviteState } from "./bulk-invite-state";
 
 let actionState: BulkInviteState = { status: "idle" };
 
@@ -19,9 +19,10 @@ vi.mock("react", async (importOriginal) => {
 
 /// The real module is `"use server"` and reaches Prisma through @/lib/roster.
 /// The component only needs the function's identity to hand to <form action>.
+/// The initial state and the types are not here — a `"use server"` module may
+/// only export async functions, so they live in ./bulk-invite-state.
 vi.mock("./actions", () => ({
   bulkInviteGuardiansAction: vi.fn(),
-  BULK_INVITE_INITIAL_STATE: { status: "idle" },
 }));
 
 import { InviteForm } from "./InviteForm";

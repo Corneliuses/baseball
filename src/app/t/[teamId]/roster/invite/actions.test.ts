@@ -45,11 +45,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import { bulkInviteGuardiansAction } from "./actions";
 import {
-  bulkInviteGuardiansAction,
   BULK_INVITE_INITIAL_STATE,
   type BulkInviteState,
-} from "./actions";
+} from "./bulk-invite-state";
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
