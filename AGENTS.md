@@ -186,6 +186,13 @@ Practices have RSVPs but no chart. Later games are ignored.
   so there is one place to audit for `teamId` filtering.
 - **Positions**: `C` is Catcher and `CF` is Center Field. Use `POSITION_LABELS` from
   `src/lib/positions.ts` rather than writing labels by hand.
+- **Mutating forms get a pending state and typed feedback, never a bare
+  `<form action={...}>`.** `SubmitButton` (`useFormStatus`) and `StatusBanner` are the
+  shared components; every mutating form in the app uses them. A form where people
+  actually type — as opposed to a one-tap RSVP or a role-select — converts its action to
+  `useActionState`: a validation failure returns `{status: "invalid", ...}` with the typed
+  values intact, instead of redirecting with `?error=` and losing them.
+  `roster/AddPlayerForm.tsx` + `roster/actions.ts` is the annotated reference.
 
 ## Setup & Prerequisites
 
@@ -230,6 +237,13 @@ production — the dev command can prompt, generate new migrations, and reset th
 - **Prisma 7 ships no bundled query engine.** `new PrismaClient()` with no argument is a
   type error. It needs an explicit driver adapter — see `src/lib/db.ts`. Nearly every
   Prisma example predating v7 is wrong on this point.
+- **A `"use server"` file may only export async functions.** The directive marks *every*
+  export as a server function, so a runtime constant — a `useActionState` initial value, a
+  shared type — cannot live in an actions file. It fails at `next build`, not at
+  `pnpm check`, which is easy to miss until a deploy breaks. The convention is a sibling
+  `<feature>-state.ts` module holding the state type and its `*_INITIAL_STATE` constant
+  (see `add-player-state.ts`, `event-form-state.ts`, `bulk-invite-state.ts`); the action
+  file imports from it, never the other way around.
 - **Middleware is called `proxy.ts` in Next.js 16.** It was renamed from
   `middleware.ts` — same functionality, `export function proxy(request: NextRequest)`.
   Training data will confidently tell you otherwise. See
@@ -425,6 +439,23 @@ production — the dev command can prompt, generate new migrations, and reset th
   whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
+- **`List-Unsubscribe` is set on two sends, and which two is a claim, not an oversight.**
+  `sendEmail` takes an optional `listUnsubscribe` address; the all-parents broadcast and
+  the day-of reminder cron pass one, and nothing else does. RFC 2369 says the header
+  describes a *list the recipient belongs to*: an invitation goes to someone not on the
+  team yet, and the two remaining message shapes are one-to-one correspondence (a coach
+  mailing one parent, a parent mailing the staff). Adding it everywhere to quiet a
+  deliverability report would be a lie in a header. The address differs by sender because
+  the senders differ: a broadcast has a human sending it, so it reuses that coach (the
+  same address as `Reply-To`), while the cron runs as the system and has to *choose* one —
+  `pickUnsubscribeContact` (`reminders.ts`) takes the team's owner over an assistant coach
+  and breaks ties on `userId`, so two runs of the same day name the same person. A team
+  with no staff address sends no header rather than one mailing nowhere. Deliberately
+  **not** RFC 8058 one-click — one-click needs an unauthenticated HTTPS POST and a suppression store,
+  which is how a parent silently drops themselves off "tonight is cancelled". Routing it
+  to a human who can ask why is the chosen trade; revisit only by deciding about that
+  failure mode, not to chase a checkmark. Callers pass a bare address — `email.ts` owns
+  the angle-bracket framing so it exists in one tested place.
 - **Three places send in a loop, and each couples a cap, an interval and a timeout.**
   `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS` (600ms) apart to stay under
   Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and the page — not the action —

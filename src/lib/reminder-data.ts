@@ -1,6 +1,6 @@
 import { endOfDayInZone } from "./calendar";
 import { db } from "./db";
-import type { ReminderEvent } from "./reminders";
+import { pickUnsubscribeContact, type ReminderEvent } from "./reminders";
 
 /// The database half of day-of reminders (#47) — the loader and the receipt
 /// ledger. The decisions live next door in `reminders.ts`, which is pure;
@@ -96,7 +96,10 @@ export async function loadTodaysReminderWork(
   // doubleheader is two events on the same team, and the roster is the same
   // both times.
   const teamIds = [...new Set(events.map((event) => event.teamId))];
-  const rosterByTeamId = await loadRostersByTeamId(teamIds);
+  const [rosterByTeamId, unsubscribeByTeamId] = await Promise.all([
+    loadRostersByTeamId(teamIds),
+    loadUnsubscribeContactsByTeamId(teamIds),
+  ]);
 
   return {
     events: events.map((event) => ({
@@ -110,9 +113,55 @@ export async function loadTodaysReminderWork(
       notes: event.notes,
       roster: rosterByTeamId.get(event.teamId) ?? [],
       rsvps: event.rsvps,
+      unsubscribeEmail: unsubscribeByTeamId.get(event.teamId) ?? null,
     })),
     truncated,
   };
+}
+
+/**
+ * One staff address per team, for the reminder's List-Unsubscribe header.
+ *
+ * Grouped across the run like `loadRostersByTeamId`, and for the same reason:
+ * a doubleheader is two events on one team. `pickUnsubscribeContact` does the
+ * choosing, so which coach gets named is a tested decision rather than a
+ * side effect of query ordering.
+ *
+ * This reads `Membership` rather than the roster, which is the one place in
+ * the reminder path that does — and it is not a recipient lookup. Nobody here
+ * is mailed; the address only rides in a header so a parent's reply reaches a
+ * human. Errors propagate, matching the rest of this loader.
+ */
+async function loadUnsubscribeContactsByTeamId(
+  teamIds: readonly string[],
+): Promise<Map<string, string | null>> {
+  const staff = await db.membership.findMany({
+    where: { teamId: { in: [...teamIds] }, role: { in: ["OWNER", "COACH"] } },
+    select: {
+      teamId: true,
+      userId: true,
+      role: true,
+      user: { select: { email: true } },
+    },
+  });
+
+  const byTeamId = new Map<string, typeof staff>();
+  for (const row of staff) {
+    byTeamId.set(row.teamId, [...(byTeamId.get(row.teamId) ?? []), row]);
+  }
+
+  return new Map(
+    [...byTeamId].map(([teamId, rows]) => [
+      teamId,
+      pickUnsubscribeContact(
+        rows.map((row) => ({
+          userId: row.userId,
+          role: row.role as "OWNER" | "COACH",
+          email: row.user.email,
+        })),
+      ),
+    ]),
+  );
 }
 
 async function loadRostersByTeamId(

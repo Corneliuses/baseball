@@ -172,6 +172,17 @@ describe("sendTeamMessageAction — coach broadcast", () => {
     expect(first.replyTo).toBe("coach@example.com");
   });
 
+  it("carries a List-Unsubscribe pointing at the sending coach", async () => {
+    await redirectUrlOf(send(form(BROADCAST)));
+
+    // The broadcast is the only shape that is list mail, and the coach is
+    // the human who can actually act on the request. email.ts owns the
+    // RFC 2369 framing, so the action passes a bare address.
+    for (const call of sendEmail.mock.calls) {
+      expect(call[0].listUnsubscribe).toBe("coach@example.com");
+    }
+  });
+
   it("writes the row before sending, so a failed tail keeps the record", async () => {
     sendEmail
       .mockResolvedValueOnce({ ok: true })
@@ -215,6 +226,8 @@ describe("sendTeamMessageAction — coach to one parent", () => {
     expect(createMessage).not.toHaveBeenCalled();
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(sendEmail.mock.calls[0][0].to).toBe("blake@example.com");
+    // One-to-one mail is not a list to leave.
+    expect(sendEmail.mock.calls[0][0]).not.toHaveProperty("listUnsubscribe");
   });
 
   it("rejects a target who is not a parent on this team, before sending", async () => {
@@ -254,6 +267,8 @@ describe("sendTeamMessageAction — parent to the coaching staff", () => {
       "coach@example.com",
     ]);
     expect(sendEmail.mock.calls[0][0].replyTo).toBe("alex@example.com");
+    // A parent writing the staff is correspondence, not a mailing list.
+    expect(sendEmail.mock.calls[0][0]).not.toHaveProperty("listUnsubscribe");
   });
 
   // Belt and suspenders: even if the requireTeamAccess gate were somehow

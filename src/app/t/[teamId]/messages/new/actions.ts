@@ -67,7 +67,11 @@ const MIN_SEND_INTERVAL_MS = 600;
  * The broadcast row is written BEFORE the fan-out (the coach's copy survives
  * a half-failed send), and each recipient gets their own email — never a
  * shared To line, which would hand every parent the rest of the parents'
- * addresses. Reply-To is the sender, so answering works from the inbox.
+ * addresses. Reply-To is the sender, so answering works from the inbox, and
+ * the broadcast — the one shape that is genuinely list mail — also carries a
+ * List-Unsubscribe pointing at that same sender. Mailboxes read its absence
+ * on bulk-shaped mail as a spam signal, and the coach is the person who can
+ * actually act on the request.
  *
  * Shaped for `useActionState`: a refusal *returns* rather than redirecting, so
  * a five-thousand-character message survives a mistyped subject. That was the
@@ -206,6 +210,11 @@ export async function sendTeamMessageAction(
         to: recipient.email,
         subject: emailSubject,
         replyTo: senderEmail,
+        // Broadcasts only — the other two audiences are one-to-one mail, and
+        // a List-Unsubscribe on those would claim a list that isn't there.
+        ...(audience === "ALL_PARENTS"
+          ? { listUnsubscribe: senderEmail }
+          : {}),
         react: TeamMessageEmail({ teamName, senderName, body, teamUrl }),
       });
 

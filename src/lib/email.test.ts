@@ -58,6 +58,43 @@ describe("sendEmail", () => {
     expect(send.mock.calls[0][0]).not.toHaveProperty("replyTo");
   });
 
+  it("sends listUnsubscribe as an RFC 2369 mailto header", async () => {
+    await sendEmail({ ...INPUT, listUnsubscribe: "coach@example.com" });
+
+    // Angle brackets are not decoration — a bare address is not a valid
+    // header value, and callers pass the address, not the framing.
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: {
+          "List-Unsubscribe": "<mailto:coach@example.com?subject=Unsubscribe>",
+        },
+      }),
+    );
+  });
+
+  it("omits headers entirely when listUnsubscribe is not provided", async () => {
+    await sendEmail(INPUT);
+
+    // Same reasoning as replyTo above: an empty `headers` object is a
+    // different payload than none, and most sends are not list mail.
+    expect(send.mock.calls[0][0]).not.toHaveProperty("headers");
+  });
+
+  it.each([
+    ["a CRLF injection attempt", "coach@example.com>\r\nBcc: victim@example.com"],
+    ["an embedded angle bracket", "coach@example.com>"],
+    ["whitespace", "coach @example.com"],
+    ["no at-sign", "not-an-address"],
+  ])("drops the header but still sends, given %s", async (_label, address) => {
+    const result = await sendEmail({ ...INPUT, listUnsubscribe: address });
+
+    // A malformed header value is header injection, not a cosmetic problem —
+    // and losing the email over it would be the worse failure.
+    expect(result.ok).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0]).not.toHaveProperty("headers");
+  });
+
   it("reports a Resend error as a failed send", async () => {
     send.mockResolvedValue({ error: { message: "rate limited" } });
 
