@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadTodaysReminderWork = vi.fn();
 const claimReminder = vi.fn();
@@ -395,14 +395,111 @@ describe("GET /api/cron/reminders — push rides along", () => {
 });
 
 describe("GET /api/cron/reminders — run limits", () => {
+  const MAX_SENDS_PER_RUN = 200;
+
+  // These cases need a couple of hundred sends, and the loop deliberately
+  // paces them 600ms apart — two minutes of real waiting, well past any
+  // sensible test timeout. The pacing reads the clock rather than sleeping a
+  // fixed amount ("wait out only the remainder of the interval"), so a clock
+  // that always reports a full interval has already passed makes every wait a
+  // no-op without touching the code under test. The pacing itself is covered
+  // by the timeout-coupling case below.
+  beforeEach(() => {
+    let clock = Date.parse("2026-07-15T12:00:00Z");
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      clock += 1000;
+      return clock;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /// One event whose roster is `count` single-guardian households, so the
+  /// batch builder produces exactly `count` payloads in a stable order.
+  function crowdedDay(count: number) {
+    return work([
+      event({
+        roster: Array.from({ length: count }, (_, index) => ({
+          playerId: `player-${index}`,
+          playerName: `Kid ${index}`,
+          guardians: [
+            {
+              userId: `user-${index}`,
+              email: `parent${index}@example.com`,
+              name: `Parent ${index}`,
+            },
+          ],
+        })),
+      }),
+    ]);
+  }
+
   it("keeps the send cap inside the route's own timeout", () => {
     // The coupling AGENTS.md calls out: cap x pacing must stay well under
     // maxDuration, or an oversized run times out half-finished.
-    const MAX_SENDS_PER_RUN = 200;
     const MIN_SEND_INTERVAL_MS = 600;
 
     expect((MAX_SENDS_PER_RUN * MIN_SEND_INTERVAL_MS) / 1000).toBeLessThan(
       maxDuration,
     );
+  });
+
+  it("stops at the cap and reports what it did not attempt", async () => {
+    loadTodaysReminderWork.mockResolvedValue(crowdedDay(MAX_SENDS_PER_RUN + 5));
+
+    const response = await get();
+
+    expect(sendEmail).toHaveBeenCalledTimes(MAX_SENDS_PER_RUN);
+    expect(await response.json()).toMatchObject({
+      sent: MAX_SENDS_PER_RUN,
+      capped: 5,
+    });
+  });
+
+  // The regression: the cap used to slice the *candidate* list, so a second
+  // run spent its whole budget skipping the window the first run had already
+  // sent and never reached the tail. Those families were never reminded that
+  // day, and the summary reported a wall of `skipped` as though the work were
+  // done.
+  it("resumes into the unsent tail when the whole first window is already sent", async () => {
+    loadTodaysReminderWork.mockResolvedValue(crowdedDay(MAX_SENDS_PER_RUN + 5));
+    // Exactly what the previous run left behind.
+    claimReminder.mockImplementation(async (_eventId: string, userId: string) => {
+      const index = Number(userId.replace("user-", ""));
+      return index < MAX_SENDS_PER_RUN ? "already-sent" : "claimed";
+    });
+
+    const response = await get();
+
+    expect(sendEmail).toHaveBeenCalledTimes(5);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "parent200@example.com" }),
+    );
+    expect(await response.json()).toMatchObject({
+      sent: 5,
+      skipped: MAX_SENDS_PER_RUN,
+      capped: 0,
+    });
+  });
+
+  it("does not spend the budget on skips", async () => {
+    loadTodaysReminderWork.mockResolvedValue(crowdedDay(10));
+    claimReminder
+      .mockResolvedValueOnce("already-sent")
+      .mockResolvedValue("claimed");
+
+    const response = await get();
+
+    // Nine sends after one skip — a skip costs an insert, not a send slot.
+    expect(sendEmail).toHaveBeenCalledTimes(9);
+    expect(await response.json()).toMatchObject({ skipped: 1, capped: 0 });
+  });
+
+  it("reports nothing capped on an ordinary day", async () => {
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
+
+    expect(await (await get()).json()).toMatchObject({ capped: 0 });
   });
 });

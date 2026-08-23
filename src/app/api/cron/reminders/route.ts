@@ -69,6 +69,9 @@ const MIN_SEND_INTERVAL_MS = 600;
 /// operator is a handful of events and ~25 households; 200 is a runaway guard,
 /// not a product limit, and anything it drops is logged rather than silently
 /// skipped.
+///
+/// It bounds **send attempts, never candidates examined**, and the difference
+/// is the whole reason the loop is written the way it is below.
 const MAX_SENDS_PER_RUN = 200;
 
 /// Long enough for a full day's fan-out at the pacing above. The route's own
@@ -115,16 +118,10 @@ export async function GET(request: Request) {
     sent: 0,
     skipped: 0,
     failed: 0,
-    capped: Math.max(0, payloads.length - MAX_SENDS_PER_RUN),
+    capped: 0,
     pushed: 0,
     truncated,
   };
-
-  if (summary.capped > 0) {
-    console.error(
-      `Reminder run capped at ${MAX_SENDS_PER_RUN} sends — ${summary.capped} not attempted`,
-    );
-  }
 
   const env = {
     AUTH_URL: process.env.AUTH_URL,
@@ -134,7 +131,29 @@ export async function GET(request: Request) {
 
   let lastSendAt = 0;
 
-  for (const payload of payloads.slice(0, MAX_SENDS_PER_RUN)) {
+  // Every payload, not the first MAX_SENDS_PER_RUN of them — the budget is
+  // spent by sending, and a pair that turns out to be already-sent costs one
+  // insert and no email at all.
+  //
+  // Slicing the candidate list instead was a silent non-delivery bug. The
+  // batch builder is deterministic (events by `startsAt`, guardians in roster
+  // order), so every run of the day walks the same sequence: run one sends the
+  // first window and writes its receipts, and run two would then find that
+  // whole window already-sent, spend its entire cap skipping, and stop — never
+  // reaching the tail. No run that day would ever get there, and the summary
+  // would report a wall of `skipped` as though the work were done.
+  //
+  // Capping on work actually performed is what makes progress monotonic: each
+  // run skips the settled prefix cheaply and picks up where the last one ran
+  // out of budget.
+  let processed = 0;
+
+  for (const payload of payloads) {
+    if (summary.sent + summary.failed >= MAX_SENDS_PER_RUN) {
+      break;
+    }
+    processed += 1;
+
     // Whether *this* iteration is the one holding the receipt. The catch below
     // must never release a claim it did not take: if `claimReminder` itself
     // throws on a transient database error (a pool timeout, a dropped
@@ -219,6 +238,13 @@ export async function GET(request: Request) {
       }
       summary.failed += 1;
     }
+  }
+
+  summary.capped = payloads.length - processed;
+  if (summary.capped > 0) {
+    console.error(
+      `Reminder run hit its ${MAX_SENDS_PER_RUN}-send cap — ${summary.capped} pairs not attempted, and the next run will resume at them`,
+    );
   }
 
   return Response.json(summary);
