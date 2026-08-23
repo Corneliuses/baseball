@@ -88,6 +88,10 @@ Other things worth knowing:
 - **Multiple teams, one owner.** A team per season, with past seasons kept read-only.
   Players and guardians persist across seasons, so adding a returning kid to a new roster
   also brings their parents onto that team.
+- **The app does the nudging, not the coach.** On the morning of a game or practice, every
+  guardian gets an email — time, place, notes, and where their own kids stand on RSVP —
+  and a push notification too if they turned those on. Email is the channel of record:
+  push is an enhancement that can fail or be absent without anyone missing anything.
 
 ## Getting started
 
@@ -130,8 +134,8 @@ Run `pnpm check` before pushing — it chains lint, typecheck, and tests.
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Prisma 7 on Neon
-Postgres · Auth.js v5 magic links · `@dnd-kit` · Motion · Resend · Vitest · deployed on
-Vercel.
+Postgres · Auth.js v5 magic links · `@dnd-kit` · Motion · Resend · `web-push` · Vitest ·
+deployed on Vercel.
 
 Every one of those was chosen deliberately, with alternatives considered and rejected in
 writing — see the stack decisions below.
