@@ -416,6 +416,18 @@ production — the dev command can prompt, generate new migrations, and reset th
   whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
+- **`List-Unsubscribe` is set on exactly one send, and that is a claim, not an oversight.**
+  `sendEmail` takes an optional `listUnsubscribe` address and only the all-parents
+  broadcast passes one. RFC 2369 says the header describes a *list the recipient belongs
+  to*: an invitation goes to someone not on the team yet, and the other two message
+  shapes are one-to-one correspondence (a coach mailing one parent, a parent mailing the
+  staff). Adding it everywhere to quiet a deliverability report would be a lie in a
+  header. The value is a `mailto:` to the sending coach and deliberately **not** RFC 8058
+  one-click — one-click needs an unauthenticated HTTPS POST and a suppression store,
+  which is how a parent silently drops themselves off "tonight is cancelled". Routing it
+  to a human who can ask why is the chosen trade; revisit only by deciding about that
+  failure mode, not to chase a checkmark. Callers pass a bare address — `email.ts` owns
+  the angle-bracket framing so it exists in one tested place.
 - **The bulk invite action is the only place that sends in a loop, and three constants are
   coupled across two files.** `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS`
   (600ms) apart to stay under Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and
