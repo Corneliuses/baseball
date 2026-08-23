@@ -9,6 +9,31 @@ const guardedRosteredPlayerIds = vi.fn();
 const upsertRsvp = vi.fn();
 const clearRsvp = vi.fn();
 const isPlayerRostered = vi.fn();
+const listTeamGuardians = vi.fn();
+const listTeamMembers = vi.fn();
+const getTeamById = vi.fn();
+const sendEmail = vi.fn();
+const sendPushToUser = vi.fn();
+
+vi.mock("@/lib/guardians", () => ({
+  listTeamGuardians: (...args: unknown[]) => listTeamGuardians(...args),
+}));
+
+vi.mock("@/lib/memberships", () => ({
+  listTeamMembers: (...args: unknown[]) => listTeamMembers(...args),
+}));
+
+vi.mock("@/lib/teams", () => ({
+  getTeamById: (...args: unknown[]) => getTeamById(...args),
+}));
+
+vi.mock("@/lib/email", () => ({
+  sendEmail: (...args: unknown[]) => sendEmail(...args),
+}));
+
+vi.mock("@/lib/push", () => ({
+  sendPushToUser: (...args: unknown[]) => sendPushToUser(...args),
+}));
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -30,6 +55,26 @@ vi.mock("@/lib/rsvps", () => ({
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+
+/// `after` callbacks are captured, not run. That mirrors production — Next runs
+/// them once the response is finished — and it is what lets these tests assert
+/// the two halves separately: what the coach sees immediately, and what
+/// actually gets sent afterwards.
+const afterCallbacks: (() => unknown)[] = [];
+
+vi.mock("next/server", () => ({
+  after: (callback: () => unknown) => {
+    afterCallbacks.push(callback);
+  },
+}));
+
+/// Run the deferred work the action scheduled, as the platform would.
+async function flushAfter(): Promise<void> {
+  const pending = afterCallbacks.splice(0);
+  for (const callback of pending) {
+    await callback();
+  }
+}
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -119,6 +164,37 @@ function rejected(state: AddEventState) {
 const NOW = new Date("2026-08-10T12:00:00Z");
 const STARTED = "2026-08-10T11:00:00Z";
 
+/// One household per player. The announcement fan-out paces sends 600ms apart,
+/// so a fixture with five guardians costs three real seconds — keep them small
+/// and assert the grouping in `announcements.test.ts`, where it is free.
+function guardian(userId: string, email: string) {
+  return { userId, email, name: null };
+}
+
+function rosterOf(...guardians: { userId: string; email: string }[]) {
+  return guardians.map((g, index) => ({
+    playerId: `player-${index}`,
+    playerName: `Kid ${index}`,
+    guardians: [{ ...g, name: null }],
+  }));
+}
+
+/// Every `href` anywhere in a rendered element tree.
+function hrefsIn(node: unknown): string[] {
+  if (!node || typeof node !== "object") {
+    return [];
+  }
+  if (Array.isArray(node)) {
+    return node.flatMap(hrefsIn);
+  }
+  const props = (node as { props?: Record<string, unknown> }).props;
+  if (!props) {
+    return [];
+  }
+  const own = typeof props.href === "string" ? [props.href] : [];
+  return [...own, ...hrefsIn(props.children)];
+}
+
 const EVENT = {
   id: "event-1",
   type: "GAME",
@@ -130,11 +206,26 @@ const EVENT = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  afterCallbacks.length = 0;
+  // Frozen, not advancing. The RSVP gate compares an event's start against
+  // `new Date()` and one test below sits a single second the right side of it,
+  // so a clock that ticks with real time turns that test into a race a loaded
+  // runner loses. The announcement suite — the only one that waits on the
+  // 600ms send pacing — re-installs an advancing clock for itself.
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
   getEvent.mockResolvedValue(EVENT);
-  createEvent.mockResolvedValue({ id: "event-1" });
+  createEvent.mockResolvedValue(EVENT);
+  // Nobody on the roster by default, so the tests that are about event
+  // *creation* don't pay for a fan-out. The announcement suite sets its own.
+  listTeamGuardians.mockResolvedValue([]);
+  listTeamMembers.mockResolvedValue([
+    { userId: "user-1", role: "COACH", name: "Coach", email: "coach@example.com", phone: null },
+  ]);
+  getTeamById.mockResolvedValue({ id: "team-1", name: "Sharks" });
+  sendEmail.mockResolvedValue({ ok: true });
+  sendPushToUser.mockResolvedValue({ delivered: 1, pruned: 0, failed: 0 });
   updateEvent.mockResolvedValue({ id: "event-1" });
   deleteEvent.mockResolvedValue(undefined);
   guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1"]));
@@ -314,6 +405,324 @@ describe("createEventAction", () => {
     data.delete("teamId");
 
     await expect(addEvent(data)).rejects.toThrow("Invalid team ID");
+  });
+});
+
+/// #45 — the announcement fan-out. The rules worth pinning here are the ones
+/// that only exist once the action, the roster and Resend are in the same
+/// place: grouping is tested in `announcements.test.ts` and wording in the two
+/// email builders' suites, all without any of this machinery.
+describe("createEventAction — announcing the event", () => {
+  // Only this suite lets the clock run. The fan-out paces its sends with
+  // setTimeout, and against the frozen clock the rest of the file needs, that
+  // promise never resolves — the suite times out rather than failing. Re-pin
+  // the system time so the past-event gate still reads NOW.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(NOW);
+  });
+
+  async function add(): Promise<AddEventState> {
+    return createEventAction(ADD_EVENT_INITIAL_STATE, form(validEvent));
+  }
+
+  // The half the coach experiences: the action returns before a single message
+  // has been sent, and says how many are coming.
+  describe("what the action returns", () => {
+    it("reports the audience without having sent anything yet", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(guardian("u-1", "one@example.com"), guardian("u-2", "two@example.com")),
+      );
+
+      const state = await add();
+
+      expect(state).toMatchObject({
+        status: "added",
+        announcement: { status: "sending", recipients: 2 },
+      });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("schedules the fan-out for after the response", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await add();
+
+      expect(afterCallbacks).toHaveLength(1);
+    });
+
+    it("says there is nobody to tell when no guardian is linked yet", async () => {
+      const state = await add();
+
+      expect(state).toMatchObject({ announcement: { status: "none" } });
+      expect(afterCallbacks).toHaveLength(0);
+    });
+
+    // The one announcement failure still knowable while the coach is looking at
+    // the page. Everything after this reports by email.
+    it("reports a roster it could not read, and schedules nothing", async () => {
+      listTeamGuardians.mockRejectedValue(new Error("connection lost"));
+
+      const state = await add();
+
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(state).toMatchObject({
+        status: "added",
+        announcement: { status: "failed" },
+      });
+      expect(afterCallbacks).toHaveLength(0);
+    });
+
+    // AC6 — a coach back-filling last week's game must not mail the team.
+    it("announces nothing for an event whose start time has already passed", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+      createEvent.mockResolvedValue({ ...EVENT, startsAt: new Date(STARTED) });
+
+      const state = await add();
+
+      expect(state).toMatchObject({ announcement: { status: "none" } });
+      expect(listTeamGuardians).not.toHaveBeenCalled();
+    });
+
+    it("reads recipients from the roster, never from the posted form", async () => {
+      await createEventAction(
+        ADD_EVENT_INITIAL_STATE,
+        form({ ...validEvent, email: "attacker@example.com" }),
+      );
+
+      expect(listTeamGuardians).toHaveBeenCalledWith("team-1");
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    // 30 rejected a 16-player roster with both parents linked. 200 is a
+    // runaway guard, and it truncates-and-reports rather than refusing.
+    it("accepts a roster far past the old cap", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(
+          ...Array.from({ length: 40 }, (_, i) =>
+            guardian(`u-${i}`, `p${i}@example.com`),
+          ),
+        ),
+      );
+
+      const state = await add();
+
+      expect(state).toMatchObject({
+        announcement: { status: "sending", recipients: 40 },
+      });
+    });
+  });
+
+  // The deferred half, run as the platform would run it.
+  describe("once the deferred work runs", () => {
+    it("emails every guardian on the roster", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(guardian("u-1", "one@example.com"), guardian("u-2", "two@example.com")),
+      );
+
+      await add();
+      await flushAfter();
+
+      const announced = sendEmail.mock.calls
+        .map(([args]) => args.to)
+        .filter((to: string) => to !== "coach@example.com");
+      expect(announced).toEqual(["one@example.com", "two@example.com"]);
+    });
+
+    it("points Reply-To and List-Unsubscribe at the coach who added it", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await add();
+      await flushAfter();
+
+      const [args] = sendEmail.mock.calls[0];
+      expect(args.replyTo).toBe("coach@example.com");
+      expect(args.listUnsubscribe).toBe("coach@example.com");
+    });
+
+    it("links to the event page, where the RSVP buttons are", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await add();
+      await flushAfter();
+
+      const [args] = sendEmail.mock.calls[0];
+      expect(args.subject).toContain("Sharks");
+      // The template is called as a function, so `react` is the rendered tree
+      // rather than an element holding the props — walk it for the href. This
+      // is the one assertion that the id the action created is the id a parent
+      // taps, which neither builder's suite can see.
+      expect(
+        hrefsIn(args.react).some((href) =>
+          href.endsWith("/t/team-1/schedule/event-1"),
+        ),
+      ).toBe(true);
+    });
+
+    it("one bad mailbox does not lose the rest of the batch", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(guardian("u-1", "one@example.com"), guardian("u-2", "two@example.com")),
+      );
+      sendEmail
+        .mockResolvedValueOnce({ ok: false, reason: "bad mailbox" })
+        .mockResolvedValue({ ok: true });
+
+      await add();
+      await flushAfter();
+
+      expect(sendEmail.mock.calls.map(([args]) => args.to)).toContain(
+        "two@example.com",
+      );
+    });
+
+    // A deferred rejection is an unhandled error in a background task nobody is
+    // watching — strictly worse than one that reports itself by email.
+    it("survives sendEmail throwing outright", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(guardian("u-1", "one@example.com"), guardian("u-2", "two@example.com")),
+      );
+      sendEmail
+        .mockRejectedValueOnce(new Error("socket hang up"))
+        .mockResolvedValue({ ok: true });
+
+      await add();
+
+      await expect(flushAfter()).resolves.toBeUndefined();
+      expect(sendEmail.mock.calls.map(([args]) => args.to)).toContain(
+        "two@example.com",
+      );
+    });
+
+    // AC7 / Decision 8 — push follows a delivered email and can never turn one
+    // into a failure.
+    it("pushes only after the email actually went", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(guardian("u-1", "one@example.com"), guardian("u-2", "two@example.com")),
+      );
+      sendEmail
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValue({ ok: false, reason: "bad mailbox" });
+
+      await add();
+      await flushAfter();
+
+      expect(sendPushToUser).toHaveBeenCalledTimes(1);
+      expect(sendPushToUser.mock.calls[0][0]).toBe("u-1");
+    });
+
+    it("a throwing push does not stop the fan-out", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(guardian("u-1", "one@example.com"), guardian("u-2", "two@example.com")),
+      );
+      sendPushToUser.mockRejectedValue(new Error("web-push exploded"));
+
+      await add();
+      await flushAfter();
+
+      expect(sendEmail.mock.calls.map(([args]) => args.to)).toContain(
+        "two@example.com",
+      );
+    });
+
+    it("still announces when the coach's own address cannot be resolved", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+      listTeamMembers.mockResolvedValue([]);
+
+      await add();
+      await flushAfter();
+
+      const [args] = sendEmail.mock.calls[0];
+      expect(args.replyTo).toBeUndefined();
+      expect(args.listUnsubscribe).toBeUndefined();
+    });
+  });
+
+  // The channel that carries the outcome, since the returned state cannot.
+  // Without it a coach has no way of learning three families were never told.
+  describe("the coach's receipt", () => {
+    function receipt() {
+      return sendEmail.mock.calls
+        .map(([args]) => args)
+        .find((args: { to: string }) => args.to === "coach@example.com");
+    }
+
+    it("reports a clean run", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await add();
+      await flushAfter();
+
+      expect(receipt()?.subject).toBe(
+        "[Sharks] Game vs Hawks announced to 1 parent",
+      );
+    });
+
+    it("leads with the number that needs acting on when sends failed", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(guardian("u-1", "one@example.com"), guardian("u-2", "two@example.com")),
+      );
+      sendEmail
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce({ ok: false, reason: "bad mailbox" })
+        .mockResolvedValue({ ok: true });
+
+      await add();
+      await flushAfter();
+
+      expect(receipt()?.subject).toBe(
+        "[Sharks] 1 parent not told about Game vs Hawks",
+      );
+    });
+
+    // It answers one person about their own action — not a list they belong to.
+    it("carries no List-Unsubscribe", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await add();
+      await flushAfter();
+
+      expect(receipt()?.listUnsubscribe).toBeUndefined();
+    });
+
+    it("is skipped rather than sent nowhere when no coach address resolves", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+      listTeamMembers.mockResolvedValue([]);
+
+      await add();
+      await flushAfter();
+
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+    });
+
+    // Nobody is left to tell, so it is logged and dropped — never rethrown out
+    // of a background task.
+    it("does not throw when the receipt itself fails", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+      sendEmail
+        .mockResolvedValueOnce({ ok: true })
+        .mockRejectedValueOnce(new Error("Resend is down"));
+
+      await add();
+
+      await expect(flushAfter()).resolves.toBeUndefined();
+    });
+  });
+});
+
+// AC4 — a change-notification is a follow-up, and needs a diff this does not
+// compute. The check is here so adding one is a deliberate act.
+describe("updateEventAction — deliberately silent", () => {
+  it("sends nothing when an event is edited", async () => {
+    listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+    await redirectUrlOf(() =>
+      updateEventAction(form({ ...validEvent, eventId: "event-1" })),
+    );
+    await flushAfter();
+
+    expect(afterCallbacks).toHaveLength(0);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(sendPushToUser).not.toHaveBeenCalled();
   });
 });
 

@@ -123,6 +123,13 @@ Three consequences worth naming:
 3. **The receipt is sent on success too**, not only failure. Silence-meaning-success makes
    every quiet evening ambiguous: a coach cannot tell "it worked" from "the receipt bounced".
 
+**Rebased onto #71.** After this was written, #71 rewrote `createEventAction` into a
+`useActionState` action returning `AddEventState` rather than redirecting. The announcement
+was re-wired onto that shape rather than merged into it, and the result is strictly better
+than what this decision originally described: the outcome is a typed `announcement` field on
+the returned state, so the `?announcing=` search param — and the whole business of refusing
+to print a non-positive-integer from an attacker-chosen URL — no longer exists.
+
 **Cost, accepted:** one extra email per event created. If it reads as noise in real use,
 gating `sendReceipt` on `needsAttention` is a one-line change — at the price of that
 ambiguity.

@@ -456,7 +456,7 @@ production — the dev command can prompt, generate new migrations, and reset th
   to a human who can ask why is the chosen trade; revisit only by deciding about that
   failure mode, not to chase a checkmark. Callers pass a bare address — `email.ts` owns
   the angle-bracket framing so it exists in one tested place.
-- **Three places send in a loop, and each couples a cap, an interval and a timeout.**
+- **Four places send in a loop, and each couples a cap, an interval and a timeout.**
   `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS` (600ms) apart to stay under
   Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and the page — not the action —
   declares `maxDuration = 60`, since that is the level governing a Server Action's timeout.
@@ -465,8 +465,50 @@ production — the dev command can prompt, generate new migrations, and reset th
   means revisiting the ceiling too. `sendTeamMessageAction` repeats the pattern with
   `MAX_RECIPIENTS` (30, deliberately equal to `MAX_ROWS`), and the reminder cron with
   `MAX_SENDS_PER_RUN` (200) against its own `maxDuration = 300` — a Route Handler declares
-  that itself, unlike a Server Action. Same rule in all three: cap × interval well under the
+  that itself, unlike a Server Action. Same rule in all four: cap × interval well under the
   ceiling, and the two move together.
+
+  `createEventAction` is the fourth, and its numbers are deliberately **not** the other
+  actions': `MAX_RECIPIENTS` is 200 against the schedule page's `maxDuration = 300`. The
+  other two block a coach who is watching a spinner, so a cap that rejects cleanly beats one
+  that times out half-finished. This one runs in `after()` with nobody waiting, where 30
+  bought nothing and cost everything — recipients dedupe per guardian `User`, not per
+  household, so a 16-player roster with both parents linked is 32 and *every* announcement
+  would have failed, permanently, with no retry path.
+- **Adding an event announces it; editing one does not.** `createEventAction` mails every
+  guardian on the roster (#45) and pushes to whoever has a subscription, which is step 2 of
+  the brief's core loop. Three things hold it in place. The fan-out runs **after**
+  `createEvent` has returned — literally, in Next's `after()` — so there is no path from a
+  Resend outage back to the event row: a coach whose game vanished because an email bounced
+  would have every reason to distrust the app. Recipients come from the **roster**
+  (`RosterEntry → Player → GuardianPlayer → User`) via `listTeamGuardians`, never from
+  `Membership` and never from the POST. And an event whose `startsAt` is already past
+  announces nothing, so back-filling last Saturday's game does not mail the team —
+  deliberately **not** `GAME_GRACE_MS`, which keeps an in-progress game current for a
+  *display* and is wrong for a send. That skip is silent, which is a known cost: a coach who
+  typos the year gets no announcement and no explanation. `updateEventAction` sends nothing
+  at all, pinned by a test, because a change-notification needs a diff this does not compute.
+  `List-Unsubscribe` **is** set here (unlike the invitation), pointing at the coach who
+  created the event — one body fanned out to every family is list mail by the same test the
+  broadcast passes, and unlike the cron there is a real human sender to name.
+  `src/lib/announcements.ts` holds the two rules worth testing without any of this: one email
+  per household, and whether to announce at all.
+- **The announcement is deferred, so the returned state cannot report it — a receipt email
+  does.** `createEventAction` returns the moment the event exists, because a fan-out is not
+  something to make a person watch. The cost is that everything after that has no response
+  left to report into, which is why `AnnouncementReceiptEmail` exists: a fan-out nobody hears
+  the outcome of is worse than a slow one, since three families silently not told about
+  Saturday is exactly the failure the feature was built to prevent. It is sent on success as
+  well as failure — silence-means-success makes every quiet evening ambiguous, because a
+  coach cannot tell "it worked" from "the receipt itself bounced". Recipients are resolved
+  **before** the action returns even though the sending is deferred: one indexed query buys an
+  honest "Emailing 24 parents now" instead of a vague reassurance, and an unreadable roster is
+  the last announcement failure that can still be shown on the page. `AddEventState` carries
+  that as a typed `announcement` field rather than a search param — which is also why there is
+  no `?announcing=` to sanitize. The banner is deliberately present tense; not one message has
+  been sent when the coach reads it. Nothing in `announceEvent` may throw: a deferred rejection
+  is an unhandled error in a background task nobody is watching, strictly worse than a
+  swallowed one that mails itself in.
 - **Day-of reminders are a cron, and their duplicate protection is a claim, not a check.**
   `/api/cron/reminders` (schedule in `vercel.json`, authorized by a `CRON_SECRET` bearer
   token, failing closed when that variable is unset) mails every guardian on the morning of

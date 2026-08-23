@@ -11,6 +11,7 @@ import { createEventAction } from "./actions";
 import {
   ADD_EVENT_INITIAL_STATE,
   EMPTY_EVENT_VALUES,
+  type AddEventAnnouncement,
   type EventFormValues,
 } from "./event-form-state";
 import { SCHEDULE_ERROR_MESSAGES } from "./schedule-messages";
@@ -43,6 +44,30 @@ const inputClass =
  * coach was actually reading. They are re-parsed server-side; see
  * schedule-context.ts on why they are three validated fields and never a URL.
  */
+/**
+ * What the success banner adds about the parent announcement.
+ *
+ * Present tense on purpose. The fan-out runs in `after()`, so at the moment
+ * this renders not one message has been sent — "24 parents emailed" would be a
+ * claim the form cannot know to be true, and the coach would have no reason to
+ * read the receipt that actually says. Promising the summary is what makes the
+ * receipt expected rather than a surprise.
+ *
+ * `failed` says nothing here; it gets its own banner below, because it is the
+ * one case that needs a tone rather than a clause.
+ */
+function announcementNote(announcement: AddEventAnnouncement): string {
+  switch (announcement.status) {
+    case "sending":
+      return announcement.recipients === 1
+        ? " Emailing 1 parent now — we'll send you a summary."
+        : ` Emailing ${announcement.recipients} parents now — we'll send you a summary.`;
+    case "none":
+    case "failed":
+      return "";
+  }
+}
+
 export function AddEventForm({
   teamId,
   context,
@@ -139,6 +164,18 @@ export function AddEventForm({
         <StatusBanner tone="success">
           Added {state.summary}. The type, location and opponent are still here
           for the next one.
+          {announcementNote(state.announcement)}
+        </StatusBanner>
+      ) : null}
+
+      {/* Its own banner, and not folded into the success one above, because it
+          is the only case where something the coach expected to happen did not.
+          The event is still added — that line stays — but "no announcement was
+          sent" needs the tone that says act on this. */}
+      {state.status === "added" && state.announcement.status === "failed" ? (
+        <StatusBanner tone="error">
+          The roster couldn&apos;t be read, so no announcement was sent and
+          nothing will retry. Tell parents from Messages.
         </StatusBanner>
       ) : null}
 

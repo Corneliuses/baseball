@@ -23,6 +23,7 @@ vi.mock("react", async (importOriginal) => {
 vi.mock("./actions", () => ({ createEventAction: vi.fn() }));
 
 import { AddEventForm } from "./AddEventForm";
+import { EMPTY_EVENT_VALUES } from "./event-form-state";
 
 const MONTH_CONTEXT: ScheduleContext = {
   view: "month",
@@ -54,6 +55,55 @@ beforeEach(() => {
   vi.clearAllMocks();
   actionState = { status: "idle" };
   actionPending = false;
+});
+
+/// #45 — what the form says about the parent announcement. The count and the
+/// promise of a summary are the coach's only feedback until the receipt lands,
+/// because the fan-out runs after this response is finished.
+describe("AddEventForm announcement feedback", () => {
+  function added(
+    announcement: Extract<AddEventState, { status: "added" }>["announcement"],
+  ): AddEventState {
+    return {
+      status: "added",
+      keep: EMPTY_EVENT_VALUES,
+      summary: "Game on Sat, Aug 15, 2026 at 6:00 PM",
+      announcement,
+    };
+  }
+
+  // Present tense on purpose: at this moment not one message has been sent, so
+  // a past-tense claim would be something the form cannot know to be true.
+  it("promises the send rather than claiming it already happened", () => {
+    const html = render(added({ status: "sending", recipients: 12 }));
+
+    expect(html).toContain("Emailing 12 parents now");
+    expect(html).toContain("summary");
+    expect(html).not.toContain("12 parents emailed");
+  });
+
+  it("says parent, singular, for a one-household team", () => {
+    expect(render(added({ status: "sending", recipients: 1 }))).toContain(
+      "Emailing 1 parent now",
+    );
+  });
+
+  it("says nothing about email when there was nobody to tell", () => {
+    const html = render(added({ status: "none" }));
+
+    expect(html).toContain("Added Game on");
+    expect(html).not.toContain("Emailing");
+  });
+
+  // The event is still added — that line stays — but a failure needs the tone
+  // that says act on this, so it gets its own banner rather than a clause.
+  it("keeps the success line and adds a failure banner when the roster failed", () => {
+    const html = render(added({ status: "failed" }));
+
+    expect(html).toContain("Added Game on");
+    expect(html).toContain("no announcement was sent");
+    expect(html).not.toContain("Emailing");
+  });
 });
 
 describe("AddEventForm at rest", () => {
@@ -95,6 +145,7 @@ describe("AddEventForm after an add", () => {
       notes: "",
     },
     summary: "Game on Sat, Aug 15, 2026 at 6:00 PM",
+    announcement: { status: "none" },
   };
 
   it("keeps the fields that barely change between games", () => {
@@ -242,6 +293,7 @@ describe("AddEventForm across successive results", () => {
         notes: "",
       },
       summary: "Practice on Sat, Aug 15, 2026 at 6:00 PM",
+    announcement: { status: "none" },
     };
     rerender(<AddEventForm teamId="team-1" context={MONTH_CONTEXT} />);
 
@@ -269,6 +321,7 @@ describe("AddEventForm across successive results", () => {
         notes: "",
       },
       summary: "Game one",
+    announcement: { status: "none" },
     };
     const { rerender, container } = renderDom(
       <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
@@ -290,6 +343,7 @@ describe("AddEventForm across successive results", () => {
         notes: "",
       },
       summary: "Game two",
+    announcement: { status: "none" },
     };
     rerender(<AddEventForm teamId="team-1" context={MONTH_CONTEXT} />);
 
