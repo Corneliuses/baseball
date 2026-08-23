@@ -32,6 +32,7 @@ async function render(searchParams: { error?: string; saved?: string } = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
   getCurrentUser.mockResolvedValue({
     id: "user-1",
     email: "sam@example.com",
@@ -131,5 +132,37 @@ describe("ProfilePage", () => {
     getProfile.mockRejectedValue(new Error("connection lost"));
 
     await expect(render()).rejects.toThrow("connection lost");
+  });
+
+  // Push opt-in (#47) lives here because a subscription belongs to a person and
+  // a browser, not a team. The card itself renders nothing until its effect has
+  // run — it cannot know what the browser supports during SSR — so what is
+  // observable at this layer is that neither configuration breaks the page, and
+  // that the rest of the profile still renders. The card's own states are
+  // covered in PushOptInCard.test.tsx.
+  describe("push opt-in card", () => {
+    it("renders the page with push configured", async () => {
+      vi.stubEnv("VAPID_PUBLIC_KEY", "test-public-key");
+
+      const html = await render();
+
+      expect(html).toContain("Contact details");
+      expect(html).toContain("Sign out");
+    });
+
+    it("renders the page unchanged on a deployment with no VAPID keys", async () => {
+      vi.stubEnv("VAPID_PUBLIC_KEY", "");
+
+      const html = await render();
+
+      expect(html).toContain("Contact details");
+      expect(html).not.toContain("Game day notifications");
+    });
+
+    it("never puts the key in the server-rendered markup", async () => {
+      vi.stubEnv("VAPID_PUBLIC_KEY", "test-public-key");
+
+      expect(await render()).not.toContain("test-public-key");
+    });
   });
 });

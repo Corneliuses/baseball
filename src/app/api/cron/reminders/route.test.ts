@@ -4,6 +4,7 @@ const loadTodaysReminderWork = vi.fn();
 const claimReminder = vi.fn();
 const releaseReminder = vi.fn();
 const sendEmail = vi.fn();
+const sendPushToUser = vi.fn();
 
 vi.mock("@/lib/reminder-data", () => ({
   loadTodaysReminderWork: (...args: unknown[]) => loadTodaysReminderWork(...args),
@@ -13,6 +14,10 @@ vi.mock("@/lib/reminder-data", () => ({
 
 vi.mock("@/lib/email", () => ({
   sendEmail: (...args: unknown[]) => sendEmail(...args),
+}));
+
+vi.mock("@/lib/push", () => ({
+  sendPushToUser: (...args: unknown[]) => sendPushToUser(...args),
 }));
 
 import { GET, maxDuration } from "./route";
@@ -58,6 +63,7 @@ beforeEach(() => {
   claimReminder.mockResolvedValue("claimed");
   releaseReminder.mockResolvedValue(undefined);
   sendEmail.mockResolvedValue({ ok: true });
+  sendPushToUser.mockResolvedValue({ delivered: 0, pruned: 0, failed: 0 });
 });
 
 describe("GET /api/cron/reminders — authorization", () => {
@@ -231,6 +237,81 @@ describe("GET /api/cron/reminders — failure handling", () => {
     await get();
 
     expect(releaseReminder).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/cron/reminders — push rides along", () => {
+  beforeEach(() => {
+    loadTodaysReminderWork.mockResolvedValue([event()]);
+  });
+
+  it("pushes after the email, with the same deep link", async () => {
+    sendPushToUser.mockResolvedValue({ delivered: 1, pruned: 0, failed: 0 });
+
+    const response = await get();
+
+    expect(sendEmail).toHaveBeenCalledBefore(sendPushToUser);
+    expect(sendPushToUser).toHaveBeenCalledWith("user-anna", {
+      title: "[Sharks] Today: Game vs Hawks, 5:30 PM",
+      body: "5:30 PM at Riverside Field 2",
+      url: "https://app.example.com/t/team-1/schedule/evt-1",
+    });
+    expect(await response.json()).toMatchObject({ sent: 1, pushed: 1 });
+  });
+
+  it("counts devices reached, not people", async () => {
+    sendPushToUser.mockResolvedValue({ delivered: 2, pruned: 1, failed: 0 });
+
+    expect(await (await get()).json()).toMatchObject({ pushed: 2 });
+  });
+
+  it("omits the location from the body when there is none", async () => {
+    loadTodaysReminderWork.mockResolvedValue([event({ location: null })]);
+
+    await get();
+
+    expect(sendPushToUser).toHaveBeenCalledWith(
+      "user-anna",
+      expect.objectContaining({ body: "5:30 PM" }),
+    );
+  });
+
+  it("does not push for an email that failed", async () => {
+    sendEmail.mockResolvedValue({ ok: false, reason: "bounced" });
+
+    await get();
+
+    expect(sendPushToUser).not.toHaveBeenCalled();
+  });
+
+  it("does not push for a pair a previous run already handled", async () => {
+    claimReminder.mockResolvedValue("already-sent");
+
+    await get();
+
+    expect(sendPushToUser).not.toHaveBeenCalled();
+  });
+
+  it("keeps the delivered email when push throws — push never gates email", async () => {
+    sendPushToUser.mockRejectedValue(new Error("vapid misconfigured"));
+
+    const response = await get();
+
+    expect(releaseReminder).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({
+      sent: 1,
+      failed: 0,
+      pushed: 0,
+    });
+  });
+
+  it("still sends email when push is unconfigured", async () => {
+    sendPushToUser.mockResolvedValue({ delivered: 0, pruned: 0, failed: 0 });
+
+    const response = await get();
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(await response.json()).toMatchObject({ sent: 1, pushed: 0 });
   });
 });
 

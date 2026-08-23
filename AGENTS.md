@@ -49,7 +49,9 @@ cookie-less calendar app to sign-in — `/api/calendar/[token]` serves each team
 feed, authorized by the capability token in the URL (`Team.calendarToken`) rather than a
 session; the subscribe URL is surfaced on the schedule page. `/api/cron/reminders` is the
 other cookie-less endpoint — a Vercel Cron target that mails day-of reminders, authorized
-by a `CRON_SECRET` bearer token.
+by a `CRON_SECRET` bearer token. `/api/push/subscription` is session-authenticated and
+per-person rather than per-team: it registers and removes the caller's own Web Push
+subscriptions for the opt-in card on `/profile`.
 
 **Contact details are staff-facing.** A parent never sees another family's phone or
 email: `/directory` and `roster/[entryId]` are both COACH+, and the team home page gives
@@ -68,6 +70,8 @@ fixes, what the team has on file for them.
 - **Drag & drop**: `@dnd-kit` (core, sortable, utilities)
 - **Animation**: `motion` v12 — import via `LazyMotion` + `m`, not the top-level `motion`
 - **Email**: Resend + React Email
+- **Push**: `web-push` + self-generated VAPID keys (Decision 8) — an enhancement layered
+  on email, never a replacement
 - **Validation**: Zod 4
 - **Testing**: Vitest 4 + Testing Library, jsdom
 - **Hosting**: Vercel
@@ -105,7 +109,8 @@ URL.
 ## Architecture
 
 Server Actions for mutations; Route Handlers only for things needing a real HTTP endpoint
-(magic-link callback, push subscription registration). No separate API layer.
+(magic-link callback, the ICS feed, push subscription registration, the reminder cron
+target). No separate API layer.
 
 ### Team scoping
 
@@ -317,12 +322,14 @@ production — the dev command can prompt, generate new migrations, and reset th
   person types into whichever container they are standing in, not a link; that is an auth
   change well beyond the PWA work, designed and costed in #60. Until it is checked, treat
   the iOS half of `InstallPrompt` as provisional.
-- **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting` plus
-  `clients.claim` and no `fetch` handler — Decision 9, and the reason there is no Workbox
-  build step. Adding a `fetch` handler is not a small change: every page under `/t/[teamId]`
-  is a different family's roster, so a cache keyed on URL alone would serve one signed-in
-  parent's data to the next person on a shared phone. It is also where the `push` handler
-  lands if Decision 8 is revisited. The manifest's two colours are frozen hex copied from
+- **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting`,
+  `clients.claim`, and the `push` / `notificationclick` pair — no `fetch` handler, which is
+  Decision 9 and the reason there is no Workbox build step. Adding a `fetch` handler is not
+  a small change: every page under `/t/[teamId]` is a different family's roster, so a cache
+  keyed on URL alone would serve one signed-in parent's data to the next person on a shared
+  phone. The `push` handler always calls `showNotification`, even on a malformed payload:
+  on iOS a push event that resolves without showing anything can cost the site its push
+  permission outright, so there is deliberately no silent push. The manifest's two colours are frozen hex copied from
   the **light** theme (a manifest cannot express a media query); `manifest.test.ts` redoes
   the HSL-to-hex conversion from `globals.css` and fails if either token moves.
 - **`RosterEntry`'s unique indexes surface as Prisma `P2002`, not a friendly error, unless
@@ -444,3 +451,16 @@ production — the dev command can prompt, generate new migrations, and reset th
   `requireTeamAccess`, so the archived-team exclusion (`team: { archivedAt: null }`) lives in
   `loadTodaysReminderWork`'s query and must stay there. "Today" is
   `[now, endOfDayInZone(now)]`, never a UTC day.
+- **Push is an enhancement and every layer has to keep it one.** `sendPushToUser`
+  (`src/lib/push.ts`) returns counts and never throws — unconfigured VAPID keys, no
+  subscription, a dead endpoint and a push-service outage are all quiet returns — and the
+  reminder cron sends it *after* a successful email, inside its own try/catch, never
+  releasing the claim on a push failure. Nothing about push may ever decide whether an
+  email goes. Endpoints answering `404`/`410` are deleted in the same pass (Decision 8:
+  subscriptions expire and must be pruned); any other status is transient and the row
+  stays. `VAPID_PUBLIC_KEY` is read at request time and passed to `PushOptInCard` as a
+  prop rather than being a `NEXT_PUBLIC_` variable — the key is not a secret, but inlining
+  it would make the build depend on the environment, which `src/lib/email.ts` and
+  `src/auth.ts` both avoid on purpose. `/api/push/subscription`'s `DELETE` matches on
+  endpoint **and** `userId`: the endpoint is unique table-wide, so without the user filter
+  it would be a fine deletion key for anyone who learned one.
