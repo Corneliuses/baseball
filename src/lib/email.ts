@@ -47,9 +47,34 @@ function requireEnv(name: string): string | null {
   return value ? value : null;
 }
 
-/// RFC 2369: the value is a URL in angle brackets. The address comes from a
-/// stored `User.email`, never from a form.
-function listUnsubscribeHeader(address: string): Record<string, string> {
+/// A bare addr-spec: no whitespace, no CR/LF, and none of the characters that
+/// would end the angle-bracket URL early. Deliberately narrower than the RFC
+/// 5322 grammar — quoted local parts are legal and this rejects them, which
+/// costs nothing here and keeps the pattern small enough to read.
+const BARE_ADDRESS = /^[^\s<>,;"\\]+@[^\s<>,;"\\]+$/;
+
+/// RFC 2369: the value is a URL in angle brackets.
+///
+/// Callers pass an address read back from a stored `User.email` — which a
+/// person typed at some point (`z.email()` guards the sign-in and bulk-invite
+/// forms), so it is validated at entry rather than trustworthy for merely
+/// being in the database. This is the second layer, and it is here because a
+/// comment cannot stop a CR/LF in a header value from becoming header
+/// injection: `email.ts` is the one place that frames the header, so it is the
+/// one place that has to check.
+///
+/// A suspect address yields no header rather than a malformed one, and the
+/// caller's email still goes out — matching how the rest of this module
+/// degrades. The address is not logged; it is someone's personal contact
+/// detail and the count of failures is what a maintainer needs.
+function listUnsubscribeHeader(address: string): Record<string, string> | null {
+  if (!BARE_ADDRESS.test(address)) {
+    console.error(
+      "Refusing to set List-Unsubscribe: the address is not a bare addr-spec",
+    );
+    return null;
+  }
+
   return { "List-Unsubscribe": `<mailto:${address}?subject=Unsubscribe>` };
 }
 
@@ -69,6 +94,10 @@ export async function sendEmail({
     return { ok: false, reason };
   }
 
+  const headers = listUnsubscribe
+    ? listUnsubscribeHeader(listUnsubscribe)
+    : null;
+
   try {
     const resend = new Resend(apiKey);
     const { error } = await resend.emails.send({
@@ -77,9 +106,7 @@ export async function sendEmail({
       subject,
       react,
       ...(replyTo ? { replyTo } : {}),
-      ...(listUnsubscribe
-        ? { headers: listUnsubscribeHeader(listUnsubscribe) }
-        : {}),
+      ...(headers ? { headers } : {}),
     });
 
     if (error) {
