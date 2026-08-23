@@ -267,10 +267,12 @@ type AnnouncementWork = {
  * Everything the deferred fan-out needs, resolved while the coach is still
  * waiting on the action.
  *
- * Deliberately synchronous even though the *sending* is not: it costs one
- * indexed query and it buys an honest "Emailing 24 parents now" instead of a
- * vague reassurance. It also keeps one announcement failure — a roster that
- * cannot be read — knowable while there is still a response to report it in.
+ * Deliberately synchronous even though the *sending* is not: it costs two
+ * indexed reads issued in parallel — the team's name and its roster, so one
+ * round trip on the critical path — and it buys an honest "Emailing 24 parents
+ * now" instead of a vague reassurance. It also keeps one announcement failure —
+ * a roster that cannot be read — knowable while there is still a response to
+ * report it in.
  * Everything after this point reports by email, because there is nothing left
  * to return to.
  *
@@ -578,11 +580,11 @@ export async function createEventAction(
  * stands either way.
  *
  * The one thing worth reading twice is where the boundary sits. Resolving the
- * audience is synchronous — the coach waits for a single indexed query — while
- * the twenty-five paced sends are not. That split is what lets the form say
- * "Emailing 24 parents now" truthfully and still return immediately, and it is
- * why an unreadable roster is reportable on screen while a bounced mailbox is
- * only reportable by email.
+ * audience is synchronous — the coach waits on two parallel reads, so roughly
+ * one round trip — while the twenty-five paced sends are not. That split is
+ * what lets the form say "Emailing 24 parents now" truthfully and still return
+ * immediately, and it is why an unreadable roster is reportable on screen while
+ * a bounced mailbox is only reportable by email.
  */
 async function scheduleAnnouncement(
   teamId: string,

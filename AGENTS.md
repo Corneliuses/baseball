@@ -501,9 +501,10 @@ production — the dev command can prompt, generate new migrations, and reset th
   Saturday is exactly the failure the feature was built to prevent. It is sent on success as
   well as failure — silence-means-success makes every quiet evening ambiguous, because a
   coach cannot tell "it worked" from "the receipt itself bounced". Recipients are resolved
-  **before** the action returns even though the sending is deferred: one indexed query buys an
-  honest "Emailing 24 parents now" instead of a vague reassurance, and an unreadable roster is
-  the last announcement failure that can still be shown on the page. `AddEventState` carries
+  **before** the action returns even though the sending is deferred: two parallel indexed reads
+  (the team's name and its roster) buy an honest "Emailing 24 parents now" instead of a vague
+  reassurance, and an unreadable roster is the last announcement failure that can still be
+  shown on the page. `AddEventState` carries
   that as a typed `announcement` field rather than a search param — which is also why there is
   no `?announcing=` to sanitize. The banner is deliberately present tense; not one message has
   been sent when the coach reads it. Nothing in `announceEvent` may throw: a deferred rejection

@@ -115,9 +115,10 @@ them navigating away, and needs no schema. `after()` is documented to run even w
 response was a `redirect`, and to run for the route's configured `maxDuration`.
 
 Three consequences worth naming:
-1. **Recipients are resolved before the redirect** even though sending is deferred. One
-   indexed query buys an honest "Emailing 24 parents now" instead of a vague reassurance, and
-   it keeps one announcement failure — an unreadable roster — reportable on the page.
+1. **Recipients are resolved before the action returns** even though sending is deferred. Two
+   indexed reads issued in parallel — the team's name and its roster, so roughly one round
+   trip — buy an honest "Emailing 24 parents now" instead of a vague reassurance, and keep one
+   announcement failure (an unreadable roster) reportable on the page.
 2. **The banner is present tense.** Not one message has been sent when the coach reads it, so
    "24 parents emailed" would be a claim the page cannot know to be true.
 3. **The receipt is sent on success too**, not only failure. Silence-meaning-success makes
