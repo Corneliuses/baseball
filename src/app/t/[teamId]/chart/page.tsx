@@ -16,7 +16,7 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
 import { BattingOrderEditor } from "./BattingOrderEditor";
-import { DraftStash } from "./DraftStash";
+import { ClearDraftStash, DraftStash } from "./DraftStash";
 import { EditorTabs } from "./EditorTabs";
 
 export const metadata = {
@@ -166,6 +166,8 @@ export default async function ChartPage({
           {/* The draft this coach just lost, if the save was refused because
               another coach got there first. Read-only reference beside the
               live board — see DraftStash on why it is not re-appliable. */}
+          {/* A save landed, so whatever the submit stashed is provably stale. */}
+          {saved ? <ClearDraftStash teamId={teamId} kind="order" /> : null}
           {error === "chart-changed" ? (
             <DraftStash
               teamId={teamId}

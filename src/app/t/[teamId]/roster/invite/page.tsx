@@ -94,12 +94,18 @@ export default async function BulkInvitePage({
           No players to invite parents for. Check the roster — invitations start
           from the players on it.
         </p>
-      ) : needingGuardians.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Every player already has a parent linked. To add another parent for a
-          kid, open the player from the roster.
-        </p>
       ) : (
+        // Rendered whenever the roster has anyone at all, *including* when
+        // every player is now covered — which is exactly what a full batch
+        // makes true.
+        //
+        // `linkGuardian` writes the GuardianPlayer row before the email is
+        // attempted, so every row the batch touched leaves `needingGuardians`.
+        // The action revalidates this page, so gating the form on
+        // `needingGuardians.length > 0` would unmount it the moment a full
+        // batch succeeded — taking the useActionState state, and with it the
+        // per-row results naming who failed, down with it. The empty case
+        // belongs inside the form for that reason, not around it.
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Send invitations</CardTitle>

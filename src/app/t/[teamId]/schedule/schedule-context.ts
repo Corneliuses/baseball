@@ -70,6 +70,25 @@ function stringOrUndefined(value: FormDataEntryValue | null): string | undefined
   return typeof value === "string" ? value : undefined;
 }
 
+/**
+ * The context a form carried, or null when it carried none.
+ *
+ * `scheduleContextFromForm` always answers, defaulting to this month's grid —
+ * right for the add/edit/delete forms, which always render the fields. RSVP is
+ * different: the same action serves team home, and a caller with no context at
+ * all should keep the bare URL it had rather than be handed a synthesised
+ * `?view=month&month=…` it never asked for.
+ */
+export function optionalScheduleContextFromForm(
+  formData: FormData,
+  now: Date,
+): ScheduleContext | null {
+  const carriesContext = ["view", "month", "past"].some(
+    (field) => typeof formData.get(field) === "string",
+  );
+  return carriesContext ? scheduleContextFromForm(formData, now) : null;
+}
+
 /// The query string for a context, omitting what the page would default to
 /// anyway so the common URL stays short and shareable.
 export function scheduleQuery(

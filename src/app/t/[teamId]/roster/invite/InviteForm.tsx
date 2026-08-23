@@ -67,7 +67,9 @@ export function InviteForm({
   const batchMessage = state.status === "invalid" ? state.message : "";
   const outcomes = state.status === "done" ? state.outcomes : null;
 
-  const filledCount = rows.filter((row) => (emails[row.entryId] ?? "").trim()).length;
+  const filledCount = rows.filter((row) =>
+    (emails[row.entryId] ?? "").trim(),
+  ).length;
 
   return (
     <div className="space-y-4">
@@ -79,87 +81,98 @@ export function InviteForm({
         </StatusBanner>
       ) : null}
 
-      <form action={formAction} className="space-y-4">
-        <input type="hidden" name="teamId" value={teamId} />
+      {rows.length === 0 ? (
+        // Every player is covered. This lives inside the form component rather
+        // than around it because a full batch *creates* this state: the action
+        // revalidates the page, and gating the component on having rows would
+        // unmount it mid-result, throwing away the list naming who failed.
+        <p className="text-sm text-muted-foreground">
+          Every player already has a parent linked. To add another parent for a
+          kid, open the player from the roster.
+        </p>
+      ) : (
+        <form action={formAction} className="space-y-4">
+          <input type="hidden" name="teamId" value={teamId} />
 
-        <ul className="space-y-3">
-          {rows.map((row) => {
-            const rowError = rowErrors[row.entryId];
-            const errorId = `email-${row.entryId}-error`;
+          <ul className="space-y-3">
+            {rows.map((row) => {
+              const rowError = rowErrors[row.entryId];
+              const errorId = `email-${row.entryId}-error`;
 
-            return (
-              <li key={row.entryId} className="space-y-1">
-                <label
-                  htmlFor={`email-${row.entryId}`}
-                  className="block text-sm font-medium text-foreground"
-                >
-                  {row.playerName}
-                  {row.jerseyNumber !== null ? ` (#${row.jerseyNumber})` : ""}
-                </label>
-                <input
-                  id={`email-${row.entryId}`}
-                  name={`email-${row.entryId}`}
-                  type="email"
-                  placeholder="parent@example.com"
-                  value={emails[row.entryId] ?? ""}
-                  onChange={(event) =>
-                    setEmails((current) => ({
-                      ...current,
-                      [row.entryId]: event.target.value,
-                    }))
-                  }
-                  aria-invalid={rowError ? true : undefined}
-                  aria-describedby={rowError ? errorId : undefined}
-                  className={`${fieldClass} ${
-                    rowError ? "border-2 border-destructive" : ""
-                  }`}
-                />
-                {rowError ? (
-                  <p id={errorId} className="text-sm text-destructive">
-                    {rowError}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+              return (
+                <li key={row.entryId} className="space-y-1">
+                  <label
+                    htmlFor={`email-${row.entryId}`}
+                    className="block text-sm font-medium text-foreground"
+                  >
+                    {row.playerName}
+                    {row.jerseyNumber !== null ? ` (#${row.jerseyNumber})` : ""}
+                  </label>
+                  <input
+                    id={`email-${row.entryId}`}
+                    name={`email-${row.entryId}`}
+                    type="email"
+                    placeholder="parent@example.com"
+                    value={emails[row.entryId] ?? ""}
+                    onChange={(event) =>
+                      setEmails((current) => ({
+                        ...current,
+                        [row.entryId]: event.target.value,
+                      }))
+                    }
+                    aria-invalid={rowError ? true : undefined}
+                    aria-describedby={rowError ? errorId : undefined}
+                    className={`${fieldClass} ${
+                      rowError ? "border-2 border-destructive" : ""
+                    }`}
+                  />
+                  {rowError ? (
+                    <p id={errorId} className="text-sm text-destructive">
+                      {rowError}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
 
-        <div className="space-y-2">
-          <label
-            htmlFor="message"
-            className="block text-sm font-medium text-foreground"
-          >
-            Message (optional)
-          </label>
-          <textarea
-            id="message"
-            name="message"
-            rows={4}
-            maxLength={1000}
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder="A note included in every invitation email."
-            className={fieldClass}
-          />
-        </div>
+          <div className="space-y-2">
+            <label
+              htmlFor="message"
+              className="block text-sm font-medium text-foreground"
+            >
+              Message (optional)
+            </label>
+            <textarea
+              id="message"
+              name="message"
+              rows={4}
+              maxLength={1000}
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder="A note included in every invitation email."
+              className={fieldClass}
+            />
+          </div>
 
-        {/* The pending label is doing real work here, not decoration: the send
+          {/* The pending label is doing real work here, not decoration: the send
             loop is paced 600ms a row to stay under Resend's rate limit, so a
             full team is the better part of ten seconds. Saying so is what
             keeps a coach from reading the wait as a dead button. */}
-        <SubmitButton
-          className="w-full"
-          pendingLabel={
-            filledCount > 1
-              ? `Sending ${filledCount} invitations…`
-              : "Sending the invitation…"
-          }
-        >
-          {filledCount > 0
-            ? `Send ${filledCount} invitation${filledCount === 1 ? "" : "s"}`
-            : "Send invitations"}
-        </SubmitButton>
-      </form>
+          <SubmitButton
+            className="w-full"
+            pendingLabel={
+              filledCount > 1
+                ? `Sending ${filledCount} invitations…`
+                : "Sending the invitation…"
+            }
+          >
+            {filledCount > 0
+              ? `Send ${filledCount} invitation${filledCount === 1 ? "" : "s"}`
+              : "Send invitations"}
+          </SubmitButton>
+        </form>
+      )}
     </div>
   );
 }

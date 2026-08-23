@@ -93,7 +93,7 @@ export async function addReturningPlayerAction(formData: FormData) {
   try {
     jerseyNumber = parseJerseyNumber(formData.get("jerseyNumber"));
   } catch {
-    redirect(`/t/${teamId}/roster/returning?error=invalid-jersey`);
+    redirect(returningUrl(teamId, query, { error: "invalid-jersey" }));
   }
 
   let notify: GuardianLink[];

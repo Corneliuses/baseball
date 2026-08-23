@@ -165,6 +165,20 @@ describe("revokeInvitationAction", () => {
     expect(revokeInvitation).not.toHaveBeenCalled();
   });
 
+  it("does not claim success when nothing was removed", async () => {
+    // `revokeInvitation` matches on `acceptedAt: null`, so it removes nothing
+    // for an invitation somebody already accepted — or one a second tab
+    // withdrew a moment ago. "Invitation withdrawn." there is a lie about a
+    // token that is either still live or was never this row's to withdraw.
+    revokeInvitation.mockResolvedValue(false);
+
+    const url = await redirectUrlOf(() =>
+      revokeInvitationAction(form({ teamId: "team-1", invitationId: "inv-1" })),
+    );
+
+    expect(url).toBe("/t/team-1/members");
+  });
+
   it("throws on a missing invitation id rather than guessing", async () => {
     await expect(
       revokeInvitationAction(form({ teamId: "team-1" })),

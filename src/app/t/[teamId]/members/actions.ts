@@ -183,9 +183,10 @@ export async function revokeInvitationAction(formData: FormData) {
   const teamId = extractTeamId(formData);
   const invitationId = extractInvitationId(formData);
 
+  let removed: boolean;
   try {
     await requireTeamAccess(teamId, { intent: "write", minRole: "OWNER" });
-    await revokeInvitation(teamId, invitationId);
+    removed = await revokeInvitation(teamId, invitationId);
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
@@ -195,7 +196,12 @@ export async function revokeInvitationAction(formData: FormData) {
   }
 
   revalidatePath("/t/[teamId]/members", "page");
-  redirect(`/t/${teamId}/members?revoked=1`);
+  // `revokeInvitation` matches on `acceptedAt: null`, so it removes nothing for
+  // an invitation somebody already accepted — or one a second tab withdrew a
+  // moment ago. Claiming "Invitation withdrawn." there would be a lie about a
+  // token that is either still live or was never this row's to withdraw. The
+  // list re-renders either way and shows the truth.
+  redirect(`/t/${teamId}/members${removed ? "?revoked=1" : ""}`);
 }
 
 /**

@@ -36,7 +36,11 @@ const ERROR_MESSAGES = messageTable({
   access: "You no longer have access to make this change.",
 });
 
-function teamLabel(team: { name: string; season: string | null; archivedAt: Date | null }) {
+function teamLabel(team: {
+  name: string;
+  season: string | null;
+  archivedAt: Date | null;
+}) {
   const season = team.season ? ` (${team.season})` : "";
   const archived = team.archivedAt ? " — archived" : "";
   return `${team.name}${season}${archived}`;
@@ -64,18 +68,23 @@ export default async function ReturningPlayersPage({
     throw caught;
   }
 
-  const allCandidates = sortReturningCandidates(await listReturningCandidates(teamId));
+  const allCandidates = sortReturningCandidates(
+    await listReturningCandidates(teamId),
+  );
 
   // The player just added is, by then, on the roster — so they are gone from
   // the candidate list this page renders. Their name comes from the roster
   // instead, team-scoped like every other read here, so the row they acted on
   // can still be shown flipping to "Added" rather than simply vanishing.
   const justAdded = added
-    ? ((await getRoster(teamId)).find((entry) => entry.player.id === added) ?? null)
+    ? ((await getRoster(teamId)).find((entry) => entry.player.id === added) ??
+      null)
     : null;
   const filter = q?.trim().toLowerCase() ?? "";
   const candidates = filter
-    ? allCandidates.filter((candidate) => candidate.name.toLowerCase().includes(filter))
+    ? allCandidates.filter((candidate) =>
+        candidate.name.toLowerCase().includes(filter),
+      )
     : allCandidates;
 
   const errorMessage = messageFor(ERROR_MESSAGES, error);
@@ -83,16 +92,18 @@ export default async function ReturningPlayersPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h3 className="text-xl font-semibold text-foreground">Add returning player</h3>
+        <h3 className="text-xl font-semibold text-foreground">
+          Add returning player
+        </h3>
         <Button asChild variant="outline" size="sm">
           <Link href={`/t/${teamId}/roster`}>Back to roster</Link>
         </Button>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Picking a player from another team adds them to this roster and gives their
-        guardians access to this team as parents. Guardians who already have access keep
-        their existing role.
+        Picking a player from another team adds them to this roster and gives
+        their guardians access to this team as parents. Guardians who already
+        have access keep their existing role.
       </p>
 
       {errorMessage ? (
@@ -115,14 +126,6 @@ export default async function ReturningPlayersPage({
         </Button>
       </form>
 
-      {candidates.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {allCandidates.length === 0
-            ? "No past players are available to add."
-            : "No players match that filter."}
-        </p>
-      ) : null}
-
       {justAdded ? (
         // The row that was just acted on, flipped in place — the owner stays
         // in the list they were working down instead of being sent to the
@@ -138,13 +141,27 @@ export default async function ReturningPlayersPage({
               {justAdded.jerseyNumber !== null
                 ? ` as #${justAdded.jerseyNumber}`
                 : ""}
-              . Keep going — the list below is where you left it.
+              {candidates.length > 0
+                ? ". Keep going — the list below is where you left it."
+                : "."}
             </CardDescription>
           </CardHeader>
         </Card>
       ) : null}
 
-      {candidates.length > 0 ? (
+      {candidates.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {/* Adding the last candidate empties this list, so the plain
+              "none available" line would print directly under the card saying
+              one was just added — two statements that read as contradicting
+              each other. */}
+          {justAdded
+            ? "That was the last one — nobody else is waiting to be added."
+            : allCandidates.length === 0
+              ? "No past players are available to add."
+              : "No players match that filter."}
+        </p>
+      ) : (
         <ul className="space-y-2">
           {candidates.map((candidate) => (
             <li key={candidate.playerId}>
@@ -164,7 +181,11 @@ export default async function ReturningPlayersPage({
                     className="flex items-end gap-2"
                   >
                     <input type="hidden" name="teamId" value={teamId} />
-                    <input type="hidden" name="playerId" value={candidate.playerId} />
+                    <input
+                      type="hidden"
+                      name="playerId"
+                      value={candidate.playerId}
+                    />
                     {/* The filter the owner narrowed the list with, so the
                         add returns them to the same three names rather than
                         to all forty. */}
@@ -194,7 +215,7 @@ export default async function ReturningPlayersPage({
             </li>
           ))}
         </ul>
-      ) : null}
+      )}
     </div>
   );
 }

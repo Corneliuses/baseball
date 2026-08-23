@@ -175,10 +175,22 @@ export async function addPlayerAction(
   const forced = formData.get("force") === "1";
 
   try {
-    await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
+    const { role } = await requireTeamAccess(teamId, {
+      intent: "write",
+      minRole: "COACH",
+    });
 
     if (!forced) {
-      const match = await findDuplicateNameMatch(teamId, parsed.data.name);
+      // The cross-team half of the check is the app's one global Player read
+      // and is documented as OWNER-gated in its caller; adding a player is
+      // COACH+, so the role has to travel or a coach gains an existence
+      // oracle over every team in the database. The picker it would point at
+      // is owner-only anyway.
+      const match = await findDuplicateNameMatch(
+        teamId,
+        parsed.data.name,
+        role === "OWNER",
+      );
       if (match) {
         return {
           status: "duplicate-name",

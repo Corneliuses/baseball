@@ -571,9 +571,19 @@ export type DuplicateNameMatch = {
  *
  * - **rostered** — someone by that name is already on *this* team, so this is
  *   almost certainly a mistake or a genuine pair of same-named kids.
- * - **returning** — someone by that name played for one of this owner's past
- *   teams, so the right move is usually the returning-player picker, which
- *   reuses the existing `Player` and carries the guardians across.
+ * - **returning** — someone by that name appears in the returning-player
+ *   candidate set, so the right move is usually the picker, which reuses the
+ *   existing `Player` and carries the guardians across.
+ *
+ * **The returning half is OWNER-only, and that is not a nicety.**
+ * `listReturningCandidates` is the app's one global `Player` read (Decision 13)
+ * and its docstring records that the gate lives in the caller, at
+ * `minRole: "OWNER"`. Adding a player is COACH+, so running that query for
+ * every caller would quietly hand a coach an existence oracle across every
+ * team in the database: type a name, learn from the answer whether a child by
+ * that exact name is rostered anywhere — and get the canonical spelling back.
+ * `canSeeReturning` is how the gate travels; the picker route it points at is
+ * owner-only too, so offering it to a coach would be a dead end regardless.
  *
  * **Exact matches only**, trimmed and case-insensitive. Fuzzy matching would
  * turn a warning into a nuisance on a roster where "Jake M" and "Jake Miller"
@@ -587,6 +597,7 @@ export type DuplicateNameMatch = {
 export async function findDuplicateNameMatch(
   teamId: string,
   name: string,
+  canSeeReturning: boolean,
 ): Promise<DuplicateNameMatch | null> {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -610,8 +621,12 @@ export async function findDuplicateNameMatch(
       };
     }
 
-    // Not on this team — but maybe on a past one, where the picker is the
-    // better route because it reuses the Player and its guardian links.
+    if (!canSeeReturning) {
+      return null;
+    }
+
+    // Not on this team — but maybe in the returning set, where the picker is
+    // the better route because it reuses the Player and its guardian links.
     const candidates = await listReturningCandidates(teamId);
     const returning = candidates.find(
       (candidate) => candidate.name.trim().toLowerCase() === trimmed.toLowerCase(),

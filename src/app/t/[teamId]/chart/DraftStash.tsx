@@ -31,7 +31,11 @@ import {
  * themselves.
  *
  * Rendered only on the conflict, and cleared the moment it stops being useful:
- * a successful save, or the coach dismissing it.
+ * a successful save (`ClearDraftStash`, rendered by the pages on `?saved=1`)
+ * or the coach dismissing it. Both matter — `stashDraft` runs on *every*
+ * submit, success included, so without the save path a board that was in fact
+ * saved would sit in storage for the life of the tab and reappear under
+ * "Your unsaved batting order" on any later conflict.
  *
  * Well clear of dnd-kit: this is a static panel below the editor, not anything
  * draggable — the collision rule in AGENTS.md is about elements dnd-kit
@@ -53,9 +57,16 @@ export function DraftStash({
   // The snapshot is the raw string rather than a parsed array on purpose —
   // useSyncExternalStore compares by identity, so a fresh array per call would
   // look like a change on every render and never settle.
+  // Memoized: a fresh closure each render makes useSyncExternalStore
+  // re-subscribe every pass, which is wasted work and defeats the caching it
+  // would otherwise do.
+  const getSnapshot = React.useCallback(
+    () => draftSnapshot(teamId, kind),
+    [teamId, kind],
+  );
   const raw = React.useSyncExternalStore(
     subscribeDraft,
-    () => draftSnapshot(teamId, kind),
+    getSnapshot,
     serverDraftSnapshot,
   );
   const lines = React.useMemo(() => parseDraft(raw), [raw]);
@@ -108,4 +119,31 @@ export function DraftStash({
       </Button>
     </section>
   );
+}
+
+/**
+ * Drops the stash once a save has landed.
+ *
+ * `stashDraft` fires from the editors' `onSubmit`, which cannot know yet
+ * whether the save will be accepted — so the stash outlives a *successful*
+ * save too. This is the other half: the chart pages render it when the action
+ * redirected with `?saved=1`, which is the one moment the stored board is
+ * provably stale.
+ *
+ * Renders nothing. An effect rather than a render-time call because clearing
+ * is a side effect on an external store, and doing it during render would
+ * mutate storage on every pass.
+ */
+export function ClearDraftStash({
+  teamId,
+  kind,
+}: {
+  teamId: string;
+  kind: ChartKind;
+}) {
+  React.useEffect(() => {
+    clearDraft(teamId, kind);
+  }, [teamId, kind]);
+
+  return null;
 }

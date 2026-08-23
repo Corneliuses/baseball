@@ -56,7 +56,10 @@ export function AddEventForm({
   /// What was duplicated, named, so the form can say why it is already full.
   duplicatedFrom?: string | null;
 }) {
-  const [state, formAction] = useActionState(
+  // `pending` comes from the hook rather than from `useFormStatus`: this
+  // component *renders* the form, and that hook only reports for a component
+  // inside one. It matters here — see the fieldset below.
+  const [state, formAction, pending] = useActionState(
     createEventAction,
     ADD_EVENT_INITIAL_STATE,
   );
@@ -116,8 +119,9 @@ export function AddEventForm({
 
       {duplicatedFrom ? (
         <p className="rounded-md border-2 border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
-          Copied from <span className="font-medium text-foreground">{duplicatedFrom}</span>
-          . Pick the new date and time.
+          Copied from{" "}
+          <span className="font-medium text-foreground">{duplicatedFrom}</span>.
+          Pick the new date and time.
         </p>
       ) : null}
 
@@ -128,93 +132,108 @@ export function AddEventForm({
         </StatusBanner>
       ) : null}
 
-      <div className="space-y-2">
-        <label htmlFor="type" className="block text-sm font-medium text-foreground">
-          Type
-        </label>
-        <select
-          id="type"
-          name="type"
-          required
-          value={values.type}
-          onChange={(event) => set("type", event.target.value)}
-          className={inputClass}
-        >
-          <option value="GAME">Game</option>
-          <option value="PRACTICE">Practice</option>
-        </select>
-      </div>
+      {/* Disabled for the length of the round trip, and not only for tidiness:
+          the moment a result lands, the block above overwrites every field
+          with what the action says to keep. Without this, a coach who started
+          typing the next event's date while the last one was still in flight
+          would watch it vanish — the exact failure this whole change exists to
+          remove. FormData is serialized at submit, before `pending` flips, so
+          disabling costs the submission nothing. */}
+      <fieldset disabled={pending} className="space-y-4 border-0 p-0">
+        <div className="space-y-2">
+          <label
+            htmlFor="type"
+            className="block text-sm font-medium text-foreground"
+          >
+            Type
+          </label>
+          <select
+            id="type"
+            name="type"
+            required
+            value={values.type}
+            onChange={(event) => set("type", event.target.value)}
+            className={inputClass}
+          >
+            <option value="GAME">Game</option>
+            <option value="PRACTICE">Practice</option>
+          </select>
+        </div>
 
-      <div className="space-y-2">
-        <label
-          htmlFor="startsAt"
-          className="block text-sm font-medium text-foreground"
-        >
-          Date and time
-        </label>
-        <input
-          id="startsAt"
-          name="startsAt"
-          type="datetime-local"
-          required
-          value={values.startsAt}
-          onChange={(event) => set("startsAt", event.target.value)}
-          aria-invalid={errorMessage ? true : undefined}
-          aria-describedby={errorMessage ? errorId : undefined}
-          className={inputClass}
-        />
-      </div>
+        <div className="space-y-2">
+          <label
+            htmlFor="startsAt"
+            className="block text-sm font-medium text-foreground"
+          >
+            Date and time
+          </label>
+          <input
+            id="startsAt"
+            name="startsAt"
+            type="datetime-local"
+            required
+            value={values.startsAt}
+            onChange={(event) => set("startsAt", event.target.value)}
+            aria-invalid={errorMessage ? true : undefined}
+            aria-describedby={errorMessage ? errorId : undefined}
+            className={inputClass}
+          />
+        </div>
 
-      <div className="space-y-2">
-        <label
-          htmlFor="location"
-          className="block text-sm font-medium text-foreground"
-        >
-          Location (optional)
-        </label>
-        <input
-          id="location"
-          name="location"
-          type="text"
-          maxLength={200}
-          value={values.location}
-          onChange={(event) => set("location", event.target.value)}
-          className={inputClass}
-        />
-      </div>
+        <div className="space-y-2">
+          <label
+            htmlFor="location"
+            className="block text-sm font-medium text-foreground"
+          >
+            Location (optional)
+          </label>
+          <input
+            id="location"
+            name="location"
+            type="text"
+            maxLength={200}
+            value={values.location}
+            onChange={(event) => set("location", event.target.value)}
+            className={inputClass}
+          />
+        </div>
 
-      <div className="space-y-2">
-        <label
-          htmlFor="opponent"
-          className="block text-sm font-medium text-foreground"
-        >
-          Opponent (optional)
-        </label>
-        <input
-          id="opponent"
-          name="opponent"
-          type="text"
-          maxLength={200}
-          value={values.opponent}
-          onChange={(event) => set("opponent", event.target.value)}
-          className={inputClass}
-        />
-      </div>
+        <div className="space-y-2">
+          <label
+            htmlFor="opponent"
+            className="block text-sm font-medium text-foreground"
+          >
+            Opponent (optional)
+          </label>
+          <input
+            id="opponent"
+            name="opponent"
+            type="text"
+            maxLength={200}
+            value={values.opponent}
+            onChange={(event) => set("opponent", event.target.value)}
+            className={inputClass}
+          />
+        </div>
 
-      <div className="space-y-2">
-        <label htmlFor="notes" className="block text-sm font-medium text-foreground">
-          Notes (optional)
-        </label>
-        <textarea
-          id="notes"
-          name="notes"
-          rows={2}
-          maxLength={2000}
-          value={values.notes}
-          onChange={(event) => set("notes", event.target.value)}
-          className={inputClass}
-        />
-      </div>
+        <div className="space-y-2">
+          <label
+            htmlFor="notes"
+            className="block text-sm font-medium text-foreground"
+          >
+            Notes (optional)
+          </label>
+          <textarea
+            id="notes"
+            name="notes"
+            rows={2}
+            maxLength={2000}
+            value={values.notes}
+            onChange={(event) => set("notes", event.target.value)}
+            className={inputClass}
+          />
+        </div>
+      </fieldset>
 
       {errorMessage ? (
         <StatusBanner tone="error" id={errorId}>

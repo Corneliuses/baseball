@@ -27,7 +27,9 @@ import {
 } from "./event-form-state";
 import {
   eventUrl,
+  optionalScheduleContextFromForm,
   scheduleContextFromForm,
+  scheduleQuery,
   scheduleUrl,
   type ScheduleContext,
 } from "./schedule-context";
@@ -328,10 +330,23 @@ function rsvpReturnUrl(
   teamId: string,
   eventId: string,
   query: string,
+  context: ScheduleContext | null,
 ): string {
-  return origin === "home"
-    ? `/t/${teamId}${query}`
-    : `/t/${teamId}/schedule/${eventId}${query}`;
+  if (origin === "home") {
+    return `/t/${teamId}${query}`;
+  }
+  // Back to the event page — and, when the coach opened it from a particular
+  // schedule, back to an event page that still remembers which. Without this
+  // the very next RSVP silently drops the context every other action on this
+  // page now carries, and the "← Schedule" link reverts to the month grid.
+  if (!context) {
+    return `/t/${teamId}/schedule/${eventId}${query}`;
+  }
+  const params = new URLSearchParams(scheduleQuery(context));
+  for (const [key, value] of new URLSearchParams(query.replace(/^\?/, ""))) {
+    params.set(key, value);
+  }
+  return `/t/${teamId}/schedule/${eventId}?${params.toString()}`;
 }
 
 /**
@@ -370,6 +385,7 @@ async function requireRsvpWriter(
   eventId: string,
   playerId: string,
   origin: RsvpOrigin,
+  context: ScheduleContext | null,
 ) {
   const { role, userId } = await requireTeamAccess(teamId, { intent: "write" });
 
@@ -380,7 +396,11 @@ async function requireRsvpWriter(
     // home there is no such page to land on, so say it instead of returning a
     // silently unchanged dashboard the parent will tap again.
     redirect(
-      origin === "home" ? `/t/${teamId}?error=event-gone` : `/t/${teamId}/schedule`,
+      origin === "home"
+        ? `/t/${teamId}?error=event-gone`
+        : context
+          ? scheduleUrl(teamId, context)
+          : `/t/${teamId}/schedule`,
     );
   }
 
@@ -388,12 +408,12 @@ async function requireRsvpWriter(
   const guardedPlayerIds = await guardedRosteredPlayerIds(teamId, userId);
   if (!guardedPlayerIds.has(playerId)) {
     if (role === "PARENT") {
-      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-your-player"));
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-your-player", context));
     }
     if (!(await isPlayerRostered(teamId, playerId))) {
       // Only reachable from a crafted form — the page renders rows from the
       // roster — so the copy is for the coach who somehow got here, not a flow.
-      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-on-team"));
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=not-on-team", context));
     }
     recordedById = userId;
   }
@@ -432,10 +452,16 @@ export async function rsvpAction(formData: FormData) {
   const eventId = extractEventId(formData);
   const playerId = extractPlayerId(formData);
   const origin = parseRsvpOrigin(formData);
+  // Only meaningful for the event-page origin; team home has its own
+  // destination. Optional, so a post that carried no context keeps the bare
+  // URL it had rather than being handed a month grid it never asked for.
+  // Re-parsed like every other context read — see schedule-context.ts on why
+  // these are validated fields and never a URL.
+  const context = optionalScheduleContextFromForm(formData, new Date());
 
   const parsedResponse = rsvpResponseSchema.safeParse(formData.get("response"));
   if (!parsedResponse.success) {
-    redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=invalid-rsvp"));
+    redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=invalid-rsvp", context));
   }
 
   try {
@@ -446,6 +472,7 @@ export async function rsvpAction(formData: FormData) {
       eventId,
       playerId,
       origin,
+      context,
     );
     if (parsedResponse.data === "clear") {
       await clearRsvp(event.id, playerId);
@@ -460,7 +487,7 @@ export async function rsvpAction(formData: FormData) {
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
-      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=access"));
+      redirect(rsvpReturnUrl(origin, teamId, eventId, "?error=access", context));
     }
     throw error;
   }
@@ -470,5 +497,5 @@ export async function rsvpAction(formData: FormData) {
   // so revalidating only the page that was posted from leaves the other stale.
   revalidatePath("/t/[teamId]/schedule/[eventId]", "page");
   revalidatePath("/t/[teamId]", "page");
-  redirect(rsvpReturnUrl(origin, teamId, eventId, "?saved=1"));
+  redirect(rsvpReturnUrl(origin, teamId, eventId, "?saved=1", context));
 }

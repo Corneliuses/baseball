@@ -133,7 +133,9 @@ export default async function EventPage({
       <Card>
         <CardHeader>
           <CardTitle>{heading}</CardTitle>
-          <CardDescription>{formatEventDateTime(event.startsAt)}</CardDescription>
+          <CardDescription>
+            {formatEventDateTime(event.startsAt)}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {event.location ? (
@@ -153,7 +155,9 @@ export default async function EventPage({
             <p className="text-muted-foreground">No location set.</p>
           )}
           {event.notes ? (
-            <p className="whitespace-pre-line text-muted-foreground">{event.notes}</p>
+            <p className="whitespace-pre-line text-muted-foreground">
+              {event.notes}
+            </p>
           ) : null}
         </CardContent>
       </Card>
@@ -174,17 +178,20 @@ export default async function EventPage({
         <CardHeader>
           <CardTitle className="text-lg">Attendance</CardTitle>
           <CardDescription>
-            RSVP is just for planning — every kid stays on the roster and in the chart
-            either way.
+            RSVP is just for planning — every kid stays on the roster and in the
+            chart either way.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {roster.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No players on the roster yet.</p>
+            <p className="text-sm text-muted-foreground">
+              No players on the roster yet.
+            </p>
           ) : (
             <ul className="space-y-2">
               {roster.map((entry) => {
-                const state = rsvpStateByPlayerId.get(entry.player.id) ?? "no-response";
+                const state =
+                  rsvpStateByPlayerId.get(entry.player.id) ?? "no-response";
                 // `no-response` is styled distinct from `declined` — it means
                 // the family hasn't answered, not that they said no. See rsvp.ts.
                 const badge = RSVP_STYLE[state];
@@ -220,9 +227,36 @@ export default async function EventPage({
                       <div className="flex shrink-0 gap-2">
                         <form action={rsvpAction}>
                           <input type="hidden" name="teamId" value={teamId} />
-                          <input type="hidden" name="eventId" value={event.id} />
-                          <input type="hidden" name="playerId" value={entry.player.id} />
-                          <input type="hidden" name="response" value="attending" />
+                          <input
+                            type="hidden"
+                            name="eventId"
+                            value={event.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="playerId"
+                            value={entry.player.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="response"
+                            value="attending"
+                          />
+                          <input
+                            type="hidden"
+                            name="view"
+                            value={context.view}
+                          />
+                          <input
+                            type="hidden"
+                            name="month"
+                            value={context.month}
+                          />
+                          <input
+                            type="hidden"
+                            name="past"
+                            value={context.past ? "1" : "0"}
+                          />
                           {/* A coach's list renders these controls on every
                               row, so each needs the player's name in its
                               accessible name — same argument as team home's
@@ -231,7 +265,9 @@ export default async function EventPage({
                           <SubmitButton
                             size="sm"
                             pendingLabel="Saving…"
-                            variant={state === "attending" ? "default" : "outline"}
+                            variant={
+                              state === "attending" ? "default" : "outline"
+                            }
                             aria-label={`${entry.player.name} is going`}
                           >
                             Going
@@ -239,13 +275,42 @@ export default async function EventPage({
                         </form>
                         <form action={rsvpAction}>
                           <input type="hidden" name="teamId" value={teamId} />
-                          <input type="hidden" name="eventId" value={event.id} />
-                          <input type="hidden" name="playerId" value={entry.player.id} />
-                          <input type="hidden" name="response" value="declined" />
+                          <input
+                            type="hidden"
+                            name="eventId"
+                            value={event.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="playerId"
+                            value={entry.player.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="response"
+                            value="declined"
+                          />
+                          <input
+                            type="hidden"
+                            name="view"
+                            value={context.view}
+                          />
+                          <input
+                            type="hidden"
+                            name="month"
+                            value={context.month}
+                          />
+                          <input
+                            type="hidden"
+                            name="past"
+                            value={context.past ? "1" : "0"}
+                          />
                           <SubmitButton
                             size="sm"
                             pendingLabel="Saving…"
-                            variant={state === "declined" ? "destructive" : "outline"}
+                            variant={
+                              state === "declined" ? "destructive" : "outline"
+                            }
                             aria-label={`${entry.player.name} is not going`}
                           >
                             Not going
@@ -257,13 +322,36 @@ export default async function EventPage({
                           // undoing their own entry. No row → nothing to clear.
                           <form action={rsvpAction}>
                             <input type="hidden" name="teamId" value={teamId} />
-                            <input type="hidden" name="eventId" value={event.id} />
+                            <input
+                              type="hidden"
+                              name="eventId"
+                              value={event.id}
+                            />
                             <input
                               type="hidden"
                               name="playerId"
                               value={entry.player.id}
                             />
-                            <input type="hidden" name="response" value="clear" />
+                            <input
+                              type="hidden"
+                              name="response"
+                              value="clear"
+                            />
+                            <input
+                              type="hidden"
+                              name="view"
+                              value={context.view}
+                            />
+                            <input
+                              type="hidden"
+                              name="month"
+                              value={context.month}
+                            />
+                            <input
+                              type="hidden"
+                              name="past"
+                              value={context.past ? "1" : "0"}
+                            />
                             <SubmitButton
                               size="sm"
                               variant="ghost"
@@ -300,7 +388,11 @@ export default async function EventPage({
                     schedule-context.ts. */}
                 <input type="hidden" name="view" value={context.view} />
                 <input type="hidden" name="month" value={context.month} />
-                <input type="hidden" name="past" value={context.past ? "1" : "0"} />
+                <input
+                  type="hidden"
+                  name="past"
+                  value={context.past ? "1" : "0"}
+                />
 
                 <div className="space-y-2">
                   <label
@@ -349,7 +441,7 @@ export default async function EventPage({
                     id="location"
                     name="location"
                     type="text"
-              maxLength={200}
+                    maxLength={200}
                     defaultValue={event.location ?? ""}
                     className={inputClass}
                   />
@@ -366,7 +458,7 @@ export default async function EventPage({
                     id="opponent"
                     name="opponent"
                     type="text"
-              maxLength={200}
+                    maxLength={200}
                     defaultValue={event.opponent ?? ""}
                     className={inputClass}
                   />
@@ -382,7 +474,7 @@ export default async function EventPage({
                   <textarea
                     id="notes"
                     name="notes"
-              maxLength={2000}
+                    maxLength={2000}
                     rows={2}
                     defaultValue={event.notes ?? ""}
                     className={inputClass}
@@ -450,18 +542,27 @@ export default async function EventPage({
                         name="past"
                         value={context.past ? "1" : "0"}
                       />
-                      <SubmitButton variant="destructive" pendingLabel="Deleting…">
+                      <SubmitButton
+                        variant="destructive"
+                        pendingLabel="Deleting…"
+                      >
                         Yes, delete it
                       </SubmitButton>
                     </form>
                     <Button asChild variant="outline">
-                      <Link href={eventUrl(teamId, event.id, context)}>Cancel</Link>
+                      <Link href={eventUrl(teamId, event.id, context)}>
+                        Cancel
+                      </Link>
                     </Button>
                   </div>
                 </div>
               ) : (
                 <Button asChild variant="destructive">
-                  <Link href={eventUrl(teamId, event.id, context, { confirm: "delete" })}>
+                  <Link
+                    href={eventUrl(teamId, event.id, context, {
+                      confirm: "delete",
+                    })}
+                  >
                     Delete event
                   </Link>
                 </Button>

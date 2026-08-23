@@ -140,13 +140,13 @@ export function AddPlayerForm({ teamId }: { teamId: string }) {
           <p className="font-medium">
             {duplicate.match.kind === "rostered"
               ? `${duplicate.match.name} is already on this roster.`
-              : `${duplicate.match.name} played on one of your past teams.`}{" "}
+              : `${duplicate.match.name} already exists from another team.`}{" "}
             Same kid?
           </p>
           <p className="mt-1 text-muted-foreground">
             {duplicate.match.kind === "rostered"
               ? "Adding them again creates a second player with the same name — separate jersey, separate batting slot, separate guardians."
-              : "Adding them here creates a brand-new player. The returning-player picker reuses the one you already have, and brings their guardians across."}
+              : "Adding them here creates a brand-new player. The returning-player picker reuses the existing one, and brings their guardians across."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {/* The only place `force` is ever set. Submitting this button

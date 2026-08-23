@@ -542,6 +542,48 @@ describe("the same-kid check on a manual add", () => {
     expect(findDuplicateNameMatch).not.toHaveBeenCalled();
   });
 
+  it("withholds the cross-team half from a coach", async () => {
+    // `listReturningCandidates` is the app's one global Player read
+    // (Decision 13) and is documented as OWNER-gated in its caller. Adding a
+    // player is COACH+, so running it for every caller would hand a coach an
+    // existence oracle across every team in the database: type a name, learn
+    // from the answer whether a child by that name is rostered anywhere, and
+    // get the canonical spelling back.
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-2",
+      jerseyNumber: null,
+      player: { id: "player-10", name: "Jake Miller", dateOfBirth: null },
+    });
+
+    await redirectUrlOf(addPlayer(form({ teamId: "team-1", name: "Jake Miller" })));
+
+    expect(findDuplicateNameMatch).toHaveBeenCalledWith(
+      "team-1",
+      "Jake Miller",
+      false,
+    );
+  });
+
+  it("allows it for an owner, who can act on the answer", async () => {
+    // The picker the "returning" branch points at is owner-only too, so
+    // offering it to a coach would be a dead end even setting the leak aside.
+    requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "owner-1" });
+    addPlayerToRoster.mockResolvedValue({
+      id: "entry-2",
+      jerseyNumber: null,
+      player: { id: "player-10", name: "Jake Miller", dateOfBirth: null },
+    });
+
+    await redirectUrlOf(addPlayer(form({ teamId: "team-1", name: "Jake Miller" })));
+
+    expect(findDuplicateNameMatch).toHaveBeenCalledWith(
+      "team-1",
+      "Jake Miller",
+      true,
+    );
+  });
+
   it("checks only after access is proven", async () => {
     // The check reads this team's roster and the owner's past players, so it
     // must never run for someone who has not been shown to be a coach here.

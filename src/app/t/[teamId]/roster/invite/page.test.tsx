@@ -138,3 +138,40 @@ describe("Bulk invite page", () => {
     expect(markup).toContain("Something went wrong.");
   });
 });
+
+describe("Bulk invite page keeps the form mounted", () => {
+  // The failure this guards is invisible on a partial batch and total on a
+  // full one. `linkGuardian` writes the GuardianPlayer row before the email is
+  // attempted, so every row a batch touched leaves `needingGuardians` — and
+  // the action revalidates this page. Gating the form on `needingGuardians`
+  // therefore unmounted it exactly when a full batch finished, taking the
+  // useActionState state, and with it the per-row list naming who failed.
+  it("keeps rendering InviteForm when every player is already covered", async () => {
+    getRosterWithGuardians.mockResolvedValue([
+      entry("entry-1", "Ada", ["a@example.com"]),
+    ]);
+
+    const markup = await renderPage();
+
+    // The card is the observable proxy for the component still being in the
+    // tree: the page renders <InviteForm> inside it on both branches, so React
+    // reconciles the same instance across the revalidation rather than
+    // unmounting it and dropping the results it holds. Before the fix this
+    // branch replaced the whole card with a bare paragraph.
+    expect(markup).toContain("Send invitations");
+    expect(markup).toContain("Every player already has a parent linked");
+  });
+
+  it("offers no rows to fill in when there are none", async () => {
+    getRosterWithGuardians.mockResolvedValue([
+      entry("entry-1", "Ada", ["a@example.com"]),
+    ]);
+
+    const markup = await renderPage();
+
+    // Alive, but with nothing to submit — the component is there to hold the
+    // results of the batch that just emptied it, not to offer another one.
+    expect(markup).not.toContain('name="email-entry-1"');
+    expect(markup).not.toContain('name="message"');
+  });
+});
