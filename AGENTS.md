@@ -47,7 +47,11 @@ history) and `messages/new` (the compose form every role uses) plus `/t/new` for
 owner-gated team creation. Outside `/t/` entirely — because `proxy.ts` would bounce a
 cookie-less calendar app to sign-in — `/api/calendar/[token]` serves each team's ICS
 feed, authorized by the capability token in the URL (`Team.calendarToken`) rather than a
-session; the subscribe URL is surfaced on the schedule page.
+session; the subscribe URL is surfaced on the schedule page. `/api/cron/reminders` is the
+other cookie-less endpoint — a Vercel Cron target that mails day-of reminders, authorized
+by a `CRON_SECRET` bearer token. `/api/push/subscription` is session-authenticated and
+per-person rather than per-team: it registers and removes the caller's own Web Push
+subscriptions for the opt-in card on `/profile`.
 
 **Contact details are staff-facing.** A parent never sees another family's phone or
 email: `/directory` and `roster/[entryId]` are both COACH+, and the team home page gives
@@ -66,6 +70,8 @@ fixes, what the team has on file for them.
 - **Drag & drop**: `@dnd-kit` (core, sortable, utilities)
 - **Animation**: `motion` v12 — import via `LazyMotion` + `m`, not the top-level `motion`
 - **Email**: Resend + React Email
+- **Push**: `web-push` + self-generated VAPID keys (Decision 8) — an enhancement layered
+  on email, never a replacement
 - **Validation**: Zod 4
 - **Testing**: Vitest 4 + Testing Library, jsdom
 - **Hosting**: Vercel
@@ -103,7 +109,8 @@ URL.
 ## Architecture
 
 Server Actions for mutations; Route Handlers only for things needing a real HTTP endpoint
-(magic-link callback, push subscription registration). No separate API layer.
+(magic-link callback, the ICS feed, push subscription registration, the reminder cron
+target). No separate API layer.
 
 ### Team scoping
 
@@ -315,12 +322,14 @@ production — the dev command can prompt, generate new migrations, and reset th
   person types into whichever container they are standing in, not a link; that is an auth
   change well beyond the PWA work, designed and costed in #60. Until it is checked, treat
   the iOS half of `InstallPrompt` as provisional.
-- **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting` plus
-  `clients.claim` and no `fetch` handler — Decision 9, and the reason there is no Workbox
-  build step. Adding a `fetch` handler is not a small change: every page under `/t/[teamId]`
-  is a different family's roster, so a cache keyed on URL alone would serve one signed-in
-  parent's data to the next person on a shared phone. It is also where the `push` handler
-  lands if Decision 8 is revisited. The manifest's two colours are frozen hex copied from
+- **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting`,
+  `clients.claim`, and the `push` / `notificationclick` pair — no `fetch` handler, which is
+  Decision 9 and the reason there is no Workbox build step. Adding a `fetch` handler is not
+  a small change: every page under `/t/[teamId]` is a different family's roster, so a cache
+  keyed on URL alone would serve one signed-in parent's data to the next person on a shared
+  phone. The `push` handler always calls `showNotification`, even on a malformed payload:
+  on iOS a push event that resolves without showing anything can cost the site its push
+  permission outright, so there is deliberately no silent push. The manifest's two colours are frozen hex copied from
   the **light** theme (a manifest cannot express a media query); `manifest.test.ts` redoes
   the HSL-to-hex conversion from `globals.css` and fails if either token moves.
 - **`RosterEntry`'s unique indexes surface as Prisma `P2002`, not a friendly error, unless
@@ -428,10 +437,42 @@ production — the dev command can prompt, generate new migrations, and reset th
   to a human who can ask why is the chosen trade; revisit only by deciding about that
   failure mode, not to chase a checkmark. Callers pass a bare address — `email.ts` owns
   the angle-bracket framing so it exists in one tested place.
-- **The bulk invite action is the only place that sends in a loop, and three constants are
-  coupled across two files.** `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS`
-  (600ms) apart to stay under Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and
-  the page — not the action — declares `maxDuration = 60`, since that is the level governing
-  a Server Action's timeout. `MAX_ROWS × MIN_SEND_INTERVAL_MS` must stay well under
-  `maxDuration`, or an oversized batch times out half-finished instead of being rejected
-  cleanly. Raising the cap or the interval means revisiting the ceiling too.
+- **Three places send in a loop, and each couples a cap, an interval and a timeout.**
+  `bulkInviteGuardiansAction` paces sends `MIN_SEND_INTERVAL_MS` (600ms) apart to stay under
+  Resend's 2 req/s limit, caps a batch at `MAX_ROWS` (30), and the page — not the action —
+  declares `maxDuration = 60`, since that is the level governing a Server Action's timeout.
+  `MAX_ROWS × MIN_SEND_INTERVAL_MS` must stay well under `maxDuration`, or an oversized batch
+  times out half-finished instead of being rejected cleanly. Raising the cap or the interval
+  means revisiting the ceiling too. `sendTeamMessageAction` repeats the pattern with
+  `MAX_RECIPIENTS` (30, deliberately equal to `MAX_ROWS`), and the reminder cron with
+  `MAX_SENDS_PER_RUN` (200) against its own `maxDuration = 300` — a Route Handler declares
+  that itself, unlike a Server Action. Same rule in all three: cap × interval well under the
+  ceiling, and the two move together.
+- **Day-of reminders are a cron, and their duplicate protection is a claim, not a check.**
+  `/api/cron/reminders` (schedule in `vercel.json`, authorized by a `CRON_SECRET` bearer
+  token, failing closed when that variable is unset) mails every guardian on the morning of
+  each game or practice. `ReminderReceipt` is the ledger: `claimReminder` **inserts** the
+  `(eventId, userId)` row before the send and `releaseReminder` deletes it if the send
+  fails, so the unique index — not application logic — is what stops a re-run double-sending,
+  and two overlapping invocations race at Postgres. Read-then-write would not hold. The
+  accepted cost is the other way round: a crash between claim and send loses one reminder,
+  which is the right trade against mailing every family twice. Recipients come from the
+  **roster** (`RosterEntry → Player → GuardianPlayer → User`), never from `Membership` — a
+  coach with no kid on the team has no RSVP state to be told about — and one household with
+  two kids gets one email naming both. The cron runs as the system with no
+  `requireTeamAccess`, so the archived-team exclusion (`team: { archivedAt: null }`) lives in
+  `loadTodaysReminderWork`'s query and must stay there. "Today" is
+  `[now, endOfDayInZone(now)]`, never a UTC day.
+- **Push is an enhancement and every layer has to keep it one.** `sendPushToUser`
+  (`src/lib/push.ts`) returns counts and never throws — unconfigured VAPID keys, no
+  subscription, a dead endpoint and a push-service outage are all quiet returns — and the
+  reminder cron sends it *after* a successful email, inside its own try/catch, never
+  releasing the claim on a push failure. Nothing about push may ever decide whether an
+  email goes. Endpoints answering `404`/`410` are deleted in the same pass (Decision 8:
+  subscriptions expire and must be pruned); any other status is transient and the row
+  stays. `VAPID_PUBLIC_KEY` is read at request time and passed to `PushOptInCard` as a
+  prop rather than being a `NEXT_PUBLIC_` variable — the key is not a secret, but inlining
+  it would make the build depend on the environment, which `src/lib/email.ts` and
+  `src/auth.ts` both avoid on purpose. `/api/push/subscription`'s `DELETE` matches on
+  endpoint **and** `userId`: the endpoint is unique table-wide, so without the user filter
+  it would be a fine deletion key for anyone who learned one.

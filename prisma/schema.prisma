@@ -78,6 +78,7 @@ model User {
   sentMessages      Message[]
   pushSubscriptions PushSubscription[]
   recordedRsvps     Rsvp[]             @relation("RsvpRecordedBy")
+  reminderReceipts  ReminderReceipt[]
 }
 
 /// A child. Holds only what is true of the child regardless of team.
@@ -218,8 +219,9 @@ model Event {
   opponent String?
   notes    String?
 
-  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  rsvps Rsvp[]
+  team             Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  rsvps            Rsvp[]
+  reminderReceipts ReminderReceipt[]
 
   @@index([teamId, startsAt])
 }
@@ -277,6 +279,31 @@ model PushSubscription {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+}
+
+/// One day-of reminder actually dispatched for one (event, guardian) pair —
+/// the duplicate-protection ledger behind /api/cron/reminders (#47).
+///
+/// The `@@unique([eventId, userId])` constraint IS the dedup mechanism: a row
+/// is claimed BEFORE the email is sent and deleted again if that send fails,
+/// so a cron re-run skips what already went out and retries only what did
+/// not. Two overlapping invocations therefore race at the database rather
+/// than in application logic — the same "make the invalid state
+/// unrepresentable" posture the chart columns take in Decision 16.
+///
+/// Cascade on both sides: this is operational bookkeeping, not history anyone
+/// reads back, so a deleted event or account takes its receipts with it.
+model ReminderReceipt {
+  id      String   @id @default(cuid())
+  eventId String
+  userId  String
+  sentAt  DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
   @@index([userId])
 }
 
