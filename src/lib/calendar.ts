@@ -1,6 +1,7 @@
 import { TZDate } from "@date-fns/tz";
 import {
   eachDayOfInterval,
+  endOfDay,
   endOfMonth,
   endOfWeek,
   format,
@@ -308,6 +309,25 @@ export function monthGridRange(month: CalendarMonth): { start: Date; end: Date }
  */
 export function startOfDayInZone(instant: Date): Date {
   return new Date(startOfDay(inZone(instant)).getTime());
+}
+
+/**
+ * The last millisecond of the day an instant falls on, in `APP_TIMEZONE`.
+ *
+ * The upper bound for "everything still to come today", which is what the
+ * day-of reminder cron (#47) asks: a run at 7 AM Central must find the 7:30 PM
+ * game and must not find tomorrow's. Doing that in UTC is precisely the bug
+ * this module exists to prevent — a 7:30 PM Central game is 00:30 the *next*
+ * day in UTC, so a UTC day window would skip today's evening games and pick up
+ * yesterday's.
+ *
+ * Inclusive of its own millisecond, matching date-fns's `endOfDay`, so callers
+ * compare with `lte` rather than `lt`. Like `startOfDayInZone` it returns a
+ * plain `Date`, never the `TZDate` — see the `toISOString` note in the module
+ * docstring.
+ */
+export function endOfDayInZone(instant: Date): Date {
+  return new Date(endOfDay(inZone(instant)).getTime());
 }
 
 // ---------------------------------------------------------------------------

@@ -21,9 +21,9 @@
  *   alone would hand the previous signed-in person's data to the next one on a
  *   shared phone. If offline support is ever wanted, adopt Serwist and think
  *   about scoping first — do not grow it a line at a time here.
- * - This is where the `push` and `notificationclick` handlers land when
- *   Decision 8 is revisited post-MVP. The VAPID variables in `.env.example` are
- *   commented out until then, and the `PushSubscription` table is unused.
+ * - The `push` and `notificationclick` handlers below are the whole of
+ *   Decision 8 in this file (#47). They read a payload and open a URL; they do
+ *   not cache, and they must not grow a `fetch` handler by association.
  *
  * `skipWaiting` and `clients.claim` together mean an updated worker takes over
  * immediately rather than waiting for every tab to close. With nothing cached
@@ -38,4 +38,67 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+/*
+ * Day-of reminders (#47).
+ *
+ * The payload is JSON written by `sendPushToUser` — `{ title, body, url }`.
+ * It is parsed defensively: a push whose body is missing or malformed must
+ * still show *something*, because on iOS a `push` event that resolves without
+ * calling `showNotification` can cost the site its push permission entirely.
+ * There is no silent push here by design.
+ */
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    const parsed = event.data ? event.data.json() : null;
+    // `json()` only throws on malformed JSON. A body of `null` — or a bare
+    // string, or a number — parses perfectly well and would then throw on the
+    // first property access below, *after* the try block, producing a push
+    // event that resolves without showing anything. On iOS that can cost the
+    // site its push permission outright, so the type is checked and not
+    // merely the parse.
+    if (parsed && typeof parsed === "object") {
+      payload = parsed;
+    }
+  } catch {
+    payload = {};
+  }
+
+  const title = payload.title || "Youth Baseball Team Manager";
+  const options = {
+    body: payload.body || "You have an update from your team.",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    // Collapses repeats on the lock screen: a re-delivered reminder for the
+    // same event replaces the old one rather than stacking.
+    tag: payload.url || "team-notification",
+    data: { url: payload.url || "/" },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+/*
+ * Focus an already-open tab rather than piling up new ones — a parent who
+ * taps two reminders should not end up with two copies of the app.
+ */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const target = (event.notification.data && event.notification.data.url) || "/";
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if (client.url === target && "focus" in client) {
+            return client.focus();
+          }
+        }
+        return self.clients.openWindow(target);
+      }),
+  );
 });
