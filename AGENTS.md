@@ -425,14 +425,19 @@ production — the dev command can prompt, generate new migrations, and reset th
   whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
-- **`List-Unsubscribe` is set on exactly one send, and that is a claim, not an oversight.**
-  `sendEmail` takes an optional `listUnsubscribe` address and only the all-parents
-  broadcast passes one. RFC 2369 says the header describes a *list the recipient belongs
-  to*: an invitation goes to someone not on the team yet, and the other two message
-  shapes are one-to-one correspondence (a coach mailing one parent, a parent mailing the
-  staff). Adding it everywhere to quiet a deliverability report would be a lie in a
-  header. The value is a `mailto:` to the sending coach and deliberately **not** RFC 8058
-  one-click — one-click needs an unauthenticated HTTPS POST and a suppression store,
+- **`List-Unsubscribe` is set on two sends, and which two is a claim, not an oversight.**
+  `sendEmail` takes an optional `listUnsubscribe` address; the all-parents broadcast and
+  the day-of reminder cron pass one, and nothing else does. RFC 2369 says the header
+  describes a *list the recipient belongs to*: an invitation goes to someone not on the
+  team yet, and the two remaining message shapes are one-to-one correspondence (a coach
+  mailing one parent, a parent mailing the staff). Adding it everywhere to quiet a
+  deliverability report would be a lie in a header. The address differs by sender because
+  the senders differ: a broadcast has a human sending it, so it reuses that coach (the
+  same address as `Reply-To`), while the cron runs as the system and has to *choose* one —
+  `pickUnsubscribeContact` (`reminders.ts`) takes the team's owner over an assistant coach
+  and breaks ties on `userId`, so two runs of the same day name the same person. A team
+  with no staff address sends no header rather than one mailing nowhere. Deliberately
+  **not** RFC 8058 one-click — one-click needs an unauthenticated HTTPS POST and a suppression store,
   which is how a parent silently drops themselves off "tonight is cancelled". Routing it
   to a human who can ask why is the chosen trade; revisit only by deciding about that
   failure mode, not to chase a checkmark. Callers pass a bare address — `email.ts` owns

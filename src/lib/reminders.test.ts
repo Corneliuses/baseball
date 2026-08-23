@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildReminderBatch,
+  pickUnsubscribeContact,
   type ReminderEvent,
   type ReminderRosterEntry,
 } from "@/lib/reminders";
@@ -29,6 +30,7 @@ function event(overrides: Partial<ReminderEvent> = {}): ReminderEvent {
     notes: "Arrive 30 minutes early.",
     roster: [rosterEntry("player-1", "Jimmy", [ANNA])],
     rsvps: [],
+    unsubscribeEmail: "coach@example.com",
     ...overrides,
   };
 }
@@ -185,5 +187,70 @@ describe("buildReminderBatch", () => {
 
     expect(payloads).toHaveLength(1);
     expect(payloads[0].kids).toHaveLength(1);
+  });
+});
+
+describe("pickUnsubscribeContact", () => {
+  const OWNER = {
+    userId: "u-owner",
+    role: "OWNER" as const,
+    email: "owner@example.com",
+  };
+  const COACH = {
+    userId: "u-coach",
+    role: "COACH" as const,
+    email: "coach@example.com",
+  };
+
+  it("prefers the owner over an assistant coach, whatever the input order", () => {
+    expect(pickUnsubscribeContact([COACH, OWNER])).toBe("owner@example.com");
+    expect(pickUnsubscribeContact([OWNER, COACH])).toBe("owner@example.com");
+  });
+
+  it("falls back to a coach when the team has no owner row", () => {
+    expect(pickUnsubscribeContact([COACH])).toBe("coach@example.com");
+  });
+
+  it("breaks a tie on userId so two runs name the same person", () => {
+    const b = { userId: "u-b", role: "COACH" as const, email: "b@example.com" };
+    const a = { userId: "u-a", role: "COACH" as const, email: "a@example.com" };
+
+    expect(pickUnsubscribeContact([b, a])).toBe("a@example.com");
+    expect(pickUnsubscribeContact([a, b])).toBe("a@example.com");
+  });
+
+  it("returns null rather than an address that mails nowhere", () => {
+    expect(pickUnsubscribeContact([])).toBeNull();
+    expect(
+      pickUnsubscribeContact([{ ...COACH, email: "" }]),
+    ).toBeNull();
+  });
+
+  it("skips a blank address but still finds a usable one", () => {
+    expect(pickUnsubscribeContact([{ ...OWNER, email: "" }, COACH])).toBe(
+      "coach@example.com",
+    );
+  });
+});
+
+describe("buildReminderBatch — unsubscribe contact", () => {
+  it("carries the event's contact onto every payload", () => {
+    const payloads = buildReminderBatch([
+      event({
+        roster: [rosterEntry("player-1", "Jimmy", [ANNA, BEN])],
+        unsubscribeEmail: "owner@example.com",
+      }),
+    ]);
+
+    expect(payloads).toHaveLength(2);
+    for (const payload of payloads) {
+      expect(payload.unsubscribeEmail).toBe("owner@example.com");
+    }
+  });
+
+  it("carries a null through rather than inventing one", () => {
+    const [payload] = buildReminderBatch([event({ unsubscribeEmail: null })]);
+
+    expect(payload.unsubscribeEmail).toBeNull();
   });
 });

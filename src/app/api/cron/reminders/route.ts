@@ -192,6 +192,14 @@ export async function GET(request: Request) {
       const outcome = await sendEmail({
         to: payload.email,
         subject,
+        // Reminders are the app's only recurring, every-family mail, which is
+        // exactly what List-Unsubscribe describes. There is no human sender to
+        // point at — the cron runs as the system — so the address is the
+        // team's staff contact, chosen by `pickUnsubscribeContact`. A team
+        // with no staff address sends none rather than one mailing nowhere.
+        ...(payload.unsubscribeEmail
+          ? { listUnsubscribe: payload.unsubscribeEmail }
+          : {}),
         react: EventReminderEmail({
           teamName: payload.teamName,
           headline,
