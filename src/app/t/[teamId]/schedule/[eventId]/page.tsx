@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { RSVP_STYLE } from "@/components/rsvp-style";
+import { TicketIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/SubmitButton";
 import {
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
-import { messageFor, messageTable } from "@/lib/error-messages";
+import { messageFor } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import { getRoster } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -24,28 +25,17 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
 import { deleteEventAction, rsvpAction, updateEventAction } from "../actions";
+import { SCHEDULE_ERROR_MESSAGES } from "../schedule-messages";
+import {
+  eventUrl,
+  scheduleContextFrom,
+  scheduleQuery,
+  scheduleUrl,
+} from "../schedule-context";
 
 export const metadata = {
   title: "Event — Youth Baseball Team Manager",
 };
-
-const ERROR_MESSAGES = messageTable({
-  "invalid-type": "Choose either a game or a practice.",
-  "invalid-datetime": "Enter a valid date and time.",
-  // The limits are named, not implied. These three were reachable purely by
-  // typing — the inputs carried no maxLength — so a coach could be told "too
-  // long" with no idea by how much (#51). Both halves are fixed: the fields
-  // now stop at the same numbers the action enforces, and the sentence says
-  // what the number is for anything that still gets through (a paste, a
-  // forged POST).
-  "invalid-location": "Location is too long — keep it under 200 characters.",
-  "invalid-opponent": "Opponent is too long — keep it under 200 characters.",
-  "invalid-notes": "Notes are too long — keep them under 2,000 characters.",
-  "invalid-rsvp": "Choose a valid response.",
-  "not-your-player": "You can only RSVP for your own kids.",
-  "not-on-team": "That player is not on this team's roster.",
-  access: "You no longer have access to make this change.",
-});
 
 const inputClass =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
@@ -59,10 +49,31 @@ export default async function EventPage({
   searchParams,
 }: {
   params: Promise<{ teamId: string; eventId: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; confirm?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    saved?: string;
+    confirm?: string;
+    view?: string;
+    month?: string;
+    past?: string;
+  }>;
 }) {
   const { teamId, eventId } = await params;
-  const { error, saved, confirm } = await searchParams;
+  const {
+    error,
+    saved,
+    confirm,
+    view: rawView,
+    month: rawMonth,
+    past,
+  } = await searchParams;
+  // Which schedule the coach opened this event from, so the back link and
+  // every redirect out of here return there rather than dumping a coach who
+  // was working down a list back onto this month's grid.
+  const context = scheduleContextFrom(
+    { view: rawView, month: rawMonth, past },
+    new Date(),
+  );
 
   let role: Role;
   let userId;
@@ -104,7 +115,7 @@ export default async function EventPage({
   // Archived teams reject every write server-side; hiding the buttons rather
   // than showing-and-refusing matches team home (its `teamIsWritable`).
   const teamIsWritable = team.archivedAt === null;
-  const errorMessage = messageFor(ERROR_MESSAGES, error);
+  const errorMessage = messageFor(SCHEDULE_ERROR_MESSAGES, error);
   const confirmingDelete = confirm === "delete";
   const heading =
     event.type === "GAME"
@@ -116,7 +127,7 @@ export default async function EventPage({
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
       <Button asChild variant="outline" size="sm">
-        <Link href={`/t/${teamId}/schedule`}>← Schedule</Link>
+        <Link href={scheduleUrl(teamId, context)}>← Schedule</Link>
       </Button>
 
       <Card>
@@ -284,6 +295,12 @@ export default async function EventPage({
               <form action={updateEventAction} className="space-y-4">
                 <input type="hidden" name="teamId" value={teamId} />
                 <input type="hidden" name="eventId" value={event.id} />
+                {/* Which schedule to return to. Re-parsed server-side —
+                    three validated fields, never a destination URL; see
+                    schedule-context.ts. */}
+                <input type="hidden" name="view" value={context.view} />
+                <input type="hidden" name="month" value={context.month} />
+                <input type="hidden" name="past" value={context.past ? "1" : "0"} />
 
                 <div className="space-y-2">
                   <label
@@ -379,6 +396,35 @@ export default async function EventPage({
             </CardContent>
           </Card>
 
+          {/* Entering a season is the same fixture over and over — six home
+              games at one field, the same opponent twice in a fortnight — so
+              the fastest new event is usually a copy of an old one (#51 / C1).
+              A link, not a mutation: it opens the add form pre-filled and lets
+              the coach choose the date. Cloning on the spot would put a
+              wrongly-dated event on the real schedule, pushing RSVPs and the
+              calendar feed, until somebody noticed. */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Duplicate this event</CardTitle>
+              <CardDescription>
+                Opens the add form with the type, location, opponent and notes
+                already filled in. You pick the new date.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="outline">
+                <Link
+                  href={`/t/${teamId}/schedule?${scheduleQuery(context, {
+                    duplicate: event.id,
+                  })}#add-event`}
+                >
+                  <TicketIcon />
+                  Duplicate event
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Delete this event</CardTitle>
@@ -397,18 +443,25 @@ export default async function EventPage({
                     <form action={deleteEventAction}>
                       <input type="hidden" name="teamId" value={teamId} />
                       <input type="hidden" name="eventId" value={event.id} />
+                      <input type="hidden" name="view" value={context.view} />
+                      <input type="hidden" name="month" value={context.month} />
+                      <input
+                        type="hidden"
+                        name="past"
+                        value={context.past ? "1" : "0"}
+                      />
                       <SubmitButton variant="destructive" pendingLabel="Deleting…">
                         Yes, delete it
                       </SubmitButton>
                     </form>
                     <Button asChild variant="outline">
-                      <Link href={`/t/${teamId}/schedule/${event.id}`}>Cancel</Link>
+                      <Link href={eventUrl(teamId, event.id, context)}>Cancel</Link>
                     </Button>
                   </div>
                 </div>
               ) : (
                 <Button asChild variant="destructive">
-                  <Link href={`/t/${teamId}/schedule/${event.id}?confirm=delete`}>
+                  <Link href={eventUrl(teamId, event.id, context, { confirm: "delete" })}>
                     Delete event
                   </Link>
                 </Button>

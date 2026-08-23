@@ -51,6 +51,10 @@ import {
   rsvpAction,
   updateEventAction,
 } from "./actions";
+import {
+  ADD_EVENT_INITIAL_STATE,
+  type AddEventState,
+} from "./event-form-state";
 
 const WRITE_ACCESS = { intent: "write", minRole: "COACH" } as const;
 
@@ -84,6 +88,29 @@ async function redirectUrlOf(run: () => Promise<unknown>): Promise<string> {
     throw error;
   }
   throw new Error("Expected a redirect, but the action returned normally");
+}
+
+/// `createEventAction` is shaped for `useActionState`, so it takes the previous
+/// state ahead of the form — and, on every path but lost access, it now
+/// *returns* that state instead of redirecting. That is the fix for C1: no
+/// navigation means the page stays put, the view stays put, and the form keeps
+/// what is worth keeping.
+function addEvent(data: FormData): Promise<AddEventState> {
+  return createEventAction(ADD_EVENT_INITIAL_STATE, data);
+}
+
+/// Narrow to one branch of the returned state, failing the test rather than
+/// the type checker when a call took the other one.
+function added(state: AddEventState) {
+  expect(state.status).toBe("added");
+  if (state.status !== "added") throw new Error("unreachable");
+  return state;
+}
+
+function rejected(state: AddEventState) {
+  expect(state.status).toBe("invalid");
+  if (state.status !== "invalid") throw new Error("unreachable");
+  return state;
 }
 
 /// The RSVP gate compares an event's start against the wall clock, so this
@@ -122,13 +149,13 @@ afterEach(() => {
 
 describe("createEventAction", () => {
   it("requires COACH and a writable team", async () => {
-    await redirectUrlOf(() => createEventAction(form(validEvent)));
+    await addEvent(form(validEvent));
 
     expect(requireTeamAccess).toHaveBeenCalledWith("team-1", WRITE_ACCESS);
   });
 
   it("converts the coach's wall clock to a Central-anchored UTC instant", async () => {
-    await redirectUrlOf(() => createEventAction(form(validEvent)));
+    await addEvent(form(validEvent));
 
     const [[teamId, input]] = createEvent.mock.calls;
     expect(teamId).toBe("team-1");
@@ -140,11 +167,7 @@ describe("createEventAction", () => {
   });
 
   it("stores blank optional fields as null rather than empty strings", async () => {
-    await redirectUrlOf(() =>
-      createEventAction(
-        form({ ...validEvent, location: "", opponent: "", notes: "  " }),
-      ),
-    );
+    await addEvent(form({ ...validEvent, location: "", opponent: "", notes: "  " }));
 
     const [[, input]] = createEvent.mock.calls;
     expect(input.location).toBeNull();
@@ -152,48 +175,79 @@ describe("createEventAction", () => {
     expect(input.notes).toBeNull();
   });
 
-  it("redirects back with an error on a blank start time, without writing", async () => {
-    const url = await redirectUrlOf(() =>
-      createEventAction(form({ ...validEvent, startsAt: "" })),
-    );
+  it("does not navigate on success, which is what kept the coach in place", async () => {
+    // The whole of C1's ~60 interactions was in the old redirect: it reloaded
+    // the page, reset five fields, dropped view/month and scrolled to the top
+    // — every time, for every game of a twelve-game season.
+    const state = await addEvent(form(validEvent));
 
-    expect(url).toBe("/t/team-1/schedule?error=invalid-datetime");
+    expect(state.status).toBe("added");
+  });
+
+  it("keeps type, location and opponent for the next event, and never the date", async () => {
+    const state = added(await addEvent(form(validEvent)));
+
+    expect(state.keep).toEqual({
+      type: "GAME",
+      // Always cleared: two events cannot share a start time, and a stale one
+      // sitting in the box is the single most dangerous thing to keep.
+      startsAt: "",
+      location: "Field 3",
+      opponent: "Hawks",
+      // Notes are about one occasion, so they clear with the date.
+      notes: "",
+    });
+  });
+
+  it("names the event it just added, since three quick adds look alike", async () => {
+    const state = added(await addEvent(form(validEvent)));
+
+    expect(state.summary).toContain("Game");
+    expect(state.summary).toContain("2026");
+  });
+
+  it("hands back what was typed on a blank start time, without writing", async () => {
+    const state = rejected(await addEvent(form({ ...validEvent, startsAt: "" })));
+
+    expect(state.code).toBe("invalid-datetime");
+    // The rest of the form survives — that is the point of returning.
+    expect(state.values.location).toBe("Field 3");
+    expect(state.values.opponent).toBe("Hawks");
+    expect(state.values.notes).toBe("Bring water");
     expect(createEvent).not.toHaveBeenCalled();
   });
 
   it("rejects a malformed start time", async () => {
-    const url = await redirectUrlOf(() =>
-      createEventAction(form({ ...validEvent, startsAt: "next tuesday" })),
+    const state = rejected(
+      await addEvent(form({ ...validEvent, startsAt: "next tuesday" })),
     );
 
-    expect(url).toBe("/t/team-1/schedule?error=invalid-datetime");
+    expect(state.code).toBe("invalid-datetime");
     expect(createEvent).not.toHaveBeenCalled();
   });
 
   it("rejects a date that does not exist", async () => {
-    const url = await redirectUrlOf(() =>
-      createEventAction(form({ ...validEvent, startsAt: "2026-02-30T18:00" })),
+    const state = rejected(
+      await addEvent(form({ ...validEvent, startsAt: "2026-02-30T18:00" })),
     );
 
-    expect(url).toBe("/t/team-1/schedule?error=invalid-datetime");
+    expect(state.code).toBe("invalid-datetime");
     expect(createEvent).not.toHaveBeenCalled();
   });
 
   it("rejects an event type outside the enum", async () => {
-    const url = await redirectUrlOf(() =>
-      createEventAction(form({ ...validEvent, type: "SCRIMMAGE" })),
-    );
+    const state = rejected(await addEvent(form({ ...validEvent, type: "SCRIMMAGE" })));
 
-    expect(url).toBe("/t/team-1/schedule?error=invalid-type");
+    expect(state.code).toBe("invalid-type");
     expect(createEvent).not.toHaveBeenCalled();
   });
 
   it("rejects an over-long location", async () => {
-    const url = await redirectUrlOf(() =>
-      createEventAction(form({ ...validEvent, location: "x".repeat(201) })),
+    const state = rejected(
+      await addEvent(form({ ...validEvent, location: "x".repeat(201) })),
     );
 
-    expect(url).toBe("/t/team-1/schedule?error=invalid-location");
+    expect(state.code).toBe("invalid-location");
     expect(createEvent).not.toHaveBeenCalled();
   });
 
@@ -202,17 +256,46 @@ describe("createEventAction", () => {
       new TeamAccessError("Requires COACH", "insufficient-role"),
     );
 
-    const url = await redirectUrlOf(() => createEventAction(form(validEvent)));
+    const url = await redirectUrlOf(() => addEvent(form(validEvent)));
 
-    expect(url).toBe("/t/team-1/schedule?error=access");
+    expect(url).toBe("/t/team-1/schedule?view=month&month=2026-08&error=access");
     expect(createEvent).not.toHaveBeenCalled();
+  });
+
+  it("sends a list-view coach back to their list, not to the grid", async () => {
+    // parseViewParam treats anything that is not exactly "list" as month, so
+    // dropping the param silently threw a coach working down a list back onto
+    // this month's calendar (C1).
+    requireTeamAccess.mockRejectedValue(
+      new TeamAccessError("Requires COACH", "insufficient-role"),
+    );
+
+    const url = await redirectUrlOf(() =>
+      addEvent(form({ ...validEvent, view: "list", past: "1" })),
+    );
+
+    expect(url).toBe("/t/team-1/schedule?view=list&past=1&error=access");
+  });
+
+  it("re-parses the context rather than trusting it", async () => {
+    // The context arrives from hidden inputs, so it arrives from whatever the
+    // POST carried. A forged month must not reach a redirect verbatim.
+    requireTeamAccess.mockRejectedValue(
+      new TeamAccessError("Requires COACH", "insufficient-role"),
+    );
+
+    const url = await redirectUrlOf(() =>
+      addEvent(form({ ...validEvent, view: "whatever", month: "not-a-month" })),
+    );
+
+    expect(url).toBe("/t/team-1/schedule?view=month&month=2026-08&error=access");
   });
 
   it("throws on a missing team id rather than guessing", async () => {
     const data = form(validEvent);
     data.delete("teamId");
 
-    await expect(createEventAction(data)).rejects.toThrow("Invalid team ID");
+    await expect(addEvent(data)).rejects.toThrow("Invalid team ID");
   });
 });
 
@@ -239,14 +322,16 @@ describe("updateEventAction", () => {
 
     const url = await redirectUrlOf(() => updateEventAction(updateForm));
 
-    expect(url).toBe("/t/team-1/schedule");
+    expect(url).toBe("/t/team-1/schedule?view=month&month=2026-08");
     expect(updateEvent).not.toHaveBeenCalled();
   });
 
   it("redirects to the event with a saved flag on success", async () => {
     const url = await redirectUrlOf(() => updateEventAction(updateForm));
 
-    expect(url).toBe("/t/team-1/schedule/event-1?saved=1");
+    expect(url).toBe(
+      "/t/team-1/schedule/event-1?view=month&month=2026-08&saved=1",
+    );
   });
 
   it("sends validation errors back to the event page, not the schedule", async () => {
@@ -254,7 +339,9 @@ describe("updateEventAction", () => {
       updateEventAction(form({ ...validEvent, eventId: "event-1", startsAt: "" })),
     );
 
-    expect(url).toBe("/t/team-1/schedule/event-1?error=invalid-datetime");
+    expect(url).toBe(
+      "/t/team-1/schedule/event-1?view=month&month=2026-08&error=invalid-datetime",
+    );
     expect(updateEvent).not.toHaveBeenCalled();
   });
 
@@ -287,7 +374,7 @@ describe("deleteEventAction", () => {
     const url = await redirectUrlOf(() => deleteEventAction(deleteForm));
 
     expect(deleteEvent).toHaveBeenCalledWith("team-1", "event-1");
-    expect(url).toBe("/t/team-1/schedule");
+    expect(url).toBe("/t/team-1/schedule?view=month&month=2026-08");
   });
 
   it("redirects with ?error=access for a parent or an archived team", async () => {
@@ -295,7 +382,9 @@ describe("deleteEventAction", () => {
 
     const url = await redirectUrlOf(() => deleteEventAction(deleteForm));
 
-    expect(url).toBe("/t/team-1/schedule/event-1?error=access");
+    expect(url).toBe(
+      "/t/team-1/schedule/event-1?view=month&month=2026-08&error=access",
+    );
     expect(deleteEvent).not.toHaveBeenCalled();
   });
 });
