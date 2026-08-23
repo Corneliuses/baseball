@@ -52,7 +52,16 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("push", (event) => {
   let payload = {};
   try {
-    payload = event.data ? event.data.json() : {};
+    const parsed = event.data ? event.data.json() : null;
+    // `json()` only throws on malformed JSON. A body of `null` — or a bare
+    // string, or a number — parses perfectly well and would then throw on the
+    // first property access below, *after* the try block, producing a push
+    // event that resolves without showing anything. On iOS that can cost the
+    // site its push permission outright, so the type is checked and not
+    // merely the parse.
+    if (parsed && typeof parsed === "object") {
+      payload = parsed;
+    }
   } catch {
     payload = {};
   }

@@ -88,6 +88,10 @@ type RunSummary = {
   /// Devices reached, not people — a guardian with a phone and a tablet counts
   /// twice, and most guardians count zero.
   pushed: number;
+  /// The day held more events than the loader will read in one run, so
+  /// `events` is not the whole day. Never true in normal operation; when it is,
+  /// the summary must not read as a clean sweep.
+  truncated: boolean;
 };
 
 /// The notification body. The subject already carries the team and the event,
@@ -102,7 +106,7 @@ export async function GET(request: Request) {
   }
 
   const now = new Date();
-  const events = await loadTodaysReminderWork(now);
+  const { events, truncated } = await loadTodaysReminderWork(now);
   const payloads = buildReminderBatch(events);
 
   const summary: RunSummary = {
@@ -113,6 +117,7 @@ export async function GET(request: Request) {
     failed: 0,
     capped: Math.max(0, payloads.length - MAX_SENDS_PER_RUN),
     pushed: 0,
+    truncated,
   };
 
   if (summary.capped > 0) {
@@ -130,12 +135,22 @@ export async function GET(request: Request) {
   let lastSendAt = 0;
 
   for (const payload of payloads.slice(0, MAX_SENDS_PER_RUN)) {
+    // Whether *this* iteration is the one holding the receipt. The catch below
+    // must never release a claim it did not take: if `claimReminder` itself
+    // throws on a transient database error (a pool timeout, a dropped
+    // connection) while a concurrent run holds the row and has already mailed
+    // against it, an unconditional release would delete that run's receipt and
+    // the next run would re-mail the family — the exact duplicate the ledger
+    // exists to prevent.
+    let claimed = false;
+
     try {
       const claim = await claimReminder(payload.eventId, payload.userId);
       if (claim === "already-sent") {
         summary.skipped += 1;
         continue;
       }
+      claimed = true;
 
       // Wait out only the remainder of the interval.
       const waitMs = lastSendAt + MIN_SEND_INTERVAL_MS - Date.now();
@@ -199,7 +214,9 @@ export async function GET(request: Request) {
         `Reminder failed for event ${payload.eventId}, user ${payload.userId}:`,
         detail,
       );
-      await releaseReminder(payload.eventId, payload.userId);
+      if (claimed) {
+        await releaseReminder(payload.eventId, payload.userId);
+      }
       summary.failed += 1;
     }
   }

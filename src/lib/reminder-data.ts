@@ -17,7 +17,20 @@ import type { ReminderEvent } from "./reminders";
 /// Belt and braces against a runaway query: a day's events for a single
 /// operator's teams is a handful, and anything wildly past that is a bug or a
 /// test fixture rather than a real Saturday.
+///
+/// Hitting it is reported rather than absorbed — see `ReminderWork.truncated`.
+/// A cap that quietly drops events would make a half-covered day look
+/// identical to a fully covered one in the run summary, which is the failure
+/// mode that hides itself.
 const MAX_EVENTS_PER_RUN = 50;
+
+export type ReminderWork = {
+  events: ReminderEvent[];
+  /// True when the day held more events than `MAX_EVENTS_PER_RUN`. Those
+  /// events get no reminder and no receipt this run, so the route surfaces
+  /// this in its summary instead of reporting a clean sweep.
+  truncated: boolean;
+};
 
 /**
  * Every event still to come today, on a team that is not archived, with the
@@ -43,14 +56,16 @@ const MAX_EVENTS_PER_RUN = 50;
  */
 export async function loadTodaysReminderWork(
   now: Date,
-): Promise<ReminderEvent[]> {
-  const events = await db.event.findMany({
+): Promise<ReminderWork> {
+  // One over the cap, so hitting it is detectable rather than merely
+  // indistinguishable from a day that happened to hold exactly that many.
+  const found = await db.event.findMany({
     where: {
       startsAt: { gte: now, lte: endOfDayInZone(now) },
       team: { archivedAt: null },
     },
     orderBy: { startsAt: "asc" },
-    take: MAX_EVENTS_PER_RUN,
+    take: MAX_EVENTS_PER_RUN + 1,
     select: {
       id: true,
       teamId: true,
@@ -64,8 +79,17 @@ export async function loadTodaysReminderWork(
     },
   });
 
+  const truncated = found.length > MAX_EVENTS_PER_RUN;
+  const events = truncated ? found.slice(0, MAX_EVENTS_PER_RUN) : found;
+
+  if (truncated) {
+    console.error(
+      `Reminder run found more than ${MAX_EVENTS_PER_RUN} events today — the rest are not being reminded`,
+    );
+  }
+
   if (events.length === 0) {
-    return [];
+    return { events: [], truncated };
   }
 
   // One roster read for the whole run rather than one per event: a
@@ -74,18 +98,21 @@ export async function loadTodaysReminderWork(
   const teamIds = [...new Set(events.map((event) => event.teamId))];
   const rosterByTeamId = await loadRostersByTeamId(teamIds);
 
-  return events.map((event) => ({
-    id: event.id,
-    teamId: event.teamId,
-    teamName: event.team.name,
-    type: event.type,
-    startsAt: event.startsAt,
-    location: event.location,
-    opponent: event.opponent,
-    notes: event.notes,
-    roster: rosterByTeamId.get(event.teamId) ?? [],
-    rsvps: event.rsvps,
-  }));
+  return {
+    events: events.map((event) => ({
+      id: event.id,
+      teamId: event.teamId,
+      teamName: event.team.name,
+      type: event.type,
+      startsAt: event.startsAt,
+      location: event.location,
+      opponent: event.opponent,
+      notes: event.notes,
+      roster: rosterByTeamId.get(event.teamId) ?? [],
+      rsvps: event.rsvps,
+    })),
+    truncated,
+  };
 }
 
 async function loadRostersByTeamId(

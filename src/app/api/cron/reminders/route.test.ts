@@ -44,6 +44,11 @@ function event(overrides: Partial<ReminderEvent> = {}): ReminderEvent {
   };
 }
 
+/// The loader returns the day's events plus whether it had to truncate them.
+function work(events: ReminderEvent[], truncated = false) {
+  return { events, truncated };
+}
+
 function get(authorization: string | null = `Bearer ${SECRET}`) {
   const headers = new Headers();
   if (authorization !== null) {
@@ -59,7 +64,7 @@ beforeEach(() => {
   vi.unstubAllEnvs();
   vi.stubEnv("CRON_SECRET", SECRET);
   vi.stubEnv("AUTH_URL", "https://app.example.com");
-  loadTodaysReminderWork.mockResolvedValue([]);
+  loadTodaysReminderWork.mockResolvedValue(work([]));
   claimReminder.mockResolvedValue("claimed");
   releaseReminder.mockResolvedValue(undefined);
   sendEmail.mockResolvedValue({ ok: true });
@@ -104,14 +109,16 @@ describe("GET /api/cron/reminders — sending", () => {
   });
 
   it("mails each guardian and reports the run", async () => {
-    loadTodaysReminderWork.mockResolvedValue([
-      event({
-        roster: [
-          { playerId: "player-1", playerName: "Jimmy", guardians: [ANNA] },
-          { playerId: "player-2", playerName: "Sofia", guardians: [BEN] },
-        ],
-      }),
-    ]);
+    loadTodaysReminderWork.mockResolvedValue(
+      work([
+        event({
+          roster: [
+            { playerId: "player-1", playerName: "Jimmy", guardians: [ANNA] },
+            { playerId: "player-2", playerName: "Sofia", guardians: [BEN] },
+          ],
+        }),
+      ]),
+    );
 
     const response = await get();
 
@@ -126,7 +133,7 @@ describe("GET /api/cron/reminders — sending", () => {
   });
 
   it("sends a subject naming the team, the event and the local time", async () => {
-    loadTodaysReminderWork.mockResolvedValue([event()]);
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
 
     await get();
 
@@ -149,7 +156,7 @@ describe("GET /api/cron/reminders — sending", () => {
 
 describe("GET /api/cron/reminders — duplicate protection", () => {
   it("claims each pair before sending it", async () => {
-    loadTodaysReminderWork.mockResolvedValue([event()]);
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
 
     await get();
 
@@ -158,7 +165,7 @@ describe("GET /api/cron/reminders — duplicate protection", () => {
   });
 
   it("does not re-send a pair a previous run already claimed", async () => {
-    loadTodaysReminderWork.mockResolvedValue([event()]);
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
     claimReminder.mockResolvedValue("already-sent");
 
     const response = await get();
@@ -168,14 +175,16 @@ describe("GET /api/cron/reminders — duplicate protection", () => {
   });
 
   it("sends only the unsent half when a re-run finds a partial batch", async () => {
-    loadTodaysReminderWork.mockResolvedValue([
-      event({
-        roster: [
-          { playerId: "player-1", playerName: "Jimmy", guardians: [ANNA] },
-          { playerId: "player-2", playerName: "Sofia", guardians: [BEN] },
-        ],
-      }),
-    ]);
+    loadTodaysReminderWork.mockResolvedValue(
+      work([
+        event({
+          roster: [
+            { playerId: "player-1", playerName: "Jimmy", guardians: [ANNA] },
+            { playerId: "player-2", playerName: "Sofia", guardians: [BEN] },
+          ],
+        }),
+      ]),
+    );
     claimReminder
       .mockResolvedValueOnce("already-sent")
       .mockResolvedValueOnce("claimed");
@@ -192,7 +201,7 @@ describe("GET /api/cron/reminders — duplicate protection", () => {
 
 describe("GET /api/cron/reminders — failure handling", () => {
   it("releases the claim when the send fails, so the next run retries", async () => {
-    loadTodaysReminderWork.mockResolvedValue([event()]);
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
     sendEmail.mockResolvedValue({ ok: false, reason: "resend down" });
 
     const response = await get();
@@ -202,7 +211,7 @@ describe("GET /api/cron/reminders — failure handling", () => {
   });
 
   it("releases the claim when the send throws", async () => {
-    loadTodaysReminderWork.mockResolvedValue([event()]);
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
     sendEmail.mockRejectedValue(new Error("network"));
 
     const response = await get();
@@ -212,14 +221,16 @@ describe("GET /api/cron/reminders — failure handling", () => {
   });
 
   it("keeps going after one bad mailbox", async () => {
-    loadTodaysReminderWork.mockResolvedValue([
-      event({
-        roster: [
-          { playerId: "player-1", playerName: "Jimmy", guardians: [ANNA] },
-          { playerId: "player-2", playerName: "Sofia", guardians: [BEN] },
-        ],
-      }),
-    ]);
+    loadTodaysReminderWork.mockResolvedValue(
+      work([
+        event({
+          roster: [
+            { playerId: "player-1", playerName: "Jimmy", guardians: [ANNA] },
+            { playerId: "player-2", playerName: "Sofia", guardians: [BEN] },
+          ],
+        }),
+      ]),
+    );
     sendEmail
       .mockResolvedValueOnce({ ok: false, reason: "bounced" })
       .mockResolvedValueOnce({ ok: true });
@@ -231,18 +242,86 @@ describe("GET /api/cron/reminders — failure handling", () => {
   });
 
   it("does not release a claim it never took", async () => {
-    loadTodaysReminderWork.mockResolvedValue([event()]);
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
     claimReminder.mockResolvedValue("already-sent");
 
     await get();
 
     expect(releaseReminder).not.toHaveBeenCalled();
   });
+
+  // The dangerous case: a concurrent run holds the receipt and has already
+  // mailed against it, and this run's own claim insert dies on a transient
+  // database error. Releasing here would delete the other run's receipt and
+  // the next run would re-mail the family — the duplicate the ledger exists
+  // to prevent.
+  it("does not release when the claim itself failed", async () => {
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
+    claimReminder.mockRejectedValue(new Error("connection pool timeout"));
+
+    const response = await get();
+
+    expect(releaseReminder).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ sent: 0, failed: 1 });
+  });
+
+  it("still releases a claim it did take when a later step throws", async () => {
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
+    sendEmail.mockRejectedValue(new Error("network"));
+
+    await get();
+
+    expect(releaseReminder).toHaveBeenCalledWith("evt-1", "user-anna");
+  });
+
+  it("keeps going to the next pair after a failed claim", async () => {
+    loadTodaysReminderWork.mockResolvedValue(
+      work([
+        event({
+          roster: [
+            { playerId: "player-1", playerName: "Jimmy", guardians: [ANNA] },
+            { playerId: "player-2", playerName: "Sofia", guardians: [BEN] },
+          ],
+        }),
+      ]),
+    );
+    claimReminder
+      .mockRejectedValueOnce(new Error("connection pool timeout"))
+      .mockResolvedValueOnce("claimed");
+
+    const response = await get();
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(await response.json()).toMatchObject({ sent: 1, failed: 1 });
+  });
+});
+
+describe("GET /api/cron/reminders — truncated days", () => {
+  it("reports a clean day as not truncated", async () => {
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
+
+    expect(await (await get()).json()).toMatchObject({ truncated: false });
+  });
+
+  // A cap that drops events silently makes a half-covered day read exactly
+  // like a fully covered one.
+  it("surfaces truncation rather than reporting a clean sweep", async () => {
+    loadTodaysReminderWork.mockResolvedValue(work([event()], true));
+
+    const response = await get();
+
+    expect(await response.json()).toMatchObject({
+      events: 1,
+      sent: 1,
+      truncated: true,
+    });
+  });
 });
 
 describe("GET /api/cron/reminders — push rides along", () => {
   beforeEach(() => {
-    loadTodaysReminderWork.mockResolvedValue([event()]);
+    loadTodaysReminderWork.mockResolvedValue(work([event()]));
   });
 
   it("pushes after the email, with the same deep link", async () => {
@@ -266,7 +345,7 @@ describe("GET /api/cron/reminders — push rides along", () => {
   });
 
   it("omits the location from the body when there is none", async () => {
-    loadTodaysReminderWork.mockResolvedValue([event({ location: null })]);
+    loadTodaysReminderWork.mockResolvedValue(work([event({ location: null })]));
 
     await get();
 

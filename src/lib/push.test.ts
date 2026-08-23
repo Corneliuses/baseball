@@ -163,6 +163,23 @@ describe("sendPushToUser", () => {
     });
   });
 
+  // setVapidDetails throws synchronously on a subject that is not a
+  // mailto:/https: URL. It sits outside every other try/catch, so without its
+  // own guard this module breaks its never-throws contract and a config typo
+  // reaches the caller — which for the cron is a delivered reminder's loop.
+  it("never throws on an invalid VAPID configuration", async () => {
+    setVapidDetails.mockImplementation(() => {
+      throw new Error("Vapid subject is not a url or mailto url");
+    });
+
+    await expect(sendPushToUser("user-1", PAYLOAD)).resolves.toEqual({
+      delivered: 0,
+      pruned: 0,
+      failed: 0,
+    });
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
   it("configures VAPID from the environment before sending", async () => {
     await sendPushToUser("user-1", PAYLOAD);
 

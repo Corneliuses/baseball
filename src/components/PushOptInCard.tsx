@@ -71,6 +71,29 @@ function isSupported(): boolean {
   );
 }
 
+/// How long to wait for the service worker before calling this device
+/// incapable. Generous for a worker that is going to activate at all.
+const SERVICE_WORKER_READY_TIMEOUT_MS = 3000;
+
+/**
+ * `navigator.serviceWorker.ready` with a deadline.
+ *
+ * The bare promise **never rejects** — when registration failed, or the page
+ * is controlled by nothing, it simply never settles. Awaiting it directly
+ * means the `catch` written for that case can never run, so the card would sit
+ * in its pre-effect state and render nothing at all, telling a parent whose
+ * worker failed precisely as much as a blank page does. Racing a timeout is
+ * what turns "never answers" into an answer.
+ */
+async function readyRegistration(): Promise<ServiceWorkerRegistration | null> {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), SERVICE_WORKER_READY_TIMEOUT_MS);
+    }),
+  ]);
+}
+
 export function PushOptInCard({ vapidPublicKey }: PushOptInCardProps) {
   const [state, setState] = useState<PushState>("unknown");
   const [error, setError] = useState<string | null>(null);
@@ -90,13 +113,45 @@ export function PushOptInCard({ vapidPublicKey }: PushOptInCardProps) {
       }
 
       try {
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await readyRegistration();
+        if (!registration) {
+          // A worker that never becomes ready is indistinguishable here from
+          // an unsupported browser, and the honest answer to the reader is the
+          // same: this device cannot do push right now.
+          if (!cancelled) setState("unsupported");
+          return;
+        }
+
         const existing = await registration.pushManager.getSubscription();
-        if (!cancelled) setState(existing ? "subscribed" : "available");
+        if (!existing) {
+          if (!cancelled) setState("available");
+          return;
+        }
+
+        // A browser subscription proves this *device* is subscribed, never
+        // that the signed-in person owns it. On a shared family phone the
+        // endpoint may belong to whoever set it up, and the server's fan-out
+        // is keyed on the owner — so without this the second parent to sign in
+        // would read "notifications are on", receive nothing, and (since
+        // DELETE is scoped to the caller) turn the first parent's push off
+        // while deleting no row of their own.
+        //
+        // Re-registering is the reconciliation: the route upserts on the
+        // endpoint and moves ownership, so the claim on screen becomes true
+        // for whoever is reading it. One browser has exactly one push channel;
+        // it belongs to whoever most recently opened this page, and the
+        // household still gets the reminder either way.
+        const claimed = await fetch("/api/push/subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(existing.toJSON()),
+        }).catch(() => null);
+
+        // No error banner on a failed reconcile — the reader did not ask for
+        // anything. They are offered the button instead, which is the honest
+        // state: the server cannot reach this device yet.
+        if (!cancelled) setState(claimed?.ok ? "subscribed" : "available");
       } catch {
-        // A service worker that never becomes ready is indistinguishable here
-        // from an unsupported browser, and the honest answer to the reader is
-        // the same: this device cannot do push right now.
         if (!cancelled) setState("unsupported");
       }
     }
@@ -120,7 +175,11 @@ export function PushOptInCard({ vapidPublicKey }: PushOptInCardProps) {
         return;
       }
 
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await readyRegistration();
+      if (!registration) {
+        throw new Error("service worker never became ready");
+      }
+
       const subscription = await registration.pushManager.subscribe({
         // Required by Chromium, and the honest setting anyway: every push this
         // app sends shows a notification.
@@ -153,15 +212,28 @@ export function PushOptInCard({ vapidPublicKey }: PushOptInCardProps) {
     setState("working");
 
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await readyRegistration();
+      if (!registration) {
+        throw new Error("service worker never became ready");
+      }
+
       const subscription = await registration.pushManager.getSubscription();
 
       if (subscription) {
-        await fetch("/api/push/subscription", {
+        const response = await fetch("/api/push/subscription", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         });
+
+        // Drop the browser subscription only once the server has forgotten it.
+        // Unsubscribing first would destroy the only channel the fan-out has
+        // while leaving its row behind — undeletable from this page afterwards,
+        // since the endpoint it keys on is gone.
+        if (!response.ok) {
+          throw new Error("deregistration failed");
+        }
+
         await subscription.unsubscribe();
       }
 

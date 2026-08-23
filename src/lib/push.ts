@@ -96,7 +96,19 @@ export async function sendPushToUser(
     return NOTHING_SENT;
   }
 
-  webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
+  try {
+    // Throws synchronously — and outside any other try/catch — on a subject
+    // that is not a mailto:/https: URL or a key pair it cannot parse. Those
+    // are configuration mistakes made once at deploy time, so the whole point
+    // is that they surface in the log and cost nothing: an escaping throw here
+    // would break this module's never-throws contract and, through it, put a
+    // misconfigured VAPID subject in the path of a delivered reminder.
+    webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
+  } catch (error) {
+    logPushError("Invalid VAPID configuration — push disabled", error);
+    return NOTHING_SENT;
+  }
+
   const body = JSON.stringify(payload);
 
   const outcomes = await Promise.all(
