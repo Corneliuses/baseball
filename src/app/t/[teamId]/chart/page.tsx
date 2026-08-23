@@ -16,9 +16,10 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
 import { BattingOrderEditor } from "./BattingOrderEditor";
+import { EditorTabs } from "./EditorTabs";
 
 export const metadata = {
-  title: "Batting order — Youth Baseball Team Manager",
+  title: "Edit lineup: batting order — Youth Baseball Team Manager",
 };
 
 const ERROR_MESSAGES = messageTable({
@@ -98,16 +99,9 @@ export default async function ChartPage({
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h3 className="text-xl font-semibold text-foreground">Batting order</h3>
-        <div className="flex gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/t/${teamId}/chart/positions`}>Positions</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/t/${teamId}/view`}>View chart</Link>
-          </Button>
-        </div>
+      <div className="space-y-3">
+        <h3 className="text-xl font-semibold text-foreground">Edit lineup</h3>
+        <EditorTabs teamId={teamId} active="order" />
       </div>
 
       {errorMessage ? (

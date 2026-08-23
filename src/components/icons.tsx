@@ -152,6 +152,18 @@ export function CapIcon({ className }: IconProps) {
   );
 }
 
+/// The person's own profile — the one nav item that is not about the team.
+/// A plain figure rather than a cap or a jersey, because whoever is reading
+/// may be a coach on one team and a parent on the next.
+export function PersonIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20a7 7 0 0114 0" />
+    </Icon>
+  );
+}
+
 /// Settings.
 export function GearIcon({ className }: IconProps) {
   return (

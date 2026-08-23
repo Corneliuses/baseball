@@ -149,7 +149,7 @@ export default async function ReadinessPage({
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-xl font-semibold text-foreground">Readiness</h3>
         <Button asChild variant="outline" size="sm">
-          <Link href={`/t/${teamId}/view`}>View chart</Link>
+          <Link href={`/t/${teamId}/view`}>See Game Day view</Link>
         </Button>
       </div>
 

@@ -27,7 +27,7 @@ import { Diamond } from "./Diamond";
 import { Reveal } from "./Reveal";
 
 export const metadata = {
-  title: "Lineup — Youth Baseball Team Manager",
+  title: "Game Day — Youth Baseball Team Manager",
 };
 
 /// One dugout roster row, shared by the batting order and the bench so the two
