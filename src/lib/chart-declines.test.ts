@@ -66,6 +66,15 @@ describe("loadDeclinedEntryIds", () => {
     expect(listEventRsvps).not.toHaveBeenCalled();
   });
 
+  it("reads no RSVPs for an empty roster either", async () => {
+    // Both editor pages already skip the call when the roster is empty, but
+    // that is their gate. This one is the module's: with no entries the answer
+    // is [] whatever the RSVPs say, so the query has one possible outcome and
+    // is not worth a round trip.
+    await expect(loadDeclinedEntryIds("team-1", [], game)).resolves.toEqual([]);
+    expect(listEventRsvps).not.toHaveBeenCalled();
+  });
+
   it("is blind to who recorded the response", async () => {
     // #54: a coach may record a family's decline. It is still a decline.
     listEventRsvps.mockResolvedValue([

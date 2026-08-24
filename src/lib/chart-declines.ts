@@ -37,9 +37,15 @@ export function declinedEntryIds(
  * Takes the next game already resolved, rather than fetching it itself, so a
  * caller can run that lookup in parallel with whatever else the page needs
  * (`getChart`, in both editor pages) instead of paying for it as an extra
- * sequential round trip after theirs. `null` — nothing on the schedule — skips
- * the RSVP read entirely and returns the same empty list an editor rendered
- * before this feature existed.
+ * sequential round trip after theirs.
+ *
+ * Two cases skip the RSVP read outright, because the answer is provably empty
+ * either way: nothing on the schedule (`game` is null — the same empty list an
+ * editor rendered before this feature existed), and an empty roster, where
+ * there is no entry a decline could attach to. Both pages already decline to
+ * call at all when the editor won't mount, but that is the caller's gate and
+ * this is the module's — a future caller that forgets should still not be able
+ * to spend a query on a question with one possible answer.
  *
  * Deliberately not wrapped in try/catch, matching every other RSVP read in the
  * app: a swallowed outage would draw a board where nobody has declined, which
@@ -50,7 +56,7 @@ export async function loadDeclinedEntryIds(
   entries: readonly Pick<ChartViewEntry, "entryId" | "playerId">[],
   game: { id: string } | null,
 ): Promise<string[]> {
-  if (!game) {
+  if (!game || entries.length === 0) {
     return [];
   }
 
