@@ -160,6 +160,15 @@ export class LastOwnerError extends Error {
  * Fully detaching a family means also unlinking the guardian on the roster
  * entry page.
  *
+ * The team's ICS feed is the same shape of leak and is deliberately left
+ * open: `/api/calendar/[token]` is authorized by the team-wide
+ * `Team.calendarToken`, generated once in `createTeam` and never rotated, so
+ * a removed member who already subscribed keeps receiving the schedule.
+ * Rotating on removal would silently break every *remaining* subscriber's
+ * calendar to close a hole whose payload is a youth team's game times — a
+ * bad trade for a season that runs a couple of months. Revisit only by
+ * deciding about per-member feed tokens, not by rotating the shared one.
+ *
  * The last-owner guard mirrors setMemberRole, and for the same racing reason
  * runs under Serializable isolation: two admins removing two different owners
  * at once must not leave the team with zero.

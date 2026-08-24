@@ -166,6 +166,35 @@ describe("MembersPage removal", () => {
     expect(markup).not.toContain("Yes, remove them");
   });
 
+  it("addresses you in the second person on your own row", async () => {
+    // requireTeamAccess resolves the reader as user-1. Every other removal an
+    // owner can undo by re-inviting; removing yourself takes away the page
+    // holding the invite form, so the copy has to say that plainly.
+    listTeamMembers.mockResolvedValue([
+      ...TWO_MEMBERS,
+      {
+        userId: "user-3",
+        role: "OWNER" as const,
+        name: "Second Owner",
+        email: "owner2@example.com",
+        phone: null,
+      },
+    ]);
+
+    const markup = await renderPage({ confirm: "remove", member: "user-1" });
+
+    expect(markup).toContain("Remove yourself from this team?");
+    expect(markup).toContain("only another owner can add you back");
+    expect(markup).not.toContain("Remove Sam from this team?");
+  });
+
+  it("keeps the third-person copy for everyone else", async () => {
+    const markup = await renderPage({ confirm: "remove", member: "user-2" });
+
+    expect(markup).toContain("They lose");
+    expect(markup).not.toContain("Remove yourself");
+  });
+
   it("confirms a completed removal", async () => {
     const markup = await renderPage({ removed: "1" });
 

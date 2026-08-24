@@ -184,6 +184,19 @@ describe("removeMemberAction", () => {
     expect(url).toBe("/");
   });
 
+  it("still sends self-removal home when the row was already gone", async () => {
+    // Two tabs racing: the second call finds nothing to delete and reports
+    // false, but the caller's membership is just as gone. Keying the redirect
+    // on `removed` would 404 the very person who just left the team.
+    removeMember.mockResolvedValue(false);
+
+    const url = await redirectUrlOf(() =>
+      removeMemberAction(form({ teamId: "team-1", userId: "owner-1" })),
+    );
+
+    expect(url).toBe("/");
+  });
+
   it("throws on a missing user id rather than guessing", async () => {
     await expect(
       removeMemberAction(form({ teamId: "team-1" })),

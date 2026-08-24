@@ -64,8 +64,15 @@ export default async function MembersPage({
     member,
   } = await searchParams;
 
+  // The caller's own id, so the removal confirm can address them in the
+  // second person on their own row — leaving the team is the one removal
+  // here the person cannot undo for themselves.
+  let callerId: string;
   try {
-    await requireTeamAccess(teamId, { intent: "read", minRole: "OWNER" });
+    ({ userId: callerId } = await requireTeamAccess(teamId, {
+      intent: "read",
+      minRole: "OWNER",
+    }));
   } catch (caught) {
     if (caught instanceof TeamAccessError) {
       notFound();
@@ -195,10 +202,27 @@ export default async function MembersPage({
                   </div>
                   {removingMemberId === teamMember.userId && !isLastOwner ? (
                     <div className="space-y-3 border-t border-border pt-3">
+                      {/* Second person on your own row, and a plainer
+                          warning: every other removal an owner can undo by
+                          re-inviting, but removing yourself takes away the
+                          page holding the invite form. Only another owner —
+                          or the database — can put you back. */}
                       <p role="alert" className="text-sm text-destructive">
-                        Remove {displayName} from this team? They lose access
-                        to this team&apos;s pages. Their account, family links,
-                        and any kids on the roster are not deleted.
+                        {teamMember.userId === callerId ? (
+                          <>
+                            Remove yourself from this team? You lose access to
+                            it immediately, and only another owner can add you
+                            back. Your account, family links, and any kids on
+                            the roster are not deleted.
+                          </>
+                        ) : (
+                          <>
+                            Remove {displayName} from this team? They lose
+                            access to this team&apos;s pages. Their account,
+                            family links, and any kids on the roster are not
+                            deleted.
+                          </>
+                        )}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         <form action={removeMemberAction}>

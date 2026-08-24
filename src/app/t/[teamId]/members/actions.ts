@@ -170,7 +170,9 @@ export async function setMemberRoleAction(formData: FormData) {
  *
  * An owner may remove themselves when another owner remains; the redirect
  * then goes to `/`, because the members page they were standing on is one
- * they no longer have access to read.
+ * they no longer have access to read. That is one-way from inside the app —
+ * a remaining owner has to invite them back — which is why the confirm step
+ * says so in the second person on the caller's own row.
  */
 export async function removeMemberAction(formData: FormData) {
   const teamId = extractTeamId(formData);
@@ -198,9 +200,11 @@ export async function removeMemberAction(formData: FormData) {
     throw error;
   }
 
-  if (removed && userId === callerId) {
-    // Self-removal succeeded, so the caller can no longer read the page this
-    // would otherwise land on.
+  // Keyed on identity, NOT on `removed`. Two tabs racing means the second
+  // call finds the row already gone and reports removed=false — but the
+  // caller's membership is just as gone either way, so falling through to the
+  // members page would 404 the very person who just left the team.
+  if (userId === callerId) {
     redirect("/");
   }
 
