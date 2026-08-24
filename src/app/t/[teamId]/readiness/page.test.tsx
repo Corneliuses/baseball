@@ -298,3 +298,139 @@ describe("ReadinessPage stays read-only", () => {
     expect(html).toContain("permanent");
   });
 });
+
+describe("ReadinessPage effective batting order", () => {
+  // Three batters so the renumbering has something to prove: take the middle
+  // one out and the third has to come up to second, not keep their stored 3.
+  const threeBatters = [
+    {
+      entryId: "entry-ava",
+      playerId: "ava",
+      playerName: "Ava",
+      jerseyNumber: 7,
+      battingOrder: 1,
+      position: "SHORTSTOP" as const,
+    },
+    {
+      entryId: "entry-ben",
+      playerId: "ben",
+      playerName: "Ben",
+      jerseyNumber: 12,
+      battingOrder: 2,
+      position: "PITCHER" as const,
+    },
+    {
+      entryId: "entry-cal",
+      playerId: "cal",
+      playerName: "Cal",
+      jerseyNumber: 21,
+      battingOrder: 3,
+      position: "CATCHER" as const,
+    },
+  ];
+
+  it("closes the ranks up rather than leaving a hole where the decline was", async () => {
+    getChart.mockResolvedValue(threeBatters);
+    listEventRsvps.mockResolvedValue([{ playerId: "ben", attending: false }]);
+
+    const html = await render();
+    const card = html.slice(html.indexOf("The order as it stands"));
+
+    // Two slots, numbered 1 and 2 — Cal bats second now, not third. The jersey
+    // numbers in the fixture (7, 12, 21) deliberately avoid 1-3 so these match
+    // only the slot dots.
+    expect(card).toContain(">1<");
+    expect(card).toContain(">2<");
+    expect(card).not.toContain(">3<");
+    expect(card).toContain("Ava");
+    expect(card).toContain("Cal");
+    expect(card.indexOf("Ava")).toBeLessThan(card.indexOf("Cal"));
+  });
+
+  it("leaves the declined player out of the order entirely", async () => {
+    getChart.mockResolvedValue(threeBatters);
+    listEventRsvps.mockResolvedValue([{ playerId: "ben", attending: false }]);
+
+    const html = await render();
+    const card = html.slice(html.indexOf("The order as it stands"));
+
+    expect(card).not.toContain("Ben");
+  });
+
+  it("keeps a player who simply hasn't answered in the order", async () => {
+    // Silence is not absence (readiness.ts) — an order that quietly dropped
+    // them would tell the coach something false.
+    getChart.mockResolvedValue(threeBatters);
+    listEventRsvps.mockResolvedValue([{ playerId: "ben", attending: false }]);
+
+    const html = await render();
+    const card = html.slice(html.indexOf("The order as it stands"));
+
+    // Cal answered nothing and still bats.
+    expect(card).toContain("Cal");
+  });
+
+  it("renders no card at all when nobody has declined", async () => {
+    // The effective order would be the standing order, which is already one
+    // link away on /view. Repetition dressed as news.
+    const html = await render();
+
+    expect(html).not.toContain("The order as it stands");
+  });
+
+  it("renders no card when the only decline was a fielder who doesn't bat", async () => {
+    // Their position is uncovered — that card says so — but the batting order
+    // is untouched, so there is no new card to show.
+    getChart.mockResolvedValue([
+      {
+        entryId: "entry-ava",
+        playerId: "ava",
+        playerName: "Ava",
+        jerseyNumber: 7,
+        battingOrder: 1,
+        position: "SHORTSTOP" as const,
+      },
+      {
+        entryId: "entry-dee",
+        playerId: "dee",
+        playerName: "Dee",
+        jerseyNumber: 4,
+        battingOrder: null,
+        position: "PITCHER" as const,
+      },
+    ]);
+    listEventRsvps.mockResolvedValue([{ playerId: "dee", attending: false }]);
+
+    const html = await render();
+
+    expect(html).toContain("Positions uncovered");
+    expect(html).not.toContain("The order as it stands");
+  });
+
+  it("says so plainly when every batter is out, rather than drawing an empty list", async () => {
+    getChart.mockResolvedValue(threeBatters);
+    listEventRsvps.mockResolvedValue([
+      { playerId: "ava", attending: false },
+      { playerId: "ben", attending: false },
+      { playerId: "cal", attending: false },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("The order as it stands");
+    expect(html).toContain("Everyone in the batting order is out");
+  });
+
+  it("stores nothing — the card is derived on the read like the rest of the page", async () => {
+    getChart.mockResolvedValue(threeBatters);
+    listEventRsvps.mockResolvedValue([{ playerId: "ben", attending: false }]);
+
+    const html = await render();
+
+    // Decision 16: no per-game lineup rows, and no write path may appear here.
+    // The whole page is already asserted form-free above; this pins that the
+    // effective order did not arrive with one.
+    expect(html).toContain("The order as it stands");
+    expect(html).not.toContain("<form");
+  });
+});
