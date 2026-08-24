@@ -388,6 +388,7 @@ function PositionTarget({
           entry={entry}
           label={diamondNames.get(entry.entryId) ?? entry.playerName}
           declined={declined.has(entry.entryId)}
+          stacked
         />
       ) : (
         <span className="rounded bg-background/85 px-1 text-[11px] italic text-muted-foreground">
@@ -460,6 +461,7 @@ function Chip({
   label,
   showJersey = false,
   declined = false,
+  stacked = false,
 }: {
   entry: PositionsEditorEntry;
   label: string;
@@ -468,6 +470,13 @@ function Chip({
   /// and does nothing else — the chip stays draggable and the drop rules never
   /// see this.
   declined?: boolean;
+  /// True for a chip seated on the diamond, where neighbouring position boxes
+  /// stand as little as 64px apart (see PositionTarget's own comment) and an
+  /// inline "Not going" tag would widen the chip past the next spot. Stacks
+  /// the tag under the name instead of beside it — trading width the board
+  /// doesn't have for height the chalk box already grows into freely. The zone
+  /// wraps and has the room, so it stays inline.
+  stacked?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: entry.entryId });
@@ -478,9 +487,9 @@ function Chip({
       style={{ transform: CSS.Translate.toString(transform) }}
       {...attributes}
       {...listeners}
-      className={`inline-flex cursor-grab touch-manipulation select-none items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground shadow-sm ${
-        isDragging ? "z-10 cursor-grabbing opacity-80 shadow-md" : ""
-      }`}
+      className={`inline-flex cursor-grab touch-manipulation select-none rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground shadow-sm ${
+        stacked ? "flex-col items-center gap-0.5" : "items-center gap-1"
+      } ${isDragging ? "z-10 cursor-grabbing opacity-80 shadow-md" : ""}`}
     >
       {label}
       {showJersey && entry.jerseyNumber !== null ? (

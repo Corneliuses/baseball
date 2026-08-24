@@ -381,6 +381,39 @@ describe("PositionsEditor decline badges", () => {
     expect(pitcher).not.toHaveTextContent("Not going");
   });
 
+  it("stacks a seated chip's badge under the name instead of beside it", () => {
+    // Position boxes stand as little as 64px apart (PositionTarget's own
+    // comment) — an inline "Not going" widens the chip enough to overlap the
+    // next spot. Stacking trades width for height instead.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b", "SHORTSTOP")]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const shortstop = document.querySelector('[data-position="SHORTSTOP"]')!;
+    const chip = shortstop.querySelector(".cursor-grab")!;
+    expect(chip.className).toContain("flex-col");
+  });
+
+  it("keeps a zone chip's badge inline, where there is room to spare", () => {
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b")]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const zone = screen.getByRole("region", { name: "Outfield" });
+    const chip = zone.querySelector(".cursor-grab")!;
+    expect(chip.className).not.toContain("flex-col");
+  });
+
   it("badges a declined player waiting in the zone", () => {
     // Where the coach looks for a replacement — a substitute who is also out
     // should say so before the drag, not after.

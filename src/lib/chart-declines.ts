@@ -1,7 +1,6 @@
 import type { ChartViewEntry } from "@/lib/chart-view";
 import { buildRsvpStateMap, type RsvpState } from "@/lib/rsvp";
 import { listEventRsvps } from "@/lib/rsvps";
-import { nextGame } from "@/lib/schedule";
 
 /// Which roster spots belong to a player who has declined the next game (#55).
 ///
@@ -33,9 +32,13 @@ export function declinedEntryIds(
 }
 
 /**
- * The thin data half: the team's next game, that game's RSVPs, and the pure
- * function above. Returns an empty list when nothing is on the schedule, which
- * is what makes an editor with no upcoming game render exactly as it did
+ * The thin data half: one game's RSVPs plus the pure function above.
+ *
+ * Takes the next game already resolved, rather than fetching it itself, so a
+ * caller can run that lookup in parallel with whatever else the page needs
+ * (`getChart`, in both editor pages) instead of paying for it as an extra
+ * sequential round trip after theirs. `null` — nothing on the schedule — skips
+ * the RSVP read entirely and returns the same empty list an editor rendered
  * before this feature existed.
  *
  * Deliberately not wrapped in try/catch, matching every other RSVP read in the
@@ -45,8 +48,8 @@ export function declinedEntryIds(
 export async function loadDeclinedEntryIds(
   teamId: string,
   entries: readonly Pick<ChartViewEntry, "entryId" | "playerId">[],
+  game: { id: string } | null,
 ): Promise<string[]> {
-  const game = await nextGame(teamId);
   if (!game) {
     return [];
   }

@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const nextGame = vi.fn();
 const listEventRsvps = vi.fn();
-
-vi.mock("@/lib/schedule", () => ({
-  nextGame: (...args: unknown[]) => nextGame(...args),
-}));
 
 vi.mock("@/lib/rsvps", () => ({
   listEventRsvps: (...args: unknown[]) => listEventRsvps(...args),
@@ -19,11 +14,10 @@ const entries = [
   { entryId: "entry-cal", playerId: "cal" },
 ];
 
-const game = { id: "event-1", startsAt: new Date("2026-08-15T23:00:00Z") };
+const game = { id: "event-1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  nextGame.mockResolvedValue(game);
   listEventRsvps.mockResolvedValue([]);
 });
 
@@ -54,21 +48,21 @@ describe("declinedEntryIds", () => {
 });
 
 describe("loadDeclinedEntryIds", () => {
-  it("reports the declines on the team's next game", async () => {
+  it("reports the declines on the game it's given", async () => {
     listEventRsvps.mockResolvedValue([
       { playerId: "ben", attending: false, recordedById: null },
     ]);
 
-    await expect(loadDeclinedEntryIds("team-1", entries)).resolves.toEqual([
-      "entry-ben",
-    ]);
+    await expect(
+      loadDeclinedEntryIds("team-1", entries, game),
+    ).resolves.toEqual(["entry-ben"]);
     expect(listEventRsvps).toHaveBeenCalledWith("team-1", "event-1");
   });
 
   it("reports nothing, and reads no RSVPs, with no game on the schedule", async () => {
-    nextGame.mockResolvedValue(null);
-
-    await expect(loadDeclinedEntryIds("team-1", entries)).resolves.toEqual([]);
+    await expect(
+      loadDeclinedEntryIds("team-1", entries, null),
+    ).resolves.toEqual([]);
     expect(listEventRsvps).not.toHaveBeenCalled();
   });
 
@@ -78,16 +72,16 @@ describe("loadDeclinedEntryIds", () => {
       { playerId: "ben", attending: false, recordedById: "coach-1" },
     ]);
 
-    await expect(loadDeclinedEntryIds("team-1", entries)).resolves.toEqual([
-      "entry-ben",
-    ]);
+    await expect(
+      loadDeclinedEntryIds("team-1", entries, game),
+    ).resolves.toEqual(["entry-ben"]);
   });
 
   it("lets a database outage propagate rather than drawing an all-clear board", async () => {
     listEventRsvps.mockRejectedValue(new Error("db down"));
 
-    await expect(loadDeclinedEntryIds("team-1", entries)).rejects.toThrow(
-      "db down",
-    );
+    await expect(
+      loadDeclinedEntryIds("team-1", entries, game),
+    ).rejects.toThrow("db down");
   });
 });

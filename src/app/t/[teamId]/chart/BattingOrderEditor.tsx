@@ -346,7 +346,7 @@ function PlayerLabel({
 }) {
   return (
     <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-      <span className="truncate">
+      <span className="min-w-0 truncate">
         {entry.playerName}
         {entry.jerseyNumber !== null ? (
           <span className="text-muted-foreground"> #{entry.jerseyNumber}</span>
