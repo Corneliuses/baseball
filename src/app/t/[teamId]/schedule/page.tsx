@@ -46,6 +46,20 @@ import {
 } from "./schedule-context";
 import { EMPTY_EVENT_VALUES, type EventFormValues } from "./event-form-state";
 
+/// Adding an event mails every family on the roster (#45), but the coach does
+/// not wait for it: `createEventAction` hands the paced fan-out to `after()`,
+/// which Next runs once the response is finished. This ceiling still governs
+/// that work — `after` runs for the route's configured max duration — it just
+/// no longer governs anything a human is watching.
+///
+/// 300 rather than 60 because the cap is sized for a real roster:
+/// MAX_RECIPIENTS is 200 (30 rejected a 16-player team outright, since
+/// recipients dedupe per guardian rather than per household), and 200 × 600ms
+/// is 120s of pacing before per-send latency. Same pair of numbers as the
+/// reminder cron. **The cap and this number move together** — see the note on
+/// MAX_RECIPIENTS in ./actions.ts and the loop note in AGENTS.md.
+export const maxDuration = 300;
+
 export const metadata = {
   title: "Schedule — Youth Baseball Team Manager",
 };

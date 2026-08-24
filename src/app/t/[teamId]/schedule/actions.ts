@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 
 import { formatEventDateTime, wallClockToInstant } from "@/lib/calendar";
@@ -17,11 +18,27 @@ import {
   getEvent,
   updateEvent,
   type EventInput,
+  type ScheduleEvent,
 } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { getTeamById } from "@/lib/teams";
+import { listTeamMembers } from "@/lib/memberships";
+import { listTeamGuardians } from "@/lib/guardians";
+import { sendEmail } from "@/lib/email";
+import { sendPushToUser } from "@/lib/push";
+import {
+  buildAnnouncementRecipients,
+  shouldAnnounceEvent,
+  type AnnouncementRecipient,
+} from "@/lib/announcements";
+import { AnnouncementReceiptEmail } from "@/emails/AnnouncementReceiptEmail";
+import { EventAnnouncementEmail } from "@/emails/EventAnnouncementEmail";
+import { buildAnnouncementReceiptEmail } from "@/emails/announcement-receipt-email";
+import { buildEventAnnouncementEmail } from "@/emails/event-announcement-email";
 
 import {
   stickyValues,
+  type AddEventAnnouncement,
   type AddEventField,
   type AddEventState,
   type EventFormValues,
@@ -199,6 +216,280 @@ async function requireEvent(
   return event;
 }
 
+// ---------------------------------------------------------------------------
+// Announcing a new event (#45)
+// ---------------------------------------------------------------------------
+
+/// Ceiling on one announcement fan-out. Recipients resolve from the roster
+/// rather than the POST, so this bounds a runaway roster, not a forged form.
+///
+/// **Deliberately not 30**, unlike the bulk invite's MAX_ROWS and the message
+/// fan-out's own MAX_RECIPIENTS, and the difference is the point. Those two are
+/// blocking: a coach is watching a spinner, so a cap that rejects cleanly beats
+/// one that times out half-finished. This loop runs in `after()` with nobody
+/// waiting, so the same number would buy nothing and cost everything — 30
+/// rejects a real team. Recipients dedupe per guardian **User**, not per
+/// household, so the brief's ~15 players is ~25 guardians and a 16-player roster
+/// with both parents linked is 32. At 30 that team's every announcement would
+/// fail, permanently, with no retry path.
+///
+/// 200 is a runaway guard rather than a product limit — the same number and the
+/// same reasoning as the reminder cron's MAX_SENDS_PER_RUN, against the same
+/// 300s ceiling: 200 × 600ms is 120s of pacing before per-send latency. It
+/// stays coupled to the schedule page's `maxDuration` (AGENTS.md), and anything
+/// it drops is reported in the coach's receipt rather than silently skipped.
+const MAX_RECIPIENTS = 200;
+
+/// Resend's API is rate limited (2 requests/second by default). Same value and
+/// same remainder-only wait as the bulk invite, the message fan-out and the
+/// reminder cron.
+const MIN_SEND_INTERVAL_MS = 600;
+
+function emailEnv() {
+  return {
+    AUTH_URL: process.env.AUTH_URL,
+    VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    VERCEL_URL: process.env.VERCEL_URL,
+  };
+}
+
+type AnnouncementWork = {
+  teamId: string;
+  teamName: string;
+  event: ScheduleEvent;
+  coachEmail: string | null;
+  recipients: AnnouncementRecipient[];
+  /// Families past MAX_RECIPIENTS, never attempted. Zero for any real roster.
+  skipped: number;
+};
+
+/**
+ * Everything the deferred fan-out needs, resolved while the coach is still
+ * waiting on the action.
+ *
+ * Deliberately synchronous even though the *sending* is not: it costs two
+ * indexed reads issued in parallel — the team's name and its roster, so one
+ * round trip on the critical path — and it buys an honest "Emailing 24 parents
+ * now" instead of a vague reassurance. It also keeps one announcement failure —
+ * a roster that cannot be read — knowable while there is still a response to
+ * report it in.
+ * Everything after this point reports by email, because there is nothing left
+ * to return to.
+ *
+ * Throws only what the caller catches; a null return means "nobody to tell",
+ * which is a real state (a roster with no guardians linked yet) and not a
+ * failure.
+ */
+async function resolveAnnouncementWork(
+  teamId: string,
+  event: ScheduleEvent,
+  coachEmail: string | null,
+): Promise<AnnouncementWork | null> {
+  const [team, roster] = await Promise.all([
+    getTeamById(teamId),
+    listTeamGuardians(teamId),
+  ]);
+
+  const all = buildAnnouncementRecipients(roster);
+  if (all.length === 0) {
+    return null;
+  }
+
+  return {
+    teamId,
+    teamName: team?.name ?? "your team",
+    event,
+    coachEmail,
+    recipients: all.slice(0, MAX_RECIPIENTS),
+    skipped: Math.max(0, all.length - MAX_RECIPIENTS),
+  };
+}
+
+/**
+ * Tell every family on the roster that a new game or practice exists.
+ *
+ * Step 2 of the product brief's core loop — the coach adds a game, parents get
+ * an email, parents RSVP — which until #45 simply did not happen.
+ *
+ * **Runs in `after()`, so nothing here is on the coach's clock.** That is what
+ * lets the cap be generous enough for a real roster, and why this returns
+ * nothing and reports through `sendReceipt` instead: by the time the first
+ * message goes out the action has long since returned its state.
+ *
+ * Three rules hold it in place:
+ *
+ *   1. **It cannot fail the event.** The caller schedules this only after
+ *      `createEvent` has returned, and nothing here throws — a deferred
+ *      rejection would be an unhandled error in a background task nobody is
+ *      watching, which is strictly worse than a swallowed one that reports
+ *      itself by email.
+ *   2. **Recipients come from the roster, never `Membership`.** A coach with no
+ *      kid on the team does not need mailing about an event they just created,
+ *      and the roster is what says which families are on this team this season
+ *      (Decision 15).
+ *   3. **Push rides along; it never gates.** Sent after a successful email,
+ *      inside its own catch. Decision 8: email is the channel of record.
+ *
+ * `List-Unsubscribe` is set, unlike the invitation and the one-to-one messages:
+ * one body fanned out to every family on the team is list mail by RFC 2369's
+ * test, the same test the all-parents broadcast passes. Unlike the reminder
+ * cron there is a real human sender to name — the coach who just created the
+ * event — so no `pickUnsubscribeContact` equivalent is needed, and `Reply-To`
+ * points at the same person so "we're away that weekend" reaches someone.
+ */
+async function announceEvent(work: AnnouncementWork): Promise<void> {
+  const { teamId, teamName, event, coachEmail, recipients, skipped } = work;
+
+  const { subject, headline, dateTimeLabel, eventUrl: link } =
+    buildEventAnnouncementEmail({
+      teamName,
+      teamId,
+      eventId: event.id,
+      type: event.type,
+      startsAt: event.startsAt,
+      opponent: event.opponent,
+      env: emailEnv(),
+    });
+
+  let sent = 0;
+  let failed = 0;
+  let lastSendAt = 0;
+
+  for (const recipient of recipients) {
+    // Wait out only the remainder of the interval — a slow send has already
+    // paid for itself.
+    const waitMs = lastSendAt + MIN_SEND_INTERVAL_MS - Date.now();
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    lastSendAt = Date.now();
+
+    let outcome;
+    try {
+      outcome = await sendEmail({
+        to: recipient.email,
+        subject,
+        ...(coachEmail
+          ? { replyTo: coachEmail, listUnsubscribe: coachEmail }
+          : {}),
+        react: EventAnnouncementEmail({
+          teamName,
+          headline,
+          dateTimeLabel,
+          location: event.location,
+          notes: event.notes,
+          eventUrl: link,
+        }),
+      });
+    } catch (error) {
+      // sendEmail returns rather than throws, but this loop has no caller left
+      // to catch for it — one unexpected throw would abandon every family after
+      // this one with no receipt to say so.
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      console.error(`Announcement send threw for event ${event.id}:`, detail);
+      failed += 1;
+      continue;
+    }
+
+    // One bad mailbox must not lose the rest of the announcement — count and
+    // continue, like every other send loop in the app.
+    if (!outcome.ok) {
+      failed += 1;
+      continue;
+    }
+    sent += 1;
+
+    // After the email, never instead of it, and never able to undo it.
+    // sendPushToUser swallows its own failures; this catch is belt and braces
+    // so a push bug cannot turn a delivered announcement into a reported
+    // failure.
+    try {
+      await sendPushToUser(recipient.userId, {
+        title: subject,
+        body: event.location
+          ? `${dateTimeLabel} at ${event.location}`
+          : dateTimeLabel,
+        url: link,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      console.error(`Push failed for user ${recipient.userId}:`, detail);
+    }
+  }
+
+  await sendReceipt({
+    teamId,
+    teamName,
+    coachEmail,
+    headline,
+    dateTimeLabel,
+    sent,
+    failed,
+    skipped,
+  });
+}
+
+/**
+ * Tell the coach how their announcement went.
+ *
+ * The whole reason this exists: the fan-out no longer blocks, so the returned
+ * state cannot carry the result. A send nobody hears the outcome of is worse
+ * than a slow one — three families silently not told about Saturday's game is
+ * exactly the failure this feature was built to prevent, and it would be
+ * invisible.
+ *
+ * Sent on success as well as failure. A clean run is one line the coach deletes
+ * unread; the alternative — silence meaning success — makes every quiet evening
+ * ambiguous, since a coach cannot tell "it worked" from "the receipt itself
+ * bounced".
+ *
+ * Best-effort and last: if this send fails there is nobody left to tell, so it
+ * is logged and dropped. A team with no resolvable coach address gets no
+ * receipt rather than a send to nowhere.
+ */
+async function sendReceipt(input: {
+  teamId: string;
+  teamName: string;
+  coachEmail: string | null;
+  headline: string;
+  dateTimeLabel: string;
+  sent: number;
+  failed: number;
+  skipped: number;
+}): Promise<void> {
+  if (!input.coachEmail) {
+    return;
+  }
+
+  const { subject, summary, needsAttention, scheduleUrl: link } =
+    buildAnnouncementReceiptEmail({
+      teamName: input.teamName,
+      teamId: input.teamId,
+      headline: input.headline,
+      dateTimeLabel: input.dateTimeLabel,
+      sent: input.sent,
+      failed: input.failed,
+      skipped: input.skipped,
+      env: emailEnv(),
+    });
+
+  try {
+    // No List-Unsubscribe: this is one person being answered about their own
+    // action, not a list they belong to.
+    const outcome = await sendEmail({
+      to: input.coachEmail,
+      subject,
+      react: AnnouncementReceiptEmail({ summary, needsAttention, scheduleUrl: link }),
+    });
+    if (!outcome.ok) {
+      console.error(`Announcement receipt failed to send: ${outcome.reason}`);
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    console.error("Announcement receipt threw:", detail);
+  }
+}
+
 /**
  * Add one event to the schedule.
  *
@@ -246,9 +537,20 @@ export async function createEventAction(
     };
   }
 
+  let event: ScheduleEvent;
+  let coachEmail: string | null = null;
+
   try {
-    await requireTeamAccess(teamId, { intent: "write", minRole: "COACH" });
-    await createEvent(teamId, parsed.input);
+    const { userId } = await requireTeamAccess(teamId, {
+      intent: "write",
+      minRole: "COACH",
+    });
+    event = await createEvent(teamId, parsed.input);
+
+    // Read after the write, so a membership lookup failing costs the
+    // announcement its Reply-To and the coach their receipt, never the event.
+    const members = await listTeamMembers(teamId);
+    coachEmail = members.find((member) => member.userId === userId)?.email ?? null;
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
@@ -266,7 +568,54 @@ export async function createEventAction(
     // *which* one just landed, and the date is the only thing distinguishing
     // them. Formatted through calendar.ts so it reads in the team's zone.
     summary: `${parsed.input.type === "GAME" ? "Game" : "Practice"} on ${formatEventDateTime(parsed.input.startsAt)}`,
+    announcement: await scheduleAnnouncement(teamId, event, coachEmail),
   };
+}
+
+/**
+ * Line up the parent announcement and hand it to `after()`.
+ *
+ * Called once the event exists and never before, so nothing here can undo it:
+ * every failure below becomes a value in the returned state, and the event
+ * stands either way.
+ *
+ * The one thing worth reading twice is where the boundary sits. Resolving the
+ * audience is synchronous — the coach waits on two parallel reads, so roughly
+ * one round trip — while the twenty-five paced sends are not. That split is
+ * what lets the form say "Emailing 24 parents now" truthfully and still return
+ * immediately, and it is why an unreadable roster is reportable on screen while
+ * a bounced mailbox is only reportable by email.
+ */
+async function scheduleAnnouncement(
+  teamId: string,
+  event: ScheduleEvent,
+  coachEmail: string | null,
+): Promise<AddEventAnnouncement> {
+  // A coach back-filling last Saturday's game should not mail the team.
+  if (!shouldAnnounceEvent(event.startsAt, new Date())) {
+    return { status: "none" };
+  }
+
+  let work: AnnouncementWork | null;
+  try {
+    work = await resolveAnnouncementWork(teamId, event, coachEmail);
+  } catch (error) {
+    unstable_rethrow(error);
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    console.error("Could not resolve announcement recipients:", detail);
+    return { status: "failed" };
+  }
+
+  if (!work) {
+    return { status: "none" };
+  }
+
+  // `after` runs this once the response is finished — including, per Next's
+  // docs, when the response was a redirect. Scheduling it cannot throw; the
+  // callback is written so that running it cannot either.
+  after(() => announceEvent(work));
+
+  return { status: "sending", recipients: work.recipients.length };
 }
 
 export async function updateEventAction(formData: FormData) {

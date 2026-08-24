@@ -31,7 +31,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
-import SchedulePage from "./page";
+import SchedulePage, { maxDuration } from "./page";
 
 const game = {
   id: "event-1",
@@ -328,5 +328,15 @@ describe("SchedulePage season pass card", () => {
 
     expect(html).not.toContain("The whole season, in your pocket");
     expect(html).not.toContain("/api/calendar/");
+  });
+});
+
+/// #45 — this page hosts the deferred announcement fan-out's timeout, even
+/// though nothing a human waits on is governed by it.
+describe("SchedulePage announcement timeout", () => {
+  it("declares the maxDuration that governs the deferred send loop", () => {
+    // Coupled to MAX_RECIPIENTS (200) × MIN_SEND_INTERVAL_MS (600ms) = 120s in
+    // ./actions.ts. The two move together — see AGENTS.md.
+    expect(maxDuration).toBe(300);
   });
 });

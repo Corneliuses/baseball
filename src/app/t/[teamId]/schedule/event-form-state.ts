@@ -44,7 +44,35 @@ export type AddEventState =
   /// one: a season is entered in runs — six home games at the same field, the
   /// same opponent twice in a fortnight — so type, location and opponent are
   /// worth keeping and the date never is.
-  | { status: "added"; keep: EventFormValues; summary: string };
+  | {
+      status: "added";
+      keep: EventFormValues;
+      summary: string;
+      announcement: AddEventAnnouncement;
+    };
+
+/// What became of the parent announcement for the event just added (#45).
+///
+/// State rather than a search param, and that is the whole gain from landing
+/// this on top of the `useActionState` rewrite: the previous shape smuggled the
+/// count back through `?announcing=`, which meant parsing an attacker-chosen
+/// string on every render and refusing to print anything that was not a
+/// positive integer. A typed union cannot be forged from the URL bar, so that
+/// entire defence disappears rather than being maintained.
+///
+/// Note what "sending" does **not** claim. The fan-out runs in `after()`, so at
+/// the moment the coach reads this not one message has been sent — the count is
+/// how many are about to be attempted, and the outcome arrives by email.
+export type AddEventAnnouncement =
+  /// Nobody to tell: the event starts in the past, or no guardian is linked to
+  /// anyone on the roster yet.
+  | { status: "none" }
+  /// `recipients` households are being emailed now.
+  | { status: "sending"; recipients: number }
+  /// The roster could not be read, so nothing was scheduled and nothing will
+  /// retry. The event itself is fine — this is the one announcement failure
+  /// still knowable while the coach is looking at the page.
+  | { status: "failed" };
 
 export const ADD_EVENT_INITIAL_STATE: AddEventState = { status: "idle" };
 
