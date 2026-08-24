@@ -56,13 +56,20 @@ no new environment variable.
 
 | # | Decision | Why |
 |---|---|---|
-| 1 | Send **blocks** the redirect rather than deferring to `after()` | AC3 needs the outcome to reach the coach; a deferred send has nowhere to put it. `after()` bills `maxDuration` anyway, so it does not escape the coupling |
+| 1 | Send **blocks** the redirect rather than deferring to `after()` — **superseded, see below** | AC3 needs the outcome to reach the coach; a deferred send has nowhere to put it. `after()` bills `maxDuration` anyway, so it does not escape the coupling |
 | 2 | **New template**, not a variant of `EventReminderEmail` | The reminder's whole middle section is per-kid RSVP state, which is definitionally empty at creation. Only the headline (`"Game vs Hawks"`) is genuinely shared, so only that is extracted |
 | 3 | Push rides along, **never gates** | AGENTS.md's rule, enforced in code by the cron's structure: nothing about push may decide whether an email goes |
 | 4 | A **past-dated** event announces nothing, silently | Back-filling last week's game should not mail 25 families. Cost flagged below |
 | 5 | **No receipt ledger** | The cron's claim/release exists because a cron re-runs and can overlap. This fires once, from one POST. Copying the mechanism without its failure mode would be cargo-culting |
 | 6 | `List-Unsubscribe` **is** set, pointing at the creating coach | Same test the broadcast passes — one body fanned out to a whole audience is list mail, and here there is a real human sender to name |
 | 7 | Recipients from the **roster**, never `Membership` | A coach with no kid on the team does not need telling about an event they just created. Preserves "people are global, participation is team-scoped" |
+
+> **Post-implementation revision.** Decision 1 above was reversed at the maintainer's
+> direction: a ~15s blocking wait to add a game was judged unacceptable. The shipped design
+> defers the send to Next's `after()` and reports the outcome through a new
+> `AnnouncementReceiptEmail` instead of the redirect. AC3 ("coach sees a non-blocking notice")
+> is satisfied by that receipt rather than by a synchronous banner. See
+> `design-doc.md`'s Decision 1 for the full account — it carries the "why" this table doesn't.
 
 ## Implementation Phases
 
