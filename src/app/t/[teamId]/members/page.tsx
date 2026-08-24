@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SubmitButton } from "@/components/SubmitButton";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -18,6 +20,7 @@ import { listTeamInvitations } from "@/lib/invitations";
 import { isLiveInvitation } from "@/lib/invitation-token";
 
 import {
+  removeMemberAction,
   resendInvitationAction,
   revokeInvitationAction,
   setMemberRoleAction,
@@ -44,6 +47,9 @@ export default async function MembersPage({
     "role-saved"?: string;
     revoked?: string;
     resent?: string;
+    removed?: string;
+    confirm?: string;
+    member?: string;
   }>;
 }) {
   const { teamId } = await params;
@@ -53,10 +59,20 @@ export default async function MembersPage({
     "role-saved": roleSaved,
     revoked,
     resent,
+    removed,
+    confirm,
+    member,
   } = await searchParams;
 
+  // The caller's own id, so the removal confirm can address them in the
+  // second person on their own row — leaving the team is the one removal
+  // here the person cannot undo for themselves.
+  let callerId: string;
   try {
-    await requireTeamAccess(teamId, { intent: "read", minRole: "OWNER" });
+    ({ userId: callerId } = await requireTeamAccess(teamId, {
+      intent: "read",
+      minRole: "OWNER",
+    }));
   } catch (caught) {
     if (caught instanceof TeamAccessError) {
       notFound();
@@ -88,8 +104,13 @@ export default async function MembersPage({
           ? "Invitation withdrawn."
           : resent
             ? "Invitation sent again — the previous link no longer works."
-            : null;
-  const ownerCount = members.filter((member) => member.role === "OWNER").length;
+            : removed
+              ? "Member removed."
+              : null;
+  const ownerCount = members.filter((m) => m.role === "OWNER").length;
+  // Removal confirms per row, like guardian unlinking on the roster entry
+  // page: ?confirm=remove&member=<userId> opens the step on that row only.
+  const removingMemberId = confirm === "remove" ? (member ?? null) : null;
 
   return (
     <div className="space-y-6">
@@ -109,44 +130,122 @@ export default async function MembersPage({
         </CardHeader>
         <CardContent>
           <ul className="space-y-2">
-            {members.map((member) => {
-              const isLastOwner = member.role === "OWNER" && ownerCount <= 1;
+            {members.map((teamMember) => {
+              const isLastOwner =
+                teamMember.role === "OWNER" && ownerCount <= 1;
+              const displayName = teamMember.name ?? teamMember.email;
               return (
+                // Identity on its own row, controls on the row beneath. The
+                // old side-by-side flex row gave the text no room to shrink
+                // (no min-w-0), so a long address pushed the Save button off
+                // the edge of a phone screen instead of wrapping.
                 <li
-                  key={member.userId}
-                  className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
+                  key={teamMember.userId}
+                  className="space-y-3 rounded-md border border-border p-3"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {member.name ?? member.email}
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-medium text-foreground">
+                      {displayName}
                     </p>
-                    <p className="text-sm text-muted-foreground">{member.email}</p>
+                    {/* break-all, not break-words: an address is one long
+                        unspaced token, and break-words won't split it until
+                        it has already overflowed the card. */}
+                    <p className="break-all text-sm text-muted-foreground">
+                      {teamMember.email}
+                    </p>
                   </div>
-                  <form action={setMemberRoleAction} className="flex items-center gap-2">
-                    <input type="hidden" name="teamId" value={teamId} />
-                    <input type="hidden" name="userId" value={member.userId} />
-                    <select
-                      name="role"
-                      defaultValue={member.role}
-                      disabled={isLastOwner}
-                      aria-label={`Role for ${member.name ?? member.email}`}
-                      className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground disabled:opacity-50"
+                  <div className="flex flex-wrap items-center gap-2">
+                    <form
+                      action={setMemberRoleAction}
+                      className="flex items-center gap-2"
                     >
-                      {ROLE_OPTIONS.map((role) => (
-                        <option key={role} value={role}>
-                          {ROLE_LABELS[role]}
-                        </option>
-                      ))}
-                    </select>
-                    <SubmitButton
-                      variant="outline"
-                      size="sm"
-                      disabled={isLastOwner}
-                      pendingLabel="Saving…"
-                    >
-                      Save
-                    </SubmitButton>
-                  </form>
+                      <input type="hidden" name="teamId" value={teamId} />
+                      <input
+                        type="hidden"
+                        name="userId"
+                        value={teamMember.userId}
+                      />
+                      <select
+                        name="role"
+                        defaultValue={teamMember.role}
+                        disabled={isLastOwner}
+                        aria-label={`Role for ${displayName}`}
+                        className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground disabled:opacity-50"
+                      >
+                        {ROLE_OPTIONS.map((role) => (
+                          <option key={role} value={role}>
+                            {ROLE_LABELS[role]}
+                          </option>
+                        ))}
+                      </select>
+                      <SubmitButton
+                        variant="outline"
+                        size="sm"
+                        disabled={isLastOwner}
+                        pendingLabel="Saving…"
+                      >
+                        Save
+                      </SubmitButton>
+                    </form>
+                    {/* No Remove for the last owner: the same rule that
+                        disables their role select — a team must always have
+                        an owner, and removeMember enforces it again. */}
+                    {!isLastOwner && removingMemberId !== teamMember.userId ? (
+                      <Button asChild variant="outline" size="sm">
+                        <Link
+                          href={`/t/${teamId}/members?confirm=remove&member=${teamMember.userId}`}
+                        >
+                          Remove
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                  {removingMemberId === teamMember.userId && !isLastOwner ? (
+                    <div className="space-y-3 border-t border-border pt-3">
+                      {/* Second person on your own row, and a plainer
+                          warning: every other removal an owner can undo by
+                          re-inviting, but removing yourself takes away the
+                          page holding the invite form. Only another owner —
+                          or the database — can put you back. */}
+                      <p role="alert" className="text-sm text-destructive">
+                        {teamMember.userId === callerId ? (
+                          <>
+                            Remove yourself from this team? You lose access to
+                            it immediately, and only another owner can add you
+                            back. Your account, family links, and any kids on
+                            the roster are not deleted.
+                          </>
+                        ) : (
+                          <>
+                            Remove {displayName} from this team? They lose
+                            access to this team&apos;s pages. Their account,
+                            family links, and any kids on the roster are not
+                            deleted.
+                          </>
+                        )}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <form action={removeMemberAction}>
+                          <input type="hidden" name="teamId" value={teamId} />
+                          <input
+                            type="hidden"
+                            name="userId"
+                            value={teamMember.userId}
+                          />
+                          <SubmitButton
+                            variant="destructive"
+                            size="sm"
+                            pendingLabel="Removing…"
+                          >
+                            Yes, remove them
+                          </SubmitButton>
+                        </form>
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/t/${teamId}/members`}>Cancel</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </li>
               );
             })}
@@ -170,7 +269,7 @@ export default async function MembersPage({
                   className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="break-all text-sm font-medium text-foreground">
                       {invitation.email}
                     </p>
                     <p className="text-xs text-muted-foreground">

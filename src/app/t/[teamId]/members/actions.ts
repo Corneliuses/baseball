@@ -11,7 +11,7 @@ import {
   getTeamInvitation,
   revokeInvitation,
 } from "@/lib/invitations";
-import { LastOwnerError, setMemberRole } from "@/lib/memberships";
+import { LastOwnerError, removeMember, setMemberRole } from "@/lib/memberships";
 import { getTeamById } from "@/lib/teams";
 import { sendEmail } from "@/lib/email";
 import { InvitationEmail } from "@/emails/InvitationEmail";
@@ -158,6 +158,60 @@ export async function setMemberRoleAction(formData: FormData) {
   // successful save was indistinguishable from a click that did nothing — the
   // select simply re-rendered showing the value it already showed (C7).
   redirect(`/t/${teamId}/members?role-saved=1`);
+}
+
+/**
+ * Remove one member from this team.
+ *
+ * Deletes only the Membership row — `removeMember` documents why the person,
+ * their family links, and their kids' roster spots all survive. The last-owner
+ * guard lives in the same transaction as the delete, so this action just
+ * translates its refusal into the error the page already knows how to say.
+ *
+ * An owner may remove themselves when another owner remains; the redirect
+ * then goes to `/`, because the members page they were standing on is one
+ * they no longer have access to read. That is one-way from inside the app —
+ * a remaining owner has to invite them back — which is why the confirm step
+ * says so in the second person on the caller's own row.
+ */
+export async function removeMemberAction(formData: FormData) {
+  const teamId = extractTeamId(formData);
+  const userId = String(formData.get("userId") ?? "").trim();
+  if (!userId) {
+    throw new Error("Invalid user ID");
+  }
+
+  let removed: boolean;
+  let callerId: string;
+  try {
+    ({ userId: callerId } = await requireTeamAccess(teamId, {
+      intent: "write",
+      minRole: "OWNER",
+    }));
+    removed = await removeMember(teamId, userId);
+  } catch (error) {
+    unstable_rethrow(error);
+    if (error instanceof TeamAccessError) {
+      redirect(`/t/${teamId}/members?error=access`);
+    }
+    if (error instanceof LastOwnerError) {
+      redirect(`/t/${teamId}/members?error=last-owner`);
+    }
+    throw error;
+  }
+
+  // Keyed on identity, NOT on `removed`. Two tabs racing means the second
+  // call finds the row already gone and reports removed=false — but the
+  // caller's membership is just as gone either way, so falling through to the
+  // members page would 404 the very person who just left the team.
+  if (userId === callerId) {
+    redirect("/");
+  }
+
+  revalidatePath("/t/[teamId]/members", "page");
+  // Like revokeInvitationAction: a row a second tab already removed is not
+  // this click's removal, so don't claim it.
+  redirect(`/t/${teamId}/members${removed ? "?removed=1" : ""}`);
 }
 
 function extractInvitationId(formData: FormData): string {
