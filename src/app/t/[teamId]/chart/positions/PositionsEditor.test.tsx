@@ -363,3 +363,102 @@ describe("PositionsEditor duplicate first names", () => {
     expect(screen.getByText("Ava C.")).toBeTruthy();
   });
 });
+
+describe("PositionsEditor decline badges", () => {
+  it("badges a declined player standing on the diamond", () => {
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b", "SHORTSTOP")]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const shortstop = document.querySelector('[data-position="SHORTSTOP"]')!;
+    const pitcher = document.querySelector('[data-position="PITCHER"]')!;
+    expect(shortstop).toHaveTextContent("Not going");
+    expect(pitcher).not.toHaveTextContent("Not going");
+  });
+
+  it("stacks a seated chip's badge under the name instead of beside it", () => {
+    // Position boxes stand as little as 64px apart (PositionTarget's own
+    // comment) — an inline "Not going" widens the chip enough to overlap the
+    // next spot. Stacking trades width for height instead.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b", "SHORTSTOP")]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const shortstop = document.querySelector('[data-position="SHORTSTOP"]')!;
+    const chip = shortstop.querySelector(".cursor-grab")!;
+    expect(chip.className).toContain("flex-col");
+  });
+
+  it("keeps a zone chip's badge inline, where there is room to spare", () => {
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b")]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const zone = screen.getByRole("region", { name: "Outfield" });
+    const chip = zone.querySelector(".cursor-grab")!;
+    expect(chip.className).not.toContain("flex-col");
+  });
+
+  it("badges a declined player waiting in the zone", () => {
+    // Where the coach looks for a replacement — a substitute who is also out
+    // should say so before the drag, not after.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b")]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const zone = screen.getByRole("region", { name: "Outfield" });
+    expect(zone).toHaveTextContent("Player-b");
+    expect(zone).toHaveTextContent("Not going");
+  });
+
+  it("shows no badge at all when the prop is omitted", () => {
+    // AC4: with no upcoming game the diamond is the one that existed before
+    // #55.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b")]}
+      />,
+    );
+
+    expect(screen.queryByText("Not going")).toBeNull();
+  });
+
+  it("leaves a declined player placed, draggable and in the payload", () => {
+    // Decoration only — no filtering, no auto-benching. The chart is standing
+    // (Decision 16).
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b", "SHORTSTOP")]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    expect(payloadOf()).toEqual({ PITCHER: "a", SHORTSTOP: "b" });
+    expect(screen.getByRole("button", { name: "Save positions" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  });
+});

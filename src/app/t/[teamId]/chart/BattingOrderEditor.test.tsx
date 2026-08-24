@@ -240,3 +240,96 @@ describe("BattingOrderEditor", () => {
     expect(screen.getByRole("button", { name: "Save order" })).toBeDisabled();
   });
 });
+
+describe("BattingOrderEditor decline badges", () => {
+  it("badges a declined player in their batting slot", () => {
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", 1), entry("b", 2)]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const items = Array.from(
+      screen.getByRole("list", { name: "Batting order" }).querySelectorAll("li"),
+    );
+    expect(items[1]).toHaveTextContent("Player b");
+    expect(items[1]).toHaveTextContent("Not going");
+    // Said once, about the right kid.
+    expect(items[0]).not.toHaveTextContent("Not going");
+  });
+
+  it("badges a declined player sitting in the pool", () => {
+    // The point of the pool badge: the coach promoting a substitute needs to
+    // know before the drag whether that substitute is also out.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[entry("a", 1), entry("b", null)]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const pool = screen.getByRole("region", { name: "Not batting" });
+    expect(pool).toHaveTextContent("Player b");
+    expect(pool).toHaveTextContent("Not going");
+  });
+
+  it("shows no badge at all when the prop is omitted", () => {
+    // AC4: with no upcoming game the page passes nothing and this board is
+    // byte-for-byte the one that existed before #55.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", 1), entry("b", 2)]}
+      />,
+    );
+
+    expect(screen.queryByText("Not going")).toBeNull();
+  });
+
+  it("leaves a declined player fully draggable and fully in the payload", () => {
+    // Decoration only. The chart is standing (Decision 16) — one Saturday's
+    // absence is not a reason to drop anyone out of the order, and the editor
+    // must not quietly do it.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", 1), entry("b", 2)]}
+        declinedEntryIds={["b"]}
+      />,
+    );
+
+    const form = screen.getByRole("button", { name: "Save order" }).closest("form")!;
+    const order = form.querySelector<HTMLInputElement>('input[name="order"]')!;
+    expect(JSON.parse(order.value)).toEqual(["a", "b"]);
+
+    // Still a real drag handle, not a disabled row.
+    const declinedRow = Array.from(
+      screen.getByRole("list", { name: "Batting order" }).querySelectorAll("li"),
+    )[1];
+    expect(declinedRow).toHaveAttribute("aria-roledescription", "sortable");
+    expect(declinedRow).not.toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("does not change Save or Cancel enablement", () => {
+    // A badge is not an edit: nothing about who replied may make the board
+    // look dirty, or the coach saves a chart they never touched.
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", 1), entry("b", 2)]}
+        declinedEntryIds={["a", "b"]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save order" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  });
+});

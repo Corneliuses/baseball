@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { JerseyDot } from "@/components/JerseyDot";
+import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/SubmitButton";
 import {
@@ -38,8 +39,11 @@ import { stashDraft } from "./draft-stash";
 import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "./drag-activation";
 
 /// The editor's slice of a roster entry — chart-view's render model minus the
-/// fields this page doesn't show. RSVP state is deliberately absent: the
-/// editor never loads RSVPs at all, so it structurally cannot filter by them.
+/// fields this page doesn't show. RSVP state is deliberately absent, and stays
+/// absent after #55: who declined arrives as `declinedEntryIds` beside these
+/// rows, never on them. The draft logic in src/lib/chart.ts consumes entries,
+/// so keeping the two apart is what makes "the pool cannot be filtered by who
+/// replied" structural rather than a promise.
 export type ChartEditorEntry = {
   entryId: string;
   playerName: string;
@@ -51,6 +55,15 @@ type BattingOrderEditorProps = {
   teamId: string;
   allPlay: boolean;
   entries: ChartEditorEntry[];
+  /// Roster spots whose player has declined the next game (#55). Decoration
+  /// only: it badges a chip and touches nothing else — not the draft, not the
+  /// drop rules, not what gets posted. A declined player is as draggable and
+  /// as seatable as anyone else, because the chart is standing and Saturday's
+  /// absence is not a reason to rewrite it (Decision 16).
+  ///
+  /// Empty when no game is on the schedule, which is what keeps this board
+  /// identical to the one that existed before the badges.
+  declinedEntryIds?: readonly string[];
 };
 
 /**
@@ -70,6 +83,7 @@ export function BattingOrderEditor({
   teamId,
   allPlay,
   entries,
+  declinedEntryIds = [],
 }: BattingOrderEditorProps) {
   const original = useMemo(
     () => buildBattingDraft(entries, allPlay),
@@ -80,6 +94,11 @@ export function BattingOrderEditor({
   const byId = useMemo(
     () => new Map(entries.map((entry) => [entry.entryId, entry])),
     [entries],
+  );
+
+  const declined = useMemo(
+    () => new Set(declinedEntryIds),
+    [declinedEntryIds],
   );
 
   const sensors = useSensors(
@@ -128,13 +147,16 @@ export function BattingOrderEditor({
                   id={slotItems[index]}
                   slotNumber={index + 1}
                   entry={entryId !== null ? byId.get(entryId) : undefined}
+                  declined={entryId !== null && declined.has(entryId)}
                 />
               ))}
             </ol>
           </SortableContext>
         </section>
 
-        {!allPlay ? <UnassignedPool draft={draft} byId={byId} /> : null}
+        {!allPlay ? (
+          <UnassignedPool draft={draft} byId={byId} declined={declined} />
+        ) : null}
 
         <form
           action={saveBattingOrderAction}
@@ -187,10 +209,12 @@ function SlotItem({
   id,
   slotNumber,
   entry,
+  declined,
 }: {
   id: string;
   slotNumber: number;
   entry: ChartEditorEntry | undefined;
+  declined: boolean;
 }) {
   const {
     attributes,
@@ -234,7 +258,7 @@ function SlotItem({
         className={entry === undefined ? "opacity-40" : ""}
       />
       {entry !== undefined ? (
-        <PlayerLabel entry={entry} />
+        <PlayerLabel entry={entry} declined={declined} />
       ) : (
         <span className="text-sm text-muted-foreground">Empty slot</span>
       )}
@@ -245,9 +269,11 @@ function SlotItem({
 function UnassignedPool({
   draft,
   byId,
+  declined,
 }: {
   draft: BattingDraft;
   byId: Map<string, ChartEditorEntry>;
+  declined: ReadonlySet<string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: UNASSIGNED_ID });
 
@@ -270,7 +296,11 @@ function UnassignedPool({
           draft.unassigned.map((entryId) => {
             const entry = byId.get(entryId);
             return entry !== undefined ? (
-              <PoolItem key={entryId} entry={entry} />
+              <PoolItem
+                key={entryId}
+                entry={entry}
+                declined={declined.has(entryId)}
+              />
             ) : null;
           })
         )}
@@ -279,7 +309,13 @@ function UnassignedPool({
   );
 }
 
-function PoolItem({ entry }: { entry: ChartEditorEntry }) {
+function PoolItem({
+  entry,
+  declined,
+}: {
+  entry: ChartEditorEntry;
+  declined: boolean;
+}) {
   // useDraggable, not useSortable — pool items sit outside the slot list's
   // SortableContext and are not drop targets, so a drag over the pool always
   // resolves to the pool container itself.
@@ -296,17 +332,39 @@ function PoolItem({ entry }: { entry: ChartEditorEntry }) {
         isDragging ? "z-10 opacity-80 shadow-md cursor-grabbing" : ""
       }`}
     >
-      <PlayerLabel entry={entry} />
+      <PlayerLabel entry={entry} declined={declined} />
     </div>
   );
 }
 
-function PlayerLabel({ entry }: { entry: ChartEditorEntry }) {
+function PlayerLabel({
+  entry,
+  declined,
+}: {
+  entry: ChartEditorEntry;
+  declined: boolean;
+}) {
   return (
-    <span className="text-sm font-medium text-foreground">
-      {entry.playerName}
-      {entry.jerseyNumber !== null ? (
-        <span className="text-muted-foreground"> #{entry.jerseyNumber}</span>
+    <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+      <span className="min-w-0 truncate">
+        {entry.playerName}
+        {entry.jerseyNumber !== null ? (
+          <span className="text-muted-foreground"> #{entry.jerseyNumber}</span>
+        ) : null}
+      </span>
+      {/* The next game's decline, in the app's one RSVP vocabulary — a label
+          and a colour, never colour alone (design-plan.md §10). The name keeps
+          full strength: this player is still in the order, and fading them
+          would read as "disabled" on a chip that is fully draggable.
+
+          Static markup on a dnd-kit element, deliberately. No Motion, no
+          animation class — dnd-kit owns `transform` here (AGENTS.md). */}
+      {declined ? (
+        <span
+          className={`shrink-0 text-xs font-semibold ${RSVP_STYLE.declined.tagClassName}`}
+        >
+          {RSVP_STYLE.declined.label}
+        </span>
       ) : null}
     </span>
   );

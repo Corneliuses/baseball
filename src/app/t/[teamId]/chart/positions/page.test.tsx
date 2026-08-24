@@ -7,6 +7,8 @@ const requireTeamAccess = vi.fn();
 const getTeamById = vi.fn();
 const getChart = vi.fn();
 const editorProps = vi.fn();
+const loadDeclinedEntryIds = vi.fn();
+const nextGame = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -19,6 +21,14 @@ vi.mock("@/lib/teams", () => ({
 
 vi.mock("@/lib/roster", () => ({
   getChart: (...args: unknown[]) => getChart(...args),
+}));
+
+vi.mock("@/lib/chart-declines", () => ({
+  loadDeclinedEntryIds: (...args: unknown[]) => loadDeclinedEntryIds(...args),
+}));
+
+vi.mock("@/lib/schedule", () => ({
+  nextGame: (...args: unknown[]) => nextGame(...args),
 }));
 
 // The editor is a client component with its own tests; here it only needs to
@@ -75,6 +85,8 @@ async function render(searchParams: Record<string, string> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  loadDeclinedEntryIds.mockResolvedValue([]);
+  nextGame.mockResolvedValue(null);
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
   getTeamById.mockResolvedValue(team);
   getChart.mockResolvedValue([
@@ -152,6 +164,9 @@ describe("PositionsPage rendering", () => {
 
     expect(html).toContain("This team is archived");
     expect(editorProps).not.toHaveBeenCalled();
+    // The editor never mounts here, so the RSVP read that only feeds its
+    // badges is a query nothing would use.
+    expect(loadDeclinedEntryIds).not.toHaveBeenCalled();
   });
 
   it("shows an empty state linking to the roster when there are no players", async () => {
@@ -162,6 +177,7 @@ describe("PositionsPage rendering", () => {
     expect(html).toContain("No players yet");
     expect(html).toContain("/t/team-1/roster");
     expect(editorProps).not.toHaveBeenCalled();
+    expect(loadDeclinedEntryIds).not.toHaveBeenCalled();
   });
 
   it("links to the batting order editor and the view page", async () => {
@@ -204,5 +220,62 @@ describe("PositionsPage rendering", () => {
     const html = await render({ saved: "1" });
 
     expect(html).toContain("Positions saved.");
+  });
+});
+
+describe("PositionsPage decline badges", () => {
+  it("hands the editor the roster spots that declined the next game", async () => {
+    nextGame.mockResolvedValue({ id: "event-1" });
+    loadDeclinedEntryIds.mockResolvedValue(["a"]);
+
+    await render();
+
+    expect(loadDeclinedEntryIds).toHaveBeenCalledWith(
+      "team-1",
+      // The chart rows (with playerId), not `entries`, which has already
+      // dropped it by this point.
+      expect.arrayContaining([expect.objectContaining({ entryId: "a" })]),
+      { id: "event-1" },
+    );
+    expect(editorProps).toHaveBeenCalledWith(
+      expect.objectContaining({ declinedEntryIds: ["a"] }),
+    );
+  });
+
+  it("fetches the next game alongside the chart, not after it", async () => {
+    await render();
+
+    expect(nextGame).toHaveBeenCalledWith("team-1");
+  });
+
+  it("hands over an empty list when nothing is on the schedule", async () => {
+    // AC4: with no game the diamond is the one that existed before badges.
+    nextGame.mockResolvedValue(null);
+
+    await render();
+
+    expect(editorProps).toHaveBeenCalledWith(
+      expect.objectContaining({ declinedEntryIds: [] }),
+    );
+    expect(loadDeclinedEntryIds).toHaveBeenCalledWith(
+      "team-1",
+      expect.any(Array),
+      null,
+    );
+  });
+
+  it("keeps RSVP state off the entry rows themselves", async () => {
+    nextGame.mockResolvedValue({ id: "event-1" });
+    loadDeclinedEntryIds.mockResolvedValue(["a"]);
+
+    await render();
+
+    const props = editorProps.mock.calls[0][0] as {
+      entries: Record<string, unknown>[];
+    };
+    for (const entry of props.entries) {
+      expect(entry).not.toHaveProperty("rsvpState");
+      expect(entry).not.toHaveProperty("declined");
+    }
   });
 });

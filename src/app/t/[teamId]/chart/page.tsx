@@ -9,9 +9,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { loadDeclinedEntryIds } from "@/lib/chart-declines";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { getChart } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
+import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -76,7 +78,10 @@ export default async function ChartPage({
     notFound();
   }
 
-  const chart = await getChart(teamId);
+  // nextGame runs alongside the chart read rather than after it — the two
+  // don't depend on each other, and awaiting them in sequence would be a free
+  // round trip paid for no reason.
+  const [chart, game] = await Promise.all([getChart(teamId), nextGame(teamId)]);
   // Jersey-then-name order (the roster page's order) decides how unassigned
   // players list in the pool and how never-ordered players fill allPlay
   // slots; buildBattingDraft keeps this order for everyone without a
@@ -95,6 +100,20 @@ export default async function ChartPage({
     jerseyNumber,
     battingOrder,
   }));
+
+  // Who has said they can't make the next game (#55). Read-only decoration:
+  // it badges chips and reaches nothing that decides seating — the draft logic
+  // never sees it, so this board still cannot be filtered by who replied.
+  //
+  // Skipped entirely when the editor won't render at all — an archived team or
+  // an empty roster both fall through to their own card below, and the RSVP
+  // read is a query whose answer nothing would use. Deliberately not caught
+  // when it does run: a swallowed outage would draw a board where nobody
+  // declined, which is indistinguishable from good news.
+  const declinedEntryIds =
+    team.archivedAt === null && entries.length > 0
+      ? await loadDeclinedEntryIds(teamId, chart, game)
+      : [];
 
   const errorMessage = messageFor(ERROR_MESSAGES, error);
 
@@ -162,6 +181,7 @@ export default async function ChartPage({
             teamId={teamId}
             allPlay={team.allPlay}
             entries={entries}
+            declinedEntryIds={declinedEntryIds}
           />
           {/* The draft this coach just lost, if the save was refused because
               another coach got there first. Read-only reference beside the

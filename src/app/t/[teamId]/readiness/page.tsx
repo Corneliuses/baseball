@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { JerseyDot } from "@/components/JerseyDot";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -74,6 +75,42 @@ function PlayerList({
   );
 }
 
+/// The next game's batting order with the declined players lifted out and the
+/// ranks closed up — `computeReadiness`'s `effectiveOrder`, computed since #12
+/// and rendered nowhere until #55.
+///
+/// The number in the jersey dot is the *closed-up* rank (`index + 1`), never
+/// the player's stored `battingOrder`. That is the whole point of the card:
+/// this is what gets read out at the plate on Saturday, and printing the
+/// standing slots would only be /view with gaps in it.
+///
+/// No RSVP tags, unlike `PlayerList` above. Everyone on this list either said
+/// yes or hasn't answered, and the awaiting card already accounts for silence —
+/// stamping "No response" beside a name here would read as a doubt about
+/// whether they are really batting third, which is not what it means.
+function EffectiveOrderList({ entries }: { entries: ChartViewEntry[] }) {
+  return (
+    <ol className="space-y-2">
+      {entries.map((entry, index) => (
+        <li
+          key={entry.playerId}
+          className="flex items-center gap-3 rounded-md border border-border p-3"
+        >
+          <JerseyDot number={index + 1} />
+          <span className="text-sm font-medium text-foreground">
+            {entry.playerName}
+            {entry.jerseyNumber !== null ? (
+              <span className="ml-1 font-mono text-xs text-muted-foreground">
+                #{entry.jerseyNumber}
+              </span>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export default async function ReadinessPage({
   params,
 }: {
@@ -141,6 +178,16 @@ export default async function ReadinessPage({
   );
 
   const hasChart = hasChartSet(chartEntries);
+
+  // Whether a decline actually moved the batting order, which is not the same
+  // question as `ready`. A player who fields without batting (selective teams)
+  // empties a position and changes nothing about the card, and on a team where
+  // nobody declined the effective order *is* the standing order — already on
+  // /view, one link away. Either way, rendering it would be repetition dressed
+  // as news, so the card appears only when it has something new to say.
+  const orderDisrupted = readiness.declined.some(
+    (entry) => entry.battingOrder !== null,
+  );
 
   const heading = game.opponent ? `Next game vs ${game.opponent}` : "Next game";
 
@@ -248,6 +295,32 @@ export default async function ReadinessPage({
                 <Button asChild variant="outline">
                   <Link href={`/t/${teamId}/chart/positions`}>Edit positions</Link>
                 </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {orderDisrupted ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  The order as it stands
+                </CardTitle>
+                <CardDescription>
+                  With the players above out, this is how the batting order
+                  comes out for this game, slots closed up. Nothing here is
+                  saved — it&rsquo;s worked out fresh each time you look, and
+                  the standing order is untouched. Edit the batting order to
+                  change it for good.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {readiness.effectiveOrder.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Everyone in the batting order is out for this game.
+                  </p>
+                ) : (
+                  <EffectiveOrderList entries={readiness.effectiveOrder} />
+                )}
               </CardContent>
             </Card>
           ) : null}

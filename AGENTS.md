@@ -163,6 +163,13 @@ positions that leaves uncovered. It is read-only: it stores nothing, writes noth
 never rearranges the chart. The instinct to "materialize the effective lineup" reintroduces
 per-game rows through the back door — don't.
 
+**Deriving it for display is not materializing it.** `effectiveOrder` — the order with
+declined players removed and ranks closed up — is rendered on `/readiness` (#55), computed
+fresh on every read and gated on a decline having actually moved the order (a fielder who
+doesn't bat empties a position without changing an at-bat). The forbidden thing is a
+*stored* effective lineup, not a printed one; the page still has no write path and none may
+be added.
+
 Practices have RSVPs but no chart. Later games are ignored.
 
 ## Coding Conventions
@@ -422,6 +429,18 @@ production — the dev command can prompt, generate new migrations, and reset th
 - Chart edits are permanent — no undo, no history. Patching the order because a kid is out
   makes that the order. This was chosen deliberately; flag it rather than silently adding
   per-game overrides.
+- **The chart editors know who declined, and must never be able to act on it.** Since #55
+  both editors badge a declined player's chip for the next game, but the declined set
+  arrives as a `declinedEntryIds` prop — a list of entry ids beside the rows — and never as
+  a field on `ChartEditorEntry` / `PositionsEditorEntry`. That separation is the whole
+  guarantee: `src/lib/chart.ts` consumes those rows and decides every drag and every save,
+  so RSVP state being absent from them is what makes "this board cannot be filtered by who
+  replied" structural rather than a promise in a comment. Adding `rsvpState` to either
+  entry type undoes it. The badge is static markup on a dnd-kit element (no Motion, no
+  animation class), and a declined player stays fully draggable and fully in the payload —
+  the chart is standing, and one Saturday's absence is not a reason to rewrite it.
+  `src/lib/chart-declines.ts` holds the derivation, split pure/thin like the rest of
+  `src/lib/`; it skips the RSVP query entirely with no game or an empty roster.
 - **Both chart writes replace the whole chart, they do not merge into it.** `saveBattingOrder`
   and `savePositions` null every value for the team and then write the submitted board, so a
   second coach saving a board they loaded earlier would erase the first one's work outright —
