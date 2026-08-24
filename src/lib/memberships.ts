@@ -142,9 +142,63 @@ export async function listDirectory(teamId: string): Promise<DirectoryEntry[]> {
 
 export class LastOwnerError extends Error {
   constructor() {
-    super("Cannot change the role of the team's only owner");
+    super("Cannot remove or demote the team's only owner");
     this.name = "LastOwnerError";
   }
+}
+
+/**
+ * Remove one member from one team.
+ *
+ * Deletes exactly the (userId, teamId) Membership row — nothing else. The
+ * person's User row, their GuardianPlayer links, and their kids' roster spots
+ * all survive: guardianship is global by design (Decision 15), so severing it
+ * here would blind the same parent on every other team, and re-inviting them
+ * restores access with the family intact. One honest consequence: a removed
+ * guardian whose kid is still rostered keeps receiving roster-driven email
+ * (announcements, reminders recipients come from the roster, not Membership).
+ * Fully detaching a family means also unlinking the guardian on the roster
+ * entry page.
+ *
+ * The last-owner guard mirrors setMemberRole, and for the same racing reason
+ * runs under Serializable isolation: two admins removing two different owners
+ * at once must not leave the team with zero.
+ *
+ * Returns false when no membership exists — already removed in another tab —
+ * so the caller can decline to claim a deletion that never happened.
+ */
+export async function removeMember(
+  teamId: string,
+  userId: string,
+): Promise<boolean> {
+  return db.$transaction(
+    async (tx) => {
+      const current = await tx.membership.findUnique({
+        where: { userId_teamId: { userId, teamId } },
+        select: { role: true },
+      });
+
+      if (!current) {
+        return false;
+      }
+
+      if (current.role === "OWNER") {
+        const otherOwners = await tx.membership.count({
+          where: { teamId, role: "OWNER", userId: { not: userId } },
+        });
+
+        if (otherOwners === 0) {
+          throw new LastOwnerError();
+        }
+      }
+
+      await tx.membership.delete({
+        where: { userId_teamId: { userId, teamId } },
+      });
+      return true;
+    },
+    { isolationLevel: "Serializable" },
+  );
 }
 
 /**

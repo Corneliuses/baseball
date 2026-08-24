@@ -45,9 +45,37 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const TWO_MEMBERS = [
+  {
+    userId: "user-1",
+    role: "OWNER" as const,
+    name: "Sam",
+    email: "sam@example.com",
+    phone: null,
+  },
+  {
+    userId: "user-2",
+    role: "PARENT" as const,
+    name: null,
+    email: "test-svjpa8fcr@srv1.mail-tester.com",
+    phone: null,
+  },
+];
+
 describe("Members page", () => {
   it("should export a default function", async () => {
     expect(typeof MembersPage).toBe("function");
+  });
+
+  it("is owner-only even to read", async () => {
+    // Unlike the roster, members and invitations are not something every
+    // parent — or coach — needs to see.
+    await renderPage();
+
+    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", {
+      intent: "read",
+      minRole: "OWNER",
+    });
   });
 
   it("shows only live invitations as pending", async () => {
@@ -105,6 +133,61 @@ describe("Members page", () => {
     const ownerFormEnd = markup.indexOf("</form>", ownerRowIndex);
     const ownerForm = markup.slice(ownerRowIndex, ownerFormEnd);
     expect(ownerForm).toContain("disabled");
+  });
+});
+
+describe("MembersPage removal", () => {
+  beforeEach(() => {
+    listTeamMembers.mockResolvedValue(TWO_MEMBERS);
+  });
+
+  it("offers a Remove step per member, but never for the last owner", async () => {
+    const markup = await renderPage();
+
+    // The parent's row links into the confirm step for exactly that member.
+    expect(markup).toContain(
+      "/t/team-1/members?confirm=remove&amp;member=user-2",
+    );
+    // Sam is the only owner — same rule that disables their role select.
+    expect(markup).not.toContain("member=user-1");
+  });
+
+  it("confirms before removing, on the named row only", async () => {
+    const markup = await renderPage({ confirm: "remove", member: "user-2" });
+
+    expect(markup).toContain("Remove test-svjpa8fcr@srv1.mail-tester.com");
+    expect(markup).toContain("Yes, remove them");
+    expect(markup).toContain("are not deleted");
+  });
+
+  it("does not show the confirm step without the param", async () => {
+    const markup = await renderPage();
+
+    expect(markup).not.toContain("Yes, remove them");
+  });
+
+  it("confirms a completed removal", async () => {
+    const markup = await renderPage({ removed: "1" });
+
+    expect(markup).toContain("Member removed.");
+    expect(markup).toContain('role="status"');
+  });
+
+  it("lets a long unspaced address break instead of pushing controls off screen", async () => {
+    // The row is stacked now, but the address itself still needs break-all —
+    // an email is one long token, and break-words won't split it until it has
+    // already overflowed the card (the screenshot bug).
+    const markup = await renderPage();
+
+    // Second occurrence: the first is the name line falling back to the email
+    // for a member with no name (break-words there), the second is the email
+    // line proper.
+    const address = "test-svjpa8fcr@srv1.mail-tester.com";
+    const emailIndex = markup.indexOf(address, markup.indexOf(address) + 1);
+    expect(emailIndex).toBeGreaterThan(-1);
+    const tagStart = markup.lastIndexOf("<p", emailIndex);
+    const emailTag = markup.slice(tagStart, emailIndex);
+    expect(emailTag).toContain("break-all");
   });
 });
 

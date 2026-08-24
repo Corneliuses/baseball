@@ -4,16 +4,18 @@ const findManyMemberships = vi.fn();
 const findUniqueMembership = vi.fn();
 const countMemberships = vi.fn();
 const updateMembership = vi.fn();
+const deleteMembership = vi.fn();
 const transaction = vi.fn();
 
-// setMemberRole runs its check-and-update inside an interactive transaction,
-// so the mock `tx` handed to the callback needs the same membership methods
-// as `db` itself.
+// setMemberRole and removeMember run their check-and-write inside an
+// interactive transaction, so the mock `tx` handed to the callback needs the
+// same membership methods as `db` itself.
 const tx = {
   membership: {
     findUnique: (...args: unknown[]) => findUniqueMembership(...args),
     count: (...args: unknown[]) => countMemberships(...args),
     update: (...args: unknown[]) => updateMembership(...args),
+    delete: (...args: unknown[]) => deleteMembership(...args),
   },
 };
 
@@ -24,6 +26,7 @@ vi.mock("./db", () => ({
       findUnique: (...args: unknown[]) => findUniqueMembership(...args),
       count: (...args: unknown[]) => countMemberships(...args),
       update: (...args: unknown[]) => updateMembership(...args),
+      delete: (...args: unknown[]) => deleteMembership(...args),
     },
     $transaction: (...args: unknown[]) => transaction(...args),
   },
@@ -34,6 +37,7 @@ import {
   listCoachContacts,
   listDirectory,
   listTeamMembers,
+  removeMember,
   setMemberRole,
 } from "./memberships";
 
@@ -269,5 +273,53 @@ describe("setMemberRole", () => {
 
     expect(countMemberships).not.toHaveBeenCalled();
     expect(updateMembership).toHaveBeenCalled();
+  });
+});
+
+describe("removeMember", () => {
+  it("deletes exactly the (userId, teamId) row inside a Serializable transaction", async () => {
+    findUniqueMembership.mockResolvedValue({ role: "PARENT" });
+
+    await expect(removeMember("team-1", "user-2")).resolves.toBe(true);
+
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expect(deleteMembership).toHaveBeenCalledWith({
+      where: { userId_teamId: { userId: "user-2", teamId: "team-1" } },
+    });
+  });
+
+  it("returns false when no membership exists, deleting nothing", async () => {
+    // Already removed in another tab. The caller uses this to avoid claiming
+    // a deletion that never happened.
+    findUniqueMembership.mockResolvedValue(null);
+
+    await expect(removeMember("team-1", "user-2")).resolves.toBe(false);
+    expect(deleteMembership).not.toHaveBeenCalled();
+  });
+
+  it("refuses to remove the team's only owner", async () => {
+    findUniqueMembership.mockResolvedValue({ role: "OWNER" });
+    countMemberships.mockResolvedValue(0);
+
+    await expect(removeMember("team-1", "user-1")).rejects.toThrow(
+      LastOwnerError,
+    );
+    expect(deleteMembership).not.toHaveBeenCalled();
+  });
+
+  it("removes an owner when another owner remains", async () => {
+    findUniqueMembership.mockResolvedValue({ role: "OWNER" });
+    countMemberships.mockResolvedValue(1);
+
+    await expect(removeMember("team-1", "user-1")).resolves.toBe(true);
+
+    // Counts OTHER owners, same as setMemberRole — it can't be fooled by
+    // counting the very row it's about to delete.
+    expect(countMemberships).toHaveBeenCalledWith({
+      where: { teamId: "team-1", role: "OWNER", userId: { not: "user-1" } },
+    });
+    expect(deleteMembership).toHaveBeenCalled();
   });
 });

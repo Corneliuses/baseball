@@ -5,6 +5,7 @@ const createInvitation = vi.fn();
 const getTeamInvitation = vi.fn();
 const revokeInvitation = vi.fn();
 const setMemberRole = vi.fn();
+const removeMember = vi.fn();
 const sendEmail = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
@@ -20,6 +21,7 @@ vi.mock("@/lib/invitations", () => ({
 
 vi.mock("@/lib/memberships", () => ({
   setMemberRole: (...args: unknown[]) => setMemberRole(...args),
+  removeMember: (...args: unknown[]) => removeMember(...args),
   LastOwnerError: class LastOwnerError extends Error {},
 }));
 
@@ -47,7 +49,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
+import { LastOwnerError } from "@/lib/memberships";
 import {
+  removeMemberAction,
   resendInvitationAction,
   revokeInvitationAction,
   setMemberRoleAction,
@@ -94,6 +98,7 @@ beforeEach(() => {
     expiresAt: new Date("2026-05-15"),
   });
   setMemberRole.mockResolvedValue(undefined);
+  removeMember.mockResolvedValue(true);
   sendEmail.mockResolvedValue({ ok: true });
 });
 
@@ -109,6 +114,80 @@ describe("setMemberRoleAction", () => {
 
     expect(url).toBe("/t/team-1/members?role-saved=1");
     expect(setMemberRole).toHaveBeenCalledWith("team-1", "user-2", "COACH");
+  });
+});
+
+describe("removeMemberAction", () => {
+  it("removes the member and says so", async () => {
+    const url = await redirectUrlOf(() =>
+      removeMemberAction(form({ teamId: "team-1", userId: "user-2" })),
+    );
+
+    expect(url).toBe("/t/team-1/members?removed=1");
+    expect(removeMember).toHaveBeenCalledWith("team-1", "user-2");
+  });
+
+  it("requires owner access with write intent", async () => {
+    // Write intent is what makes an archived team reject this, owner or not.
+    await redirectUrlOf(() =>
+      removeMemberAction(form({ teamId: "team-1", userId: "user-2" })),
+    );
+
+    expect(requireTeamAccess).toHaveBeenCalledWith("team-1", {
+      intent: "write",
+      minRole: "OWNER",
+    });
+  });
+
+  it("redirects to the access error when the caller is not an owner", async () => {
+    requireTeamAccess.mockRejectedValue(
+      new TeamAccessError("denied", "insufficient-role"),
+    );
+
+    const url = await redirectUrlOf(() =>
+      removeMemberAction(form({ teamId: "team-1", userId: "user-2" })),
+    );
+
+    expect(url).toBe("/t/team-1/members?error=access");
+    expect(removeMember).not.toHaveBeenCalled();
+  });
+
+  it("reports the last-owner refusal instead of crashing", async () => {
+    removeMember.mockRejectedValue(new LastOwnerError());
+
+    const url = await redirectUrlOf(() =>
+      removeMemberAction(form({ teamId: "team-1", userId: "owner-1" })),
+    );
+
+    expect(url).toBe("/t/team-1/members?error=last-owner");
+  });
+
+  it("does not claim success when nothing was removed", async () => {
+    // A second tab may have removed the row a moment ago; the list re-renders
+    // and shows the truth either way.
+    removeMember.mockResolvedValue(false);
+
+    const url = await redirectUrlOf(() =>
+      removeMemberAction(form({ teamId: "team-1", userId: "user-2" })),
+    );
+
+    expect(url).toBe("/t/team-1/members");
+  });
+
+  it("sends an owner who removed themselves to the team list", async () => {
+    // requireTeamAccess resolves the caller as owner-1; removing that same
+    // membership means the members page can no longer be read.
+    const url = await redirectUrlOf(() =>
+      removeMemberAction(form({ teamId: "team-1", userId: "owner-1" })),
+    );
+
+    expect(url).toBe("/");
+  });
+
+  it("throws on a missing user id rather than guessing", async () => {
+    await expect(
+      removeMemberAction(form({ teamId: "team-1" })),
+    ).rejects.toThrow("Invalid user ID");
   });
 });
 
