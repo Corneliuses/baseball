@@ -29,6 +29,7 @@ import {
   NO_CATCHER_TEXT,
   NoCatcherMarker,
 } from "@/components/NoCatcherMarker";
+import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { Position } from "@/generated/prisma/enums";
@@ -48,9 +49,11 @@ import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "../drag-activation";
 import { savePositionsAction } from "./actions";
 import { stashDraft } from "../draft-stash";
 
-/// The editor's slice of a roster entry. RSVP state is deliberately absent —
-/// the page never loads RSVPs, so the assignable pool structurally cannot be
-/// filtered by who has replied (#7, and the issue says so explicitly).
+/// The editor's slice of a roster entry. RSVP state is deliberately absent, and
+/// stays absent after #55: who declined arrives as `declinedEntryIds` beside
+/// these rows, never on them. `buildPositionsDraft` and `resolvePositionDrop`
+/// consume entries, so keeping the two apart is what makes "the assignable pool
+/// cannot be filtered by who has replied" structural rather than a promise (#7).
 export type PositionsEditorEntry = {
   entryId: string;
   playerName: string;
@@ -62,6 +65,15 @@ type PositionsEditorProps = {
   teamId: string;
   allPlay: boolean;
   entries: PositionsEditorEntry[];
+  /// Roster spots whose player has declined the next game (#55). Decoration
+  /// only: it badges a chip and touches nothing else — not the draft, not the
+  /// drop rules, not what gets posted. A declined player stays as draggable and
+  /// as placeable as anyone else, because the chart is standing and one
+  /// Saturday's absence is not a reason to rewrite it (Decision 16).
+  ///
+  /// Empty when no game is on the schedule, which is what keeps this board
+  /// identical to the one that existed before the badges.
+  declinedEntryIds?: readonly string[];
 };
 
 
@@ -81,6 +93,7 @@ export function PositionsEditor({
   teamId,
   allPlay,
   entries,
+  declinedEntryIds = [],
 }: PositionsEditorProps) {
   const original = useMemo(
     () => buildPositionsDraft(entries, allPlay),
@@ -91,6 +104,11 @@ export function PositionsEditor({
   const byId = useMemo(
     () => new Map(entries.map((entry) => [entry.entryId, entry])),
     [entries],
+  );
+
+  const declined = useMemo(
+    () => new Set(declinedEntryIds),
+    [declinedEntryIds],
   );
 
   // Where the keyboard drag currently "hovers". A ref, not state: the
@@ -196,8 +214,18 @@ export function PositionsEditor({
             starts and where the coach's thumb returns between drags, so on a
             phone it belongs above the fold rather than below a 400x520 board
             the coach has to scroll past to reach it. */}
-        <Zone draft={draft} byId={byId} allPlay={allPlay} />
-        <Field draft={draft} byId={byId} diamondNames={diamondNames} />
+        <Zone
+          draft={draft}
+          byId={byId}
+          allPlay={allPlay}
+          declined={declined}
+        />
+        <Field
+          draft={draft}
+          byId={byId}
+          diamondNames={diamondNames}
+          declined={declined}
+        />
 
         <form
           action={savePositionsAction}
@@ -266,10 +294,12 @@ function Field({
   draft,
   byId,
   diamondNames,
+  declined,
 }: {
   draft: PositionsDraft;
   byId: Map<string, PositionsEditorEntry>;
   diamondNames: ReadonlyMap<string, string>;
+  declined: ReadonlySet<string>;
 }) {
   // An allPlay board has no catcher. The spot is still drawn — as the disc
   // that says nobody plays it — so the coach isn't left wondering whether the
@@ -309,6 +339,7 @@ function Field({
                 : undefined
             }
             diamondNames={diamondNames}
+            declined={declined}
           />
         ))}
       </div>
@@ -320,6 +351,7 @@ function PositionTarget({
   position,
   entry,
   diamondNames,
+  declined,
 }: {
   position: Position;
   entry: PositionsEditorEntry | undefined;
@@ -327,6 +359,7 @@ function PositionTarget({
   /// than shortened here because "is this first name ambiguous" is a question
   /// about every other player on the board, not about this one.
   diamondNames: ReadonlyMap<string, string>;
+  declined: ReadonlySet<string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: position });
   const { x, y } = positionPercent(position);
@@ -354,6 +387,7 @@ function PositionTarget({
         <Chip
           entry={entry}
           label={diamondNames.get(entry.entryId) ?? entry.playerName}
+          declined={declined.has(entry.entryId)}
         />
       ) : (
         <span className="rounded bg-background/85 px-1 text-[11px] italic text-muted-foreground">
@@ -371,10 +405,12 @@ function Zone({
   draft,
   byId,
   allPlay,
+  declined,
 }: {
   draft: PositionsDraft;
   byId: Map<string, PositionsEditorEntry>;
   allPlay: boolean;
+  declined: ReadonlySet<string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: POSITION_POOL_ID });
   // "Substitutes", never "Bench": the app-wide word for the state, chosen
@@ -405,6 +441,7 @@ function Zone({
                 entry={entry}
                 label={entry.playerName}
                 showJersey
+                declined={declined.has(entryId)}
               />
             ) : null;
           })
@@ -422,10 +459,15 @@ function Chip({
   entry,
   label,
   showJersey = false,
+  declined = false,
 }: {
   entry: PositionsEditorEntry;
   label: string;
   showJersey?: boolean;
+  /// True when this player has declined the team's next game (#55). Says so
+  /// and does nothing else — the chip stays draggable and the drop rules never
+  /// see this.
+  declined?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: entry.entryId });
@@ -443,6 +485,18 @@ function Chip({
       {label}
       {showJersey && entry.jerseyNumber !== null ? (
         <span className="text-muted-foreground">#{entry.jerseyNumber}</span>
+      ) : null}
+      {/* The next game's decline, in the app's one RSVP vocabulary — a label
+          and a colour, never colour alone (design-plan.md §10). The name keeps
+          full strength: fading it would read as "disabled" on a chip that is
+          fully draggable.
+
+          Static markup on a dnd-kit element, deliberately. No Motion, no
+          animation class — dnd-kit owns `transform` here (AGENTS.md). */}
+      {declined ? (
+        <span className={`font-semibold ${RSVP_STYLE.declined.tagClassName}`}>
+          {RSVP_STYLE.declined.label}
+        </span>
       ) : null}
     </span>
   );

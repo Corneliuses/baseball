@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { loadDeclinedEntryIds } from "@/lib/chart-declines";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { getChart } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
@@ -94,6 +95,16 @@ export default async function PositionsPage({
     position,
   }));
 
+  // Who has said they can't make the next game (#55). Read-only decoration:
+  // it badges chips and reaches nothing that decides seating — the draft logic
+  // never sees it, so this board still cannot be filtered by who replied.
+  //
+  // Deliberately after the chart read rather than beside it: it needs those
+  // rows. Empty when nothing is on the schedule, and deliberately not caught —
+  // a swallowed outage would draw a board where nobody declined, which is
+  // indistinguishable from good news.
+  const declinedEntryIds = await loadDeclinedEntryIds(teamId, chart);
+
   const errorMessage = messageFor(ERROR_MESSAGES, error);
 
   return (
@@ -159,6 +170,7 @@ export default async function PositionsPage({
             teamId={teamId}
             allPlay={team.allPlay}
             entries={entries}
+            declinedEntryIds={declinedEntryIds}
           />
           {/* The board this coach just lost, if another coach's save landed
               first. Read-only reference — see DraftStash. */}

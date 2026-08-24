@@ -7,6 +7,7 @@ const requireTeamAccess = vi.fn();
 const getTeamById = vi.fn();
 const getChart = vi.fn();
 const editorProps = vi.fn();
+const loadDeclinedEntryIds = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -19,6 +20,10 @@ vi.mock("@/lib/teams", () => ({
 
 vi.mock("@/lib/roster", () => ({
   getChart: (...args: unknown[]) => getChart(...args),
+}));
+
+vi.mock("@/lib/chart-declines", () => ({
+  loadDeclinedEntryIds: (...args: unknown[]) => loadDeclinedEntryIds(...args),
 }));
 
 // The editor is a client component with its own tests; here it only needs to
@@ -75,6 +80,7 @@ async function render(searchParams: Record<string, string> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  loadDeclinedEntryIds.mockResolvedValue([]);
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
   getTeamById.mockResolvedValue(team);
   getChart.mockResolvedValue([
@@ -204,5 +210,46 @@ describe("PositionsPage rendering", () => {
     const html = await render({ saved: "1" });
 
     expect(html).toContain("Positions saved.");
+  });
+});
+
+describe("PositionsPage decline badges", () => {
+  it("hands the editor the roster spots that declined the next game", async () => {
+    loadDeclinedEntryIds.mockResolvedValue(["a"]);
+
+    await render();
+
+    expect(loadDeclinedEntryIds).toHaveBeenCalledWith(
+      "team-1",
+      expect.arrayContaining([expect.objectContaining({ entryId: "a" })]),
+    );
+    expect(editorProps).toHaveBeenCalledWith(
+      expect.objectContaining({ declinedEntryIds: ["a"] }),
+    );
+  });
+
+  it("hands over an empty list when nothing is on the schedule", async () => {
+    // AC4: with no game the diamond is the one that existed before badges.
+    loadDeclinedEntryIds.mockResolvedValue([]);
+
+    await render();
+
+    expect(editorProps).toHaveBeenCalledWith(
+      expect.objectContaining({ declinedEntryIds: [] }),
+    );
+  });
+
+  it("keeps RSVP state off the entry rows themselves", async () => {
+    loadDeclinedEntryIds.mockResolvedValue(["a"]);
+
+    await render();
+
+    const props = editorProps.mock.calls[0][0] as {
+      entries: Record<string, unknown>[];
+    };
+    for (const entry of props.entries) {
+      expect(entry).not.toHaveProperty("rsvpState");
+      expect(entry).not.toHaveProperty("declined");
+    }
   });
 });

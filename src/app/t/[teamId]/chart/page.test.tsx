@@ -5,6 +5,7 @@ const requireTeamAccess = vi.fn();
 const getTeamById = vi.fn();
 const getChart = vi.fn();
 const editorProps = vi.fn();
+const loadDeclinedEntryIds = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -17,6 +18,10 @@ vi.mock("@/lib/teams", () => ({
 
 vi.mock("@/lib/roster", () => ({
   getChart: (...args: unknown[]) => getChart(...args),
+}));
+
+vi.mock("@/lib/chart-declines", () => ({
+  loadDeclinedEntryIds: (...args: unknown[]) => loadDeclinedEntryIds(...args),
 }));
 
 // The editor is a client component with its own tests; here it only needs to
@@ -73,6 +78,7 @@ async function render(searchParams: Record<string, string> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  loadDeclinedEntryIds.mockResolvedValue([]);
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
   getTeamById.mockResolvedValue(team);
   getChart.mockResolvedValue([
@@ -172,5 +178,51 @@ describe("ChartPage rendering", () => {
     const html = await render({ saved: "1" });
 
     expect(html).toContain("Order saved.");
+  });
+});
+
+describe("ChartPage decline badges", () => {
+  it("hands the editor the roster spots that declined the next game", async () => {
+    loadDeclinedEntryIds.mockResolvedValue(["b"]);
+
+    await render();
+
+    expect(loadDeclinedEntryIds).toHaveBeenCalledWith(
+      "team-1",
+      // The chart rows, so the lookup can map a player's decline back to the
+      // roster spot the editor keys its chips on.
+      expect.arrayContaining([expect.objectContaining({ entryId: "b" })]),
+    );
+    expect(editorProps).toHaveBeenCalledWith(
+      expect.objectContaining({ declinedEntryIds: ["b"] }),
+    );
+  });
+
+  it("hands over an empty list when nothing is on the schedule", async () => {
+    // AC4: with no game the board is the one that existed before badges.
+    loadDeclinedEntryIds.mockResolvedValue([]);
+
+    await render();
+
+    expect(editorProps).toHaveBeenCalledWith(
+      expect.objectContaining({ declinedEntryIds: [] }),
+    );
+  });
+
+  it("keeps RSVP state off the entry rows themselves", async () => {
+    // The badge travels beside the entries, never on them: src/lib/chart.ts
+    // consumes these rows, and that is what makes "the pool cannot be filtered
+    // by who replied" structural rather than a promise.
+    loadDeclinedEntryIds.mockResolvedValue(["b"]);
+
+    await render();
+
+    const props = editorProps.mock.calls[0][0] as {
+      entries: Record<string, unknown>[];
+    };
+    for (const entry of props.entries) {
+      expect(entry).not.toHaveProperty("rsvpState");
+      expect(entry).not.toHaveProperty("declined");
+    }
   });
 });
