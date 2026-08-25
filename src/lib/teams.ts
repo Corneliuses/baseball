@@ -19,6 +19,7 @@ export interface Team {
   name: string;
   season: string | null;
   allPlay: boolean;
+  groupMeUrl: string | null;
   archivedAt: Date | null;
   createdAt: Date;
 }
@@ -28,6 +29,7 @@ const TEAM_SELECT = {
   name: true,
   season: true,
   allPlay: true,
+  groupMeUrl: true,
   archivedAt: true,
   createdAt: true,
 } as const;
@@ -107,6 +109,7 @@ export type UpdateTeamInput = {
   name: string;
   season: string | null;
   allPlay: boolean;
+  groupMeUrl: string | null;
 };
 
 export async function updateTeam(
@@ -119,6 +122,7 @@ export async function updateTeam(
       name: input.name,
       season: input.season,
       allPlay: input.allPlay,
+      groupMeUrl: input.groupMeUrl,
     },
     select: TEAM_SELECT,
   });

@@ -119,6 +119,7 @@ beforeEach(() => {
     name: "Sluggers",
     season: "Fall 2026",
     allPlay: true,
+    groupMeUrl: null,
     archivedAt: null,
   });
 });
@@ -150,12 +151,37 @@ describe("TeamHomePage", () => {
       name: "Sluggers",
       season: "Fall 2026",
       allPlay: true,
+      groupMeUrl: null,
       archivedAt: new Date("2026-01-01T00:00:00Z"),
     });
 
     const html = await render();
 
     expect(html).toContain("archived and read-only");
+  });
+
+  it("links to the team GroupMe when the owner has shared one", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: true,
+      groupMeUrl: "https://groupme.com/join_group/12345678/AbCdEfGh",
+      archivedAt: null,
+    });
+
+    const html = await render();
+
+    expect(html).toContain(
+      'href="https://groupme.com/join_group/12345678/AbCdEfGh"',
+    );
+    expect(html).toContain("Join the GroupMe chat");
+  });
+
+  it("says nothing about GroupMe when no link is set", async () => {
+    const html = await render();
+
+    expect(html).not.toContain("GroupMe");
   });
 });
 

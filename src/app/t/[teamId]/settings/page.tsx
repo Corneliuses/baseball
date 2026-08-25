@@ -22,6 +22,8 @@ export const metadata = {
 
 const ERROR_MESSAGES = messageTable({
   "invalid-name": "Team name is required.",
+  "invalid-groupme":
+    "That doesn't look like a GroupMe link — paste the group's share link, like https://groupme.com/join_group/…",
   access: "You no longer have access to make this change.",
 });
 
@@ -98,6 +100,28 @@ export default async function TeamSettingsPage({
                 placeholder="2026"
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="groupMeUrl"
+                className="block text-sm font-medium text-foreground"
+              >
+                GroupMe link
+              </label>
+              <input
+                id="groupMeUrl"
+                name="groupMeUrl"
+                type="url"
+                defaultValue={team.groupMeUrl ?? ""}
+                placeholder="https://groupme.com/join_group/…"
+                aria-describedby="groupme-hint"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <p id="groupme-hint" className="text-xs text-muted-foreground">
+                The group&rsquo;s share link. Everyone on the team sees it on the
+                team page so parents can join the chat. Leave blank to hide it.
+              </p>
             </div>
 
             <div className="flex items-center gap-2">

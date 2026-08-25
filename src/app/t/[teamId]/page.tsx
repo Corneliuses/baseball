@@ -528,6 +528,31 @@ export default async function TeamHomePage({
           Role-gated links (directory, settings) are gated there — and, as
           always, enforced by each page itself. */}
 
+      {/* The team's GroupMe chat, when the owner has shared its link in
+          settings. Shown to every role, not just parents — a coach joins the
+          chat too — and kept on team home for the same reason the coach card
+          is: this is the page the invitation lands a new family on, and
+          joining the chat is part of joining the team. An external link, so a
+          plain anchor rather than next/link, opening in its own tab; the
+          GroupMe app intercepts it on a phone. */}
+      {team.groupMeUrl ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Team chat</CardTitle>
+            <CardDescription>
+              The team is on GroupMe — join to keep up between games.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline" size="sm">
+              <a href={team.groupMeUrl} target="_blank" rel="noreferrer">
+                Join the GroupMe chat
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {coachContacts.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-lg font-semibold text-foreground">Coaches</h3>

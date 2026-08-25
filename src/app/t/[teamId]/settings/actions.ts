@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
+import { isGroupMeUrl } from "@/lib/groupme";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { archiveTeam, unarchiveTeam, updateTeam } from "@/lib/teams";
 
@@ -14,6 +15,14 @@ const updateTeamSchema = z.object({
     .trim()
     .transform((value) => (value === "" ? null : value)),
   allPlay: z.boolean(),
+  // Empty clears the link; anything else must actually be a GroupMe URL —
+  // team home renders this as a tappable "join the chat" link for every
+  // family, so a typo'd or non-GroupMe address is refused, not stored.
+  groupMeUrl: z
+    .string()
+    .trim()
+    .transform((value) => (value === "" ? null : value))
+    .refine((value) => value === null || isGroupMeUrl(value)),
 });
 
 function extractTeamId(formData: FormData): string {
@@ -41,10 +50,16 @@ export async function updateTeamAction(formData: FormData) {
     name: formData.get("name") ?? "",
     season: formData.get("season") ?? "",
     allPlay: formData.get("allPlay") === "on",
+    groupMeUrl: formData.get("groupMeUrl") ?? "",
   });
 
   if (!parsed.success) {
-    redirect(`/t/${teamId}/settings?error=invalid-name`);
+    const code = parsed.error.issues.some(
+      (issue) => issue.path[0] === "groupMeUrl",
+    )
+      ? "invalid-groupme"
+      : "invalid-name";
+    redirect(`/t/${teamId}/settings?error=${code}`);
   }
 
   try {
