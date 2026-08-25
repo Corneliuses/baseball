@@ -126,6 +126,12 @@ model Team {
   archivedAt DateTime?
   createdAt  DateTime  @default(now())
 
+  /// Invite link to the team's GroupMe chat, set by the owner in team
+  /// settings and shown to every member on team home. A URL into GroupMe's
+  /// own join flow, not membership state — who is actually in the chat lives
+  /// with GroupMe, which is why this is one nullable column and not a model.
+  groupMeUrl String?
+
   /// Capability credential for the ICS feed URL (/api/calendar/[token]) —
   /// calendar apps poll with no cookies, so the URL carries its own auth.
   /// Same posture as Invitation.token: unguessable (32 random bytes,

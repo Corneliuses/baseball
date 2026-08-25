@@ -24,6 +24,7 @@ const ACTIVE_TEAM = {
   name: "Sharks",
   season: "2026",
   allPlay: true,
+  groupMeUrl: null,
   archivedAt: null,
   createdAt: new Date("2026-07-28"),
 };
@@ -48,6 +49,41 @@ describe("Team settings page", () => {
   it("should export a default function", async () => {
     const { default: TeamSettingsPage } = await import("./page");
     expect(typeof TeamSettingsPage).toBe("function");
+  });
+
+  it("offers a GroupMe link field, prefilled with the stored link", async () => {
+    getTeamById.mockResolvedValue({
+      ...ACTIVE_TEAM,
+      groupMeUrl: "https://groupme.com/join_group/12345678/AbCdEfGh",
+    });
+
+    const html = await render();
+
+    expect(html).toContain('name="groupMeUrl"');
+    expect(html).toContain(
+      'value="https://groupme.com/join_group/12345678/AbCdEfGh"',
+    );
+  });
+
+  it("leaves the GroupMe field empty when the team has no link", async () => {
+    const html = await render();
+
+    expect(html).toMatch(/<input[^>]*name="groupMeUrl"[^>]*value=""/);
+  });
+
+  // Validation failures are form state now, not `?error=` — see
+  // TeamDetailsForm.test.tsx. `access` is the one code that still redirects,
+  // because a save that can never succeed has no form worth keeping warm.
+  it("passes a lost-access redirect through to the form", async () => {
+    const html = await render({ error: "access" });
+
+    expect(html).toContain("no longer have access");
+  });
+
+  it("confirms a save", async () => {
+    const html = await render({ saved: "1" });
+
+    expect(html).toContain("Saved.");
   });
 
   it("asks for confirmation before offering the archive button", async () => {

@@ -31,6 +31,7 @@ const TEAM_SELECT = {
   name: true,
   season: true,
   allPlay: true,
+  groupMeUrl: true,
   archivedAt: true,
   createdAt: true,
 };
@@ -40,6 +41,7 @@ const SAMPLE_TEAM = {
   name: "Sharks",
   season: "2026",
   allPlay: true,
+  groupMeUrl: null,
   archivedAt: null,
   createdAt: new Date("2026-07-28"),
 };
@@ -133,12 +135,22 @@ describe("createTeam", () => {
 });
 
 describe("updateTeam", () => {
-  it("updates only name, season, and allPlay", async () => {
-    await updateTeam("team-1", { name: "Sharks", season: "2027", allPlay: false });
+  it("updates only name, season, allPlay, and groupMeUrl", async () => {
+    await updateTeam("team-1", {
+      name: "Sharks",
+      season: "2027",
+      allPlay: false,
+      groupMeUrl: "https://groupme.com/join_group/1/x",
+    });
 
     expect(updateTeamRow).toHaveBeenCalledWith({
       where: { id: "team-1" },
-      data: { name: "Sharks", season: "2027", allPlay: false },
+      data: {
+        name: "Sharks",
+        season: "2027",
+        allPlay: false,
+        groupMeUrl: "https://groupme.com/join_group/1/x",
+      },
       select: TEAM_SELECT,
     });
   });
@@ -147,7 +159,12 @@ describe("updateTeam", () => {
     updateTeamRow.mockRejectedValue(new Error("not found"));
 
     await expect(
-      updateTeam("team-1", { name: "Sharks", season: null, allPlay: true }),
+      updateTeam("team-1", {
+        name: "Sharks",
+        season: null,
+        allPlay: true,
+        groupMeUrl: null,
+      }),
     ).rejects.toThrow("not found");
   });
 });

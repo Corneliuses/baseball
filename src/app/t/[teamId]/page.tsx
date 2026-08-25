@@ -35,6 +35,7 @@ import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
+import { BleacherChatterCard } from "./BleacherChatterCard";
 import { rsvpAction } from "./schedule/actions";
 
 /// Copy for the codes `rsvpAction` redirects here with when it is posted from
@@ -527,6 +528,19 @@ export default async function TeamHomePage({
           the persistent TeamNav in the /t/[teamId] layout, on every team view.
           Role-gated links (directory, settings) are gated there — and, as
           always, enforced by each page itself. */}
+
+      {/* The team's GroupMe chat, when the owner has shared its link in
+          settings — drawn as the bleachers, the one place at a ballgame that
+          belongs to the families this link is for. Shown to every role, not
+          just parents — a coach joins the chat too — and kept on team home
+          for the same reason the coach card is: this is the page the
+          invitation lands a new family on, and joining the chat is part of
+          joining the team. The card collapses on this browser once tapped;
+          see BleacherChatterCard for that memory and for why it never goes
+          banana. */}
+      {team.groupMeUrl ? (
+        <BleacherChatterCard teamId={teamId} groupMeUrl={team.groupMeUrl} />
+      ) : null}
 
       {coachContacts.length > 0 && (
         <div className="space-y-2">

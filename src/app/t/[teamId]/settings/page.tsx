@@ -10,20 +10,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
-import { archiveTeamAction, unarchiveTeamAction, updateTeamAction } from "./actions";
+import { archiveTeamAction, unarchiveTeamAction } from "./actions";
+import { TeamDetailsForm } from "./TeamDetailsForm";
 
 export const metadata = {
   title: "Team settings — Youth Baseball Team Manager",
 };
-
-const ERROR_MESSAGES = messageTable({
-  "invalid-name": "Team name is required.",
-  access: "You no longer have access to make this change.",
-});
 
 /// Viewing this page requires OWNER, but the intent is "read" — an archived
 /// team must still let its owner reach this page to unarchive it. The
@@ -52,7 +47,6 @@ export default async function TeamSettingsPage({
     notFound();
   }
 
-  const errorMessage = messageFor(ERROR_MESSAGES, error);
   const confirmingArchive = confirm === "archive" && !team.archivedAt;
 
   return (
@@ -64,71 +58,25 @@ export default async function TeamSettingsPage({
       <Card>
         <CardHeader>
           <CardTitle>Team settings</CardTitle>
-          <CardDescription>Name, season, and lineup settings.</CardDescription>
+          <CardDescription>
+            Name, season, team chat, and lineup settings.
+          </CardDescription>
         </CardHeader>
 
         <CardContent>
-          <form action={updateTeamAction} className="space-y-4">
-            <input type="hidden" name="teamId" value={teamId} />
-
-            <div className="space-y-2">
-              <label htmlFor="name" className="block text-sm font-medium text-foreground">
-                Team name
-              </label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                required
-                defaultValue={team.name}
-                aria-describedby={errorMessage ? "settings-error" : undefined}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="season" className="block text-sm font-medium text-foreground">
-                Season
-              </label>
-              <input
-                id="season"
-                name="season"
-                type="text"
-                defaultValue={team.season ?? ""}
-                placeholder="2026"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                id="allPlay"
-                name="allPlay"
-                type="checkbox"
-                defaultChecked={team.allPlay}
-                className="h-4 w-4 rounded border-border"
-              />
-              <label htmlFor="allPlay" className="text-sm text-foreground">
-                Every kid bats and fields (all-play)
-              </label>
-            </div>
-
-            {errorMessage ? (
-              <p id="settings-error" role="alert" className="text-sm text-destructive">
-                {errorMessage}
-              </p>
-            ) : null}
-
-            {saved && !errorMessage ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                Saved.
-              </p>
-            ) : null}
-
-            <SubmitButton className="w-full" pendingLabel="Saving…">
-              Save changes
-            </SubmitButton>
-          </form>
+          {/* A client form on `useActionState`, not a bare
+              `<form action={...}>`: this is a form people type into, so a
+              rejected value comes back as state with everything they typed
+              intact. See AGENTS.md and ./actions.ts. */}
+          <TeamDetailsForm
+            teamId={teamId}
+            name={team.name}
+            season={team.season ?? ""}
+            allPlay={team.allPlay}
+            groupMeUrl={team.groupMeUrl ?? ""}
+            saved={Boolean(saved)}
+            redirectErrorCode={error}
+          />
         </CardContent>
       </Card>
 
