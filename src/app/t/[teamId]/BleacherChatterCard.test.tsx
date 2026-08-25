@@ -38,6 +38,21 @@ describe("BleacherChatterCard before joining", () => {
     }
   });
 
+  // The stands stay 88px tall at every card width — a wider card sees more
+  // crowd (`slice` crops the wings), never a taller one. `meet` here would
+  // letterbox the planks short of the card's edges; proportional scaling drew
+  // a 275px crowd inside the layout's max-w-7xl column.
+  it("caps the stands at phone height and crops wider views, never scales", () => {
+    const { container } = render(
+      <BleacherChatterCard teamId="team-1" groupMeUrl={URL} />,
+    );
+
+    const art = container.querySelector('svg[viewBox="0 0 1280 88"]');
+    expect(art).not.toBeNull();
+    expect(art!.getAttribute("preserveAspectRatio")).toBe("xMidYMid slice");
+    expect(art!.getAttribute("class")).toContain("h-[88px]");
+  });
+
   // Team home's banana belongs to the kids' marquee strips (design-plan.md
   // §2), and this card's fun budget is spent on the crowd instead.
   it("never goes banana", () => {
