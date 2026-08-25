@@ -78,23 +78,49 @@ describe("BleacherChatterCard before joining", () => {
 });
 
 describe("BleacherChatterCard once this browser has joined", () => {
-  it("collapses to the you're-in row when tapped, remembering it", () => {
+  it("collapses when tapped, remembering it", () => {
     render(<BleacherChatterCard teamId="team-1" groupMeUrl={URL} />);
 
     fireEvent.click(screen.getByRole("link", { name: /join the chatter/i }));
 
-    expect(screen.getByText("You’re in the stands.")).toBeInTheDocument();
+    expect(screen.getByText("You’re in the stands")).toBeInTheDocument();
+    expect(screen.queryByText(/where the families sit/i)).not.toBeInTheDocument();
     expect(window.localStorage.getItem(JOINED_KEY)).toBe("1");
   });
 
-  it("opens collapsed on a later visit, keeping the link", () => {
+  it("drops the pitch but keeps the identity and the way back in", () => {
     window.localStorage.setItem(JOINED_KEY, "1");
 
     render(<BleacherChatterCard teamId="team-1" groupMeUrl={URL} />);
 
-    expect(screen.queryByText("Bleacher chatter")).not.toBeInTheDocument();
-    const link = screen.getByRole("link", { name: "Open GroupMe" });
+    // The pitch is gone...
+    expect(screen.queryByText(/where the families sit/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /join the chatter/i }),
+    ).not.toBeInTheDocument();
+
+    // ...but the card is still recognisably the bleachers, and still a door.
+    expect(screen.getByText("Bleacher chatter")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /bleacher chatter/i });
     expect(link).toHaveAttribute("href", URL);
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  // The failure this replaces: a check mark and a small underlined text link,
+  // which read as a dismissed notice rather than the way into the team chat.
+  it("makes the whole row the tap target, not a text link", () => {
+    window.localStorage.setItem(JOINED_KEY, "1");
+
+    const { container } = render(
+      <BleacherChatterCard teamId="team-1" groupMeUrl={URL} />,
+    );
+
+    expect(container.querySelectorAll("a")).toHaveLength(1);
+    const link = container.querySelector("a")!;
+    expect(link.className).toContain("flex");
+    expect(link.className).toContain("p-3");
+    // The cropped stands ride along, so the row is still visibly the card.
+    expect(link.querySelector('svg[viewBox="672 0 88 88"]')).not.toBeNull();
   });
 
   // A family on two teams joins two chats: joined on one team must not
@@ -104,6 +130,6 @@ describe("BleacherChatterCard once this browser has joined", () => {
 
     render(<BleacherChatterCard teamId="team-2" groupMeUrl={URL} />);
 
-    expect(screen.getByText("Bleacher chatter")).toBeInTheDocument();
+    expect(screen.getByText(/where the families sit/i)).toBeInTheDocument();
   });
 });

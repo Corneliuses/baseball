@@ -57,15 +57,9 @@ const hydratedOnServer = () => false;
 /// mid-card. The essential scene (the speech bubble and the fans around it)
 /// lives in the middle 390 units, so a phone shows exactly the frame this
 /// card was composed at; only bonus fans are ever cropped.
-function BleacherArt() {
+function BleacherCrowd() {
   return (
-    <svg
-      viewBox="0 0 1280 88"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden="true"
-      focusable="false"
-      className="block h-[88px] w-full"
-    >
+    <>
       {/* Back row — fans first, then the plank overlaps their laps. */}
       <rect x="51" y="16" width="18" height="13" rx="6" className="fill-destructive" />
       <circle cx="60" cy="10" r="6" className="fill-destructive" />
@@ -151,6 +145,38 @@ function BleacherArt() {
       <circle cx="1210" cy="58" r="6" className="fill-destructive" />
       <rect x="-8" y="76" width="1296" height="8" rx="2" className="fill-dirt" />
       <rect x="-8" y="84" width="1296" height="3" className="fill-foreground/15" />
+    </>
+  );
+}
+
+/// The full-width strip on the invitation card.
+function BleacherArt() {
+  return (
+    <svg
+      viewBox="0 0 1280 88"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+      focusable="false"
+      className="block h-[88px] w-full"
+    >
+      <BleacherCrowd />
+    </svg>
+  );
+}
+
+/// The same stands, cropped square around the speech bubble, for the joined
+/// row. The bubble is what makes an 56px tile read as *chat* rather than as
+/// an abstract pattern, and cropping the one composition rather than drawing
+/// a second one is why the tile can never drift from the strip above it.
+function BleacherThumb() {
+  return (
+    <svg
+      viewBox="672 0 88 88"
+      aria-hidden="true"
+      focusable="false"
+      className="block size-14 shrink-0 rounded-md border border-border bg-pinstripe"
+    >
+      <BleacherCrowd />
     </svg>
   );
 }
@@ -158,9 +184,10 @@ function BleacherArt() {
 /// You're leaving the app for GroupMe — the one glyph this card draws that
 /// icons.tsx doesn't already have. Local like team home's StarGlyph, same
 /// contract: aria-hidden, currentColor, the set's 1.75 stroke on a 24 grid.
-function ArrowGlyph() {
+function ArrowGlyph({ className }: { className?: string }) {
   return (
     <svg
+      className={className}
       viewBox="0 0 24 24"
       aria-hidden="true"
       focusable="false"
@@ -214,18 +241,37 @@ export function BleacherChatterCard({
     setJoinedThisVisit(true);
   };
 
+  // Joined is not "done" — it is the state this card spends the rest of the
+  // season in, and the chat is a place the family goes back to every week. So
+  // the collapse drops the pitch (the overline, the explainer, the big art)
+  // and keeps the identity: the same stands cropped to a tile, the same slab
+  // name, and the whole row as one tap target. The first version of this was
+  // a check mark and a text link, which read as a dismissed notice — the
+  // bleachers had vanished and the way back into the chat was the smallest
+  // thing on the page.
   if (joined) {
     return (
-      <Card className="flex items-center gap-2 p-4 text-sm">
-        <CheckIcon className="size-4 shrink-0 text-primary" />
-        <span className="flex-1 text-foreground">You&rsquo;re in the stands.</span>
+      <Card className="overflow-hidden">
         <a
           href={groupMeUrl}
           target="_blank"
           rel="noreferrer"
-          className="underline underline-offset-2 hover:text-primary"
+          className="flex items-center gap-3 p-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          Open GroupMe
+          <BleacherThumb />
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-lg leading-tight tracking-tight text-foreground">
+              Bleacher chatter
+            </span>
+            <span className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CheckIcon className="size-3.5 shrink-0 text-primary" />
+              You&rsquo;re in the stands
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1 pr-1 text-sm font-medium text-primary">
+            Open
+            <ArrowGlyph className="size-4" />
+          </span>
         </a>
       </Card>
     );
