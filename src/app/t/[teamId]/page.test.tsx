@@ -160,7 +160,7 @@ describe("TeamHomePage", () => {
     expect(html).toContain("archived and read-only");
   });
 
-  it("links to the team GroupMe when the owner has shared one", async () => {
+  it("seats the team GroupMe in the bleachers when the owner has shared one", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
       name: "Sluggers",
@@ -172,16 +172,18 @@ describe("TeamHomePage", () => {
 
     const html = await render();
 
+    expect(html).toContain("Bleacher chatter");
     expect(html).toContain(
       'href="https://groupme.com/join_group/12345678/AbCdEfGh"',
     );
-    expect(html).toContain("Join the GroupMe chat");
+    expect(html).toContain("Join the chatter");
   });
 
   it("says nothing about GroupMe when no link is set", async () => {
     const html = await render();
 
     expect(html).not.toContain("GroupMe");
+    expect(html).not.toContain("Bleacher chatter");
   });
 });
 
