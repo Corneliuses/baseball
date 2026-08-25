@@ -65,10 +65,25 @@ describe("Team settings page", () => {
     );
   });
 
-  it("explains a rejected GroupMe link", async () => {
-    const html = await render({ error: "invalid-groupme" });
+  it("leaves the GroupMe field empty when the team has no link", async () => {
+    const html = await render();
 
-    expect(html).toContain("look like a GroupMe link");
+    expect(html).toMatch(/<input[^>]*name="groupMeUrl"[^>]*value=""/);
+  });
+
+  // Validation failures are form state now, not `?error=` — see
+  // TeamDetailsForm.test.tsx. `access` is the one code that still redirects,
+  // because a save that can never succeed has no form worth keeping warm.
+  it("passes a lost-access redirect through to the form", async () => {
+    const html = await render({ error: "access" });
+
+    expect(html).toContain("no longer have access");
+  });
+
+  it("confirms a save", async () => {
+    const html = await render({ saved: "1" });
+
+    expect(html).toContain("Saved.");
   });
 
   it("asks for confirmation before offering the archive button", async () => {
