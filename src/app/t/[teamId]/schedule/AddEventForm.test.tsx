@@ -495,4 +495,75 @@ describe("AddEventForm repeat-weekly", () => {
     expect(fieldFor(html, "repeat")).toContain('value="99"');
     expect(html).toContain("between 1 and 30");
   });
+
+  /// The help line is the same element in both states, so it is described in
+  /// both. Two <p>s where only the preview carried an id lost the fallback
+  /// entirely for a screen reader, and lost it silently — the sighted layout is
+  /// identical either way.
+  describe("its help line is always described", () => {
+    it("points at the fallback when there is no run to preview", () => {
+      const html = render({ status: "idle" });
+
+      expect(fieldFor(html, "repeat")).toContain(
+        'aria-describedby="add-event-repeat-help"',
+      );
+      expect(html).toContain(
+        '<p id="add-event-repeat-help"',
+      );
+    });
+
+    it("points at the preview once there is one", () => {
+      const { container } = renderDom(
+        <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
+      );
+
+      fireEvent.change(container.querySelector<HTMLInputElement>("#startsAt")!, {
+        target: { value: "2026-04-04T18:00" },
+      });
+      fireEvent.change(container.querySelector<HTMLInputElement>("#repeat")!, {
+        target: { value: "8" },
+      });
+
+      const repeat = container.querySelector<HTMLInputElement>("#repeat")!;
+      expect(repeat.getAttribute("aria-describedby")).toBe(
+        "add-event-repeat-help",
+      );
+      expect(
+        container.querySelector("#add-event-repeat-help")?.textContent,
+      ).toContain("Creates 8 events");
+    });
+
+    // The regression the reviewer caught: `aria-describedby` is a list, and
+    // spreading `marks` over a hand-written one dropped the help id — at
+    // exactly the moment the preview was most worth reading, on the submit that
+    // had just been rejected.
+    it("points at both the error and the help line when the count is rejected", () => {
+      const html = render({
+        status: "invalid",
+        code: "invalid-repeat",
+        field: "repeat",
+        values: { ...EMPTY_EVENT_VALUES, startsAt: "2026-04-04T18:00", repeat: "8" },
+      });
+
+      expect(fieldFor(html, "repeat")).toContain(
+        'aria-describedby="add-event-error add-event-repeat-help"',
+      );
+    });
+
+    // Fields with no permanent help text keep exactly the single id they had,
+    // which is what the two assertions in the suite above depend on.
+    it("leaves a field with no help text describing only its error", () => {
+      const html = render({
+        status: "invalid",
+        code: "invalid-datetime",
+        field: "startsAt",
+        values: EMPTY_EVENT_VALUES,
+      });
+
+      expect(fieldFor(html, "startsAt")).toContain(
+        'aria-describedby="add-event-error"',
+      );
+      expect(fieldFor(html, "location")).not.toContain("aria-describedby");
+    });
+  });
 });
