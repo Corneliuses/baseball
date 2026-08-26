@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { wallClockToInstant } from "@/lib/calendar";
 import { MAX_REPEAT_WEEKS } from "@/lib/repeat-weekly";
 
 import { repeatPreview } from "./repeat-preview";
@@ -68,6 +69,32 @@ describe("repeatPreview — when it says nothing", () => {
   it("stays quiet on a date that does not exist, which the submit also rejects", () => {
     expect(repeatPreview("2026-02-30T18:00", "4")).toBeNull();
     expect(repeatPreview("2026-13-01T18:00", "4")).toBeNull();
+  });
+
+  // `Date.UTC` remaps years 0-99 to 1900-1999, and the month and day survive
+  // that remapping — so without an explicit year check the preview names a
+  // weekday computed for 1926 and promises events the server then refuses.
+  // Browsers commit `0026-04-04` when a coach types "26" into the year segment.
+  it("stays quiet on a two-digit year rather than previewing 1926", () => {
+    expect(repeatPreview("0026-04-04T18:00", "4")).toBeNull();
+    expect(repeatPreview("0099-04-04T18:00", "4")).toBeNull();
+    // Year 100 is the first Date.UTC does not remap, and it is a real date the
+    // server accepts — so the guard must not reject everything small.
+    expect(repeatPreview("0100-04-04T18:00", "2")).not.toBeNull();
+  });
+});
+
+/// The guard above only matters if the server really does refuse these, so
+/// pin that rather than asserting it in a comment.
+describe("repeatPreview — a rejected year is rejected on both sides", () => {
+  it("agrees with wallClockToInstant that a two-digit year is not a date", () => {
+    expect(() => wallClockToInstant("0026-04-04T18:00")).toThrow(RangeError);
+    expect(repeatPreview("0026-04-04T18:00", "4")).toBeNull();
+  });
+
+  it("agrees that a four-digit year past the remapping range is fine", () => {
+    expect(() => wallClockToInstant("0100-04-04T18:00")).not.toThrow();
+    expect(repeatPreview("0100-04-04T18:00", "2")).not.toBeNull();
   });
 });
 

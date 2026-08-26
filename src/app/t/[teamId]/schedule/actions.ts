@@ -817,33 +817,47 @@ async function scheduleAnnouncement(
   }
 
   let work: AnnouncementWork | null;
+  let message: AnnouncementMessage;
   try {
     work = await resolveAnnouncementWork(teamId, coachEmail);
+    if (!work) {
+      return { status: "none" };
+    }
+
+    // Composed here rather than inside the deferred callback, and inside this
+    // catch rather than beside it. Both halves matter:
+    //
+    // Composing it here means a builder that somehow throws — an unreadable
+    // date, a shape neither builder expected — becomes the honest "no
+    // announcement was sent" banner the coach can act on. Left in `after()` it
+    // would be an unhandled rejection in a background task nobody is watching;
+    // left here but outside the catch it would 500 the action *after* the
+    // events were written, which reads to a coach exactly like the write
+    // having failed. Neither builder is expected to throw — both are pure and
+    // take values this file just validated — which is precisely why the
+    // failure mode has to be chosen deliberately rather than discovered.
+    //
+    // One message either way: a batch is one email listing every date, never
+    // one email per date. See `batchEventsMessage`.
+    message =
+      announceable.length === 1
+        ? singleEventMessage(work, announceable[0])
+        : batchEventsMessage(work, announceable);
   } catch (error) {
     unstable_rethrow(error);
     const detail = error instanceof Error ? error.message : "Unknown error";
-    console.error("Could not resolve announcement recipients:", detail);
+    console.error("Could not prepare the announcement:", detail);
     return { status: "failed" };
   }
 
-  if (!work) {
-    return { status: "none" };
-  }
-
-  // One message either way — a batch is one email listing every date, never one
-  // email per date. See `batchEventsMessage`.
   const resolved = work;
-  const message =
-    announceable.length === 1
-      ? singleEventMessage(resolved, announceable[0])
-      : batchEventsMessage(resolved, announceable);
 
   // `after` runs this once the response is finished — including, per Next's
   // docs, when the response was a redirect. Scheduling it cannot throw; the
   // callback is written so that running it cannot either.
   after(() => fanOut(resolved, message));
 
-  return { status: "sending", recipients: work.recipients.length };
+  return { status: "sending", recipients: resolved.recipients.length };
 }
 
 export async function updateEventAction(formData: FormData) {

@@ -103,7 +103,21 @@ function lastOccurrence(startsAt: string, total: number): string | null {
   // Rejects a date the constructor rolled forward (30 February), matching what
   // `wallClockToInstant` refuses server-side — so the preview does not name a
   // date the submit is about to reject.
-  if (anchor.getUTCMonth() !== month - 1 || anchor.getUTCDate() !== day) {
+  //
+  // **The year is checked for a different reason than the month and day**, and
+  // dropping it is not a tidy-up: `Date.UTC` remaps years 0-99 to 1900-1999, so
+  // a coach who types "26" into the year segment — which browsers commit as
+  // `0026-04-04` — gets an anchor in 1926. Month and day survive that remapping
+  // intact, so those two checks pass and the preview confidently names a
+  // weekday computed a century out. The server rejects the same value
+  // (`TZDate` inherits the identical mapping, and `wallClockToInstant`'s guard
+  // catches it), so without this the preview promises events the submit then
+  // refuses with `invalid-datetime`.
+  if (
+    anchor.getUTCFullYear() !== year ||
+    anchor.getUTCMonth() !== month - 1 ||
+    anchor.getUTCDate() !== day
+  ) {
     return null;
   }
 

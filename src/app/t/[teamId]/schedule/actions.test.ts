@@ -691,6 +691,33 @@ describe("createEventAction — announcing the event", () => {
       expect(afterCallbacks).toHaveLength(0);
     });
 
+    // Composing the message sits on the request path, so its failure mode had
+    // to be chosen rather than discovered: it reports, exactly like an
+    // unreadable roster. Outside the catch it would 500 the action after the
+    // events were written — which reads to a coach as the write having failed.
+    it("reports rather than 500s if the message cannot be composed", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+      // `location` is read only when the message body is composed — not by
+      // `announceableOccurrences` (which touches `startsAt`) nor by
+      // `resolveAnnouncementWork` (which no longer sees the event at all), so
+      // this fails in the new step and nowhere earlier.
+      createEvent.mockResolvedValue({
+        ...EVENT,
+        get location(): string {
+          throw new Error("row is malformed");
+        },
+      });
+
+      const state = await add();
+
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(state).toMatchObject({
+        status: "added",
+        announcement: { status: "failed" },
+      });
+      expect(afterCallbacks).toHaveLength(0);
+    });
+
     // AC6 — a coach back-filling last week's game must not mail the team.
     it("announces nothing for an event whose start time has already passed", async () => {
       listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
