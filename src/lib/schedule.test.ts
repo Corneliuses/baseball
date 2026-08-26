@@ -5,6 +5,7 @@ const findFirstEvent = vi.fn();
 const createEvent = vi.fn();
 const updateEvent = vi.fn();
 const deleteEvent = vi.fn();
+const transaction = vi.fn();
 
 vi.mock("./db", () => ({
   db: {
@@ -15,11 +16,13 @@ vi.mock("./db", () => ({
       update: (...args: unknown[]) => updateEvent(...args),
       delete: (...args: unknown[]) => deleteEvent(...args),
     },
+    $transaction: (...args: unknown[]) => transaction(...args),
   },
 }));
 
 import {
   createEvent as createEventFn,
+  createEvents as createEventsFn,
   deleteEvent as deleteEventFn,
   getEvent,
   listEventsInMonthGrid,
@@ -283,5 +286,66 @@ describe("writes", () => {
     await expect(createEventFn("team-1", input)).rejects.toThrow(
       "constraint violation",
     );
+  });
+});
+
+describe("createEvents", () => {
+  const input = (startsAt: Date) => ({
+    type: "GAME" as const,
+    startsAt,
+    location: "Field 3",
+    opponent: "Hawks",
+    notes: null,
+  });
+
+  const APRIL_4 = new Date("2026-04-04T22:30:00Z");
+  const APRIL_11 = new Date("2026-04-11T22:30:00Z");
+
+  beforeEach(() => {
+    // Array-form $transaction: it receives the already-built statement list,
+    // not a callback — same shape as saveBattingOrder's tests in roster.test.ts.
+    transaction.mockResolvedValue([]);
+  });
+
+  it("writes every occurrence in one transaction", async () => {
+    createEvent.mockReturnValueOnce("stmt-a").mockReturnValueOnce("stmt-b");
+
+    await createEventsFn("team-1", [input(APRIL_4), input(APRIL_11)]);
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    const [[statements]] = transaction.mock.calls;
+    expect(statements).toEqual(["stmt-a", "stmt-b"]);
+  });
+
+  it("attaches the teamId to every row, not just the first", async () => {
+    await createEventsFn("team-1", [input(APRIL_4), input(APRIL_11)]);
+
+    expect(createEvent.mock.calls).toHaveLength(2);
+    for (const [args] of createEvent.mock.calls) {
+      expect(args.data.teamId).toBe("team-1");
+    }
+    expect(createEvent.mock.calls[0][0].data.startsAt).toEqual(APRIL_4);
+    expect(createEvent.mock.calls[1][0].data.startsAt).toEqual(APRIL_11);
+  });
+
+  it("returns the created rows, which is why this is not createMany", async () => {
+    transaction.mockResolvedValue([eventRow({ id: "a" }), eventRow({ id: "b" })]);
+
+    const created = await createEventsFn("team-1", [
+      input(APRIL_4),
+      input(APRIL_11),
+    ]);
+
+    expect(created.map((event) => event.id)).toEqual(["a", "b"]);
+  });
+
+  // All-or-nothing is the whole point: a half-written season is worse to hand a
+  // coach than a failed submit they can retry unchanged.
+  it("propagates a transaction failure rather than reporting a partial batch", async () => {
+    transaction.mockRejectedValue(new Error("connection refused"));
+
+    await expect(
+      createEventsFn("team-1", [input(APRIL_4), input(APRIL_11)]),
+    ).rejects.toThrow("connection refused");
   });
 });

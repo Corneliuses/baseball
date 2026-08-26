@@ -21,8 +21,10 @@ import {
   selectNextGame,
   startOfDayInZone,
   wallClockToInstant,
+  weeklyOccurrences,
   type GameCandidate,
 } from "@/lib/calendar";
+import { MAX_REPEAT_WEEKS } from "@/lib/repeat-weekly";
 
 /// These tests must not depend on the machine's TZ. The container and Vercel
 /// both run TZ=UTC; a contributor's laptop may not. Every assertion below goes
@@ -120,6 +122,130 @@ describe("wallClockToInstant", () => {
   it("rejects an impossible time of day", () => {
     expect(() => wallClockToInstant("2026-07-15T25:00")).toThrow(RangeError);
     expect(() => wallClockToInstant("2026-07-15T18:70")).toThrow(RangeError);
+  });
+});
+
+describe("weeklyOccurrences", () => {
+  /// What a coach would read off the schedule, so a failure names a wall clock
+  /// rather than a UTC instant nobody typed.
+  const wallClocks = (start: string, total: number) =>
+    weeklyOccurrences(start, total).map(instantToWallClock);
+
+  it("returns exactly the start for a run of one", () => {
+    expect(weeklyOccurrences("2026-04-04T18:00", 1)).toEqual([
+      wallClockToInstant("2026-04-04T18:00"),
+    ]);
+  });
+
+  // The property the whole single-vs-batch split rests on: repeating once is
+  // not *like* the behaviour that was already there, it is that behaviour.
+  it("agrees with wallClockToInstant on the first occurrence of any run", () => {
+    expect(weeklyOccurrences("2026-04-04T18:00", 8)[0]).toEqual(
+      wallClockToInstant("2026-04-04T18:00"),
+    );
+  });
+
+  it("steps seven days at a time, soonest first", () => {
+    expect(wallClocks("2026-04-04T18:00", 4)).toEqual([
+      "2026-04-04T18:00",
+      "2026-04-11T18:00",
+      "2026-04-18T18:00",
+      "2026-04-25T18:00",
+    ]);
+  });
+
+  it("returns plain Dates, not TZDates, so Prisma serializes them as UTC", () => {
+    for (const occurrence of weeklyOccurrences("2026-04-04T18:00", 3)) {
+      expect(occurrence.constructor).toBe(Date);
+      expect(occurrence.toISOString().endsWith("Z")).toBe(true);
+    }
+  });
+
+  // The two tests this function exists for. Adding 7 x 24h to an *instant*
+  // passes every other assertion in this block and fails both of these — by an
+  // hour, in opposite directions, for every game after the boundary.
+  it("holds the wall clock across spring forward", () => {
+    // Clocks jump 2 AM -> 3 AM on 8 Mar 2026, so only 167 hours separate these
+    // two 6 PM games.
+    expect(wallClocks("2026-03-07T18:00", 2)).toEqual([
+      "2026-03-07T18:00",
+      "2026-03-14T18:00",
+    ]);
+    expect(weeklyOccurrences("2026-03-07T18:00", 2).map((d) => d.toISOString())).toEqual([
+      "2026-03-08T00:00:00.000Z", // CST, UTC-6
+      "2026-03-14T23:00:00.000Z", // CDT, UTC-5
+    ]);
+  });
+
+  it("holds the wall clock across fall back", () => {
+    // Clocks fall back on 1 Nov 2026, so 169 hours separate these two.
+    expect(wallClocks("2026-10-31T18:00", 2)).toEqual([
+      "2026-10-31T18:00",
+      "2026-11-07T18:00",
+    ]);
+    expect(weeklyOccurrences("2026-10-31T18:00", 2).map((d) => d.toISOString())).toEqual([
+      "2026-10-31T23:00:00.000Z", // CDT, UTC-5
+      "2026-11-08T00:00:00.000Z", // CST, UTC-6
+    ]);
+  });
+
+  // Day-component arithmetic overflows its month by construction, which is the
+  // same rolling-forward `wallClockToInstant` rejects — so the existence check
+  // has to apply to the typed date only. These pin that it does.
+  it("rolls over a month end", () => {
+    expect(wallClocks("2026-01-31T18:00", 2)).toEqual([
+      "2026-01-31T18:00",
+      "2026-02-07T18:00",
+    ]);
+  });
+
+  it("rolls over a year end", () => {
+    expect(wallClocks("2026-12-26T10:00", 2)).toEqual([
+      "2026-12-26T10:00",
+      "2027-01-02T10:00",
+    ]);
+  });
+
+  it("lands on 29 February in a leap year and skips it otherwise", () => {
+    expect(wallClocks("2028-02-22T18:00", 2)[1]).toBe("2028-02-29T18:00");
+    expect(wallClocks("2026-02-22T18:00", 2)[1]).toBe("2026-03-01T18:00");
+  });
+
+  it("runs a full season without drifting off the weekday", () => {
+    const occurrences = wallClocks("2026-04-04T09:00", MAX_REPEAT_WEEKS);
+
+    expect(occurrences).toHaveLength(MAX_REPEAT_WEEKS);
+    // 4 Apr 2026 is a Saturday; 30 weeks later is 24 Oct, still a Saturday,
+    // and the run crosses no DST boundary in between (8 Mar is behind it).
+    expect(occurrences.at(-1)).toBe("2026-10-24T09:00");
+    for (const occurrence of occurrences) {
+      expect(occurrence.endsWith("T09:00")).toBe(true);
+    }
+  });
+
+  it("rejects a count outside the cap, so a forged post cannot write hundreds of rows", () => {
+    expect(() => weeklyOccurrences("2026-04-04T18:00", 0)).toThrow(RangeError);
+    expect(() => weeklyOccurrences("2026-04-04T18:00", -1)).toThrow(RangeError);
+    expect(() =>
+      weeklyOccurrences("2026-04-04T18:00", MAX_REPEAT_WEEKS + 1),
+    ).toThrow(RangeError);
+    expect(() => weeklyOccurrences("2026-04-04T18:00", 500)).toThrow(RangeError);
+  });
+
+  it("rejects a count that is not a whole number", () => {
+    expect(() => weeklyOccurrences("2026-04-04T18:00", 2.5)).toThrow(RangeError);
+    expect(() => weeklyOccurrences("2026-04-04T18:00", Number.NaN)).toThrow(
+      RangeError,
+    );
+    expect(() => weeklyOccurrences("2026-04-04T18:00", Infinity)).toThrow(
+      RangeError,
+    );
+  });
+
+  it("rejects a bad start the same way wallClockToInstant does", () => {
+    expect(() => weeklyOccurrences("tomorrow", 4)).toThrow(RangeError);
+    expect(() => weeklyOccurrences("2026-02-30T18:00", 4)).toThrow(RangeError);
+    expect(() => weeklyOccurrences("2026-07-15T25:00", 4)).toThrow(RangeError);
   });
 });
 

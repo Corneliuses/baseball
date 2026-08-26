@@ -1,11 +1,19 @@
 "use server";
 
+import type { ReactElement } from "react";
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 
-import { formatEventDateTime, wallClockToInstant } from "@/lib/calendar";
+import type { EventType } from "@/generated/prisma/enums";
+import {
+  formatEventDateShort,
+  formatEventDateTime,
+  wallClockToInstant,
+  weeklyOccurrences,
+} from "@/lib/calendar";
+import { MAX_REPEAT_WEEKS } from "@/lib/repeat-weekly";
 import {
   clearRsvp,
   guardedRosteredPlayerIds,
@@ -14,6 +22,7 @@ import {
 } from "@/lib/rsvps";
 import {
   createEvent,
+  createEvents,
   deleteEvent,
   getEvent,
   updateEvent,
@@ -27,14 +36,16 @@ import { listTeamGuardians } from "@/lib/guardians";
 import { sendEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
 import {
+  announceableOccurrences,
   buildAnnouncementRecipients,
-  shouldAnnounceEvent,
   type AnnouncementRecipient,
 } from "@/lib/announcements";
 import { AnnouncementReceiptEmail } from "@/emails/AnnouncementReceiptEmail";
 import { EventAnnouncementEmail } from "@/emails/EventAnnouncementEmail";
+import { EventsAnnouncementEmail } from "@/emails/EventsAnnouncementEmail";
 import { buildAnnouncementReceiptEmail } from "@/emails/announcement-receipt-email";
 import { buildEventAnnouncementEmail } from "@/emails/event-announcement-email";
+import { buildEventsAnnouncementEmail } from "@/emails/events-announcement-email";
 
 import {
   stickyValues,
@@ -109,7 +120,8 @@ type EventErrorCode =
   | "invalid-datetime"
   | "invalid-location"
   | "invalid-opponent"
-  | "invalid-notes";
+  | "invalid-notes"
+  | "invalid-repeat";
 
 function eventValidationErrorCode(error: z.ZodError): EventErrorCode {
   const field = error.issues[0]?.path[0];
@@ -141,12 +153,56 @@ function eventErrorField(code: EventErrorCode): AddEventField {
       return "opponent";
     case "invalid-notes":
       return "notes";
+    case "invalid-repeat":
+      return "repeat";
     case "invalid-datetime":
       return "startsAt";
   }
 }
 
-type ParsedEventForm = { input: EventInput } | { errorCode: EventErrorCode };
+type ParsedEventForm =
+  | {
+      input: EventInput;
+      /// The start as the coach typed it, kept beside the converted instant so
+      /// `weeklyOccurrences` can step *wall clocks* rather than milliseconds.
+      /// An instant cannot answer "same time next week" on its own — that is
+      /// the whole DST argument — and recovering the wall clock by formatting
+      /// the instant back through the zone would be a round trip to undo work
+      /// this function just did.
+      wallClock: string;
+    }
+  | { errorCode: EventErrorCode };
+
+/**
+ * How many weekly occurrences to create (#70).
+ *
+ * Blank or absent means one, which is the form's default and every submit made
+ * before this field existed — so an old client, or a POST that predates it,
+ * behaves exactly as it always did.
+ *
+ * Plain pattern matching rather than Zod, the same choice `parseMonthParam`
+ * makes and for the same reason: the shape is one regex, and `Number()` alone
+ * accepts things a count must not be (`"0x10"` is 16, `""` is 0, `"2.5"` is
+ * 2.5). Digits only, then the range.
+ *
+ * `null` means "not a usable count" and becomes `invalid-repeat`. The cap is
+ * enforced here and again inside `weeklyOccurrences`, because the form's
+ * `max=30` is a convenience for the coach and not a boundary — a crafted POST
+ * never touches it.
+ */
+function parseRepeat(formData: FormData): number | null {
+  const raw = String(formData.get("repeat") ?? "").trim();
+  if (raw === "") {
+    return 1;
+  }
+
+  if (!/^\d{1,4}$/.test(raw)) {
+    return null;
+  }
+
+  const total = Number(raw);
+  return total >= 1 && total <= MAX_REPEAT_WEEKS ? total : null;
+}
 
 /**
  * Validate the shared event form and convert the coach's wall clock into a
@@ -185,6 +241,7 @@ function parseEventForm(formData: FormData): ParsedEventForm {
       opponent: parsed.data.opponent,
       notes: parsed.data.notes,
     },
+    wallClock: parsed.data.startsAt,
   };
 }
 
@@ -256,11 +313,29 @@ function emailEnv() {
 type AnnouncementWork = {
   teamId: string;
   teamName: string;
-  event: ScheduleEvent;
   coachEmail: string | null;
   recipients: AnnouncementRecipient[];
   /// Families past MAX_RECIPIENTS, never attempted. Zero for any real roster.
   skipped: number;
+};
+
+/// One body, addressed to everyone. What varies between announcing a single
+/// event and announcing a repeat-weekly batch (#70) is exactly this and nothing
+/// else — the audience, the pacing, the push-rides-along rule and the receipt
+/// are shared, which is why `fanOut` below takes this rather than a discriminant.
+type AnnouncementMessage = {
+  subject: string;
+  /// Built once and sent to everyone. Safe to reuse across sends because a
+  /// React element is an immutable description — rendering it does not consume
+  /// it — and every recipient gets the identical body anyway: an announcement
+  /// says nothing about the family reading it, which is the rule
+  /// `EventAnnouncementEmail`'s docstring states and this type makes structural.
+  body: ReactElement;
+  push: { title: string; body: string; url: string };
+  /// What the coach's receipt calls this — "Game vs Hawks", or "8 games".
+  headline: string;
+  /// The date or span the receipt names.
+  dateTimeLabel: string;
 };
 
 /**
@@ -282,7 +357,6 @@ type AnnouncementWork = {
  */
 async function resolveAnnouncementWork(
   teamId: string,
-  event: ScheduleEvent,
   coachEmail: string | null,
 ): Promise<AnnouncementWork | null> {
   const [team, roster] = await Promise.all([
@@ -298,7 +372,6 @@ async function resolveAnnouncementWork(
   return {
     teamId,
     teamName: team?.name ?? "your team",
-    event,
     coachEmail,
     recipients: all.slice(0, MAX_RECIPIENTS),
     skipped: Math.max(0, all.length - MAX_RECIPIENTS),
@@ -306,10 +379,16 @@ async function resolveAnnouncementWork(
 }
 
 /**
- * Tell every family on the roster that a new game or practice exists.
+ * Tell every family on the roster that something new is on the schedule.
  *
  * Step 2 of the product brief's core loop — the coach adds a game, parents get
  * an email, parents RSVP — which until #45 simply did not happen.
+ *
+ * **One paced loop, whatever was created.** Adding a single event (#45) and
+ * adding a repeat-weekly run (#70) differ only in the body they address to
+ * everyone, which arrives as an `AnnouncementMessage`; the audience, the
+ * pacing, the push rule and the receipt are identical and must stay that way.
+ * Two copies of this loop would be two places for the rules below to rot.
  *
  * **Runs in `after()`, so nothing here is on the coach's clock.** That is what
  * lets the cap be generous enough for a real roster, and why this returns
@@ -318,11 +397,10 @@ async function resolveAnnouncementWork(
  *
  * Three rules hold it in place:
  *
- *   1. **It cannot fail the event.** The caller schedules this only after
- *      `createEvent` has returned, and nothing here throws — a deferred
- *      rejection would be an unhandled error in a background task nobody is
- *      watching, which is strictly worse than a swallowed one that reports
- *      itself by email.
+ *   1. **It cannot fail the events.** The caller schedules this only after the
+ *      write has returned, and nothing here throws — a deferred rejection would
+ *      be an unhandled error in a background task nobody is watching, which is
+ *      strictly worse than a swallowed one that reports itself by email.
  *   2. **Recipients come from the roster, never `Membership`.** A coach with no
  *      kid on the team does not need mailing about an event they just created,
  *      and the roster is what says which families are on this team this season
@@ -337,19 +415,11 @@ async function resolveAnnouncementWork(
  * event — so no `pickUnsubscribeContact` equivalent is needed, and `Reply-To`
  * points at the same person so "we're away that weekend" reaches someone.
  */
-async function announceEvent(work: AnnouncementWork): Promise<void> {
-  const { teamId, teamName, event, coachEmail, recipients, skipped } = work;
-
-  const { subject, headline, dateTimeLabel, eventUrl: link } =
-    buildEventAnnouncementEmail({
-      teamName,
-      teamId,
-      eventId: event.id,
-      type: event.type,
-      startsAt: event.startsAt,
-      opponent: event.opponent,
-      env: emailEnv(),
-    });
+async function fanOut(
+  work: AnnouncementWork,
+  message: AnnouncementMessage,
+): Promise<void> {
+  const { teamId, teamName, coachEmail, recipients, skipped } = work;
 
   let sent = 0;
   let failed = 0;
@@ -368,25 +438,18 @@ async function announceEvent(work: AnnouncementWork): Promise<void> {
     try {
       outcome = await sendEmail({
         to: recipient.email,
-        subject,
+        subject: message.subject,
         ...(coachEmail
           ? { replyTo: coachEmail, listUnsubscribe: coachEmail }
           : {}),
-        react: EventAnnouncementEmail({
-          teamName,
-          headline,
-          dateTimeLabel,
-          location: event.location,
-          notes: event.notes,
-          eventUrl: link,
-        }),
+        react: message.body,
       });
     } catch (error) {
       // sendEmail returns rather than throws, but this loop has no caller left
       // to catch for it — one unexpected throw would abandon every family after
       // this one with no receipt to say so.
       const detail = error instanceof Error ? error.message : "Unknown error";
-      console.error(`Announcement send threw for event ${event.id}:`, detail);
+      console.error(`Announcement send threw for team ${teamId}:`, detail);
       failed += 1;
       continue;
     }
@@ -404,13 +467,7 @@ async function announceEvent(work: AnnouncementWork): Promise<void> {
     // so a push bug cannot turn a delivered announcement into a reported
     // failure.
     try {
-      await sendPushToUser(recipient.userId, {
-        title: subject,
-        body: event.location
-          ? `${dateTimeLabel} at ${event.location}`
-          : dateTimeLabel,
-        url: link,
-      });
+      await sendPushToUser(recipient.userId, message.push);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown error";
       console.error(`Push failed for user ${recipient.userId}:`, detail);
@@ -421,12 +478,102 @@ async function announceEvent(work: AnnouncementWork): Promise<void> {
     teamId,
     teamName,
     coachEmail,
-    headline,
-    dateTimeLabel,
+    headline: message.headline,
+    dateTimeLabel: message.dateTimeLabel,
     sent,
     failed,
     skipped,
   });
+}
+
+/// The message for one newly created event. Everything about *why* it is shaped
+/// this way is in `buildEventAnnouncementEmail` and `EventAnnouncementEmail`.
+function singleEventMessage(
+  work: AnnouncementWork,
+  event: ScheduleEvent,
+): AnnouncementMessage {
+  const { subject, headline, dateTimeLabel, eventUrl: link } =
+    buildEventAnnouncementEmail({
+      teamName: work.teamName,
+      teamId: work.teamId,
+      eventId: event.id,
+      type: event.type,
+      startsAt: event.startsAt,
+      opponent: event.opponent,
+      env: emailEnv(),
+    });
+
+  return {
+    subject,
+    headline,
+    dateTimeLabel,
+    body: EventAnnouncementEmail({
+        teamName: work.teamName,
+        headline,
+        dateTimeLabel,
+        location: event.location,
+        notes: event.notes,
+        eventUrl: link,
+      }),
+    push: {
+      title: subject,
+      body: event.location
+        ? `${dateTimeLabel} at ${event.location}`
+        : dateTimeLabel,
+      url: link,
+    },
+  };
+}
+
+/**
+ * The message for a whole repeat-weekly run (#70) — **one email about N events,
+ * never N emails**.
+ *
+ * That is the only thing this shares with looping `singleEventMessage`: nothing.
+ * A coach entering a twelve-game season in one submit would otherwise put twelve
+ * messages in every family's inbox, which `buildAnnouncementRecipients`' own
+ * docstring names as how a family learns that this app's email is noise. The
+ * same argument that makes the recipient list dedupe per household makes the
+ * *body* dedupe per submit.
+ *
+ * Location and notes come from the first event because every occurrence carries
+ * the same ones by construction — one form, filled in once, repeated weekly.
+ */
+function batchEventsMessage(
+  work: AnnouncementWork,
+  events: readonly ScheduleEvent[],
+): AnnouncementMessage {
+  const first = events[0];
+  const { subject, headline, dateRangeLabel, dateTimeLabels, scheduleUrl: link } =
+    buildEventsAnnouncementEmail({
+      teamName: work.teamName,
+      teamId: work.teamId,
+      type: first.type,
+      startsAts: events.map((event) => event.startsAt),
+      opponent: first.opponent,
+      env: emailEnv(),
+    });
+
+  return {
+    subject,
+    headline,
+    dateTimeLabel: dateRangeLabel,
+    body: EventsAnnouncementEmail({
+        teamName: work.teamName,
+        headline,
+        dateTimeLabels,
+        location: first.location,
+        notes: first.notes,
+        scheduleUrl: link,
+      }),
+    push: {
+      title: subject,
+      body: first.location
+        ? `${dateRangeLabel} at ${first.location}`
+        : dateRangeLabel,
+      url: link,
+    },
+  };
 }
 
 /**
@@ -491,7 +638,7 @@ async function sendReceipt(input: {
 }
 
 /**
- * Add one event to the schedule.
+ * Add an event to the schedule — or, since #70, a whole run of them.
  *
  * This is the action the Aug 2026 audit costed at ~60 interactions a season
  * (C1), and every part of that cost was in what happened *after* a successful
@@ -503,8 +650,17 @@ async function sendReceipt(input: {
  * So it no longer redirects on success. `revalidatePath` refreshes the list in
  * place and the action returns, which leaves the page where it was, the view
  * where it was, and the form filled in with everything worth keeping for the
- * next event. Only the date and the notes clear (see `stickyValues` — a stale
- * start time is the one field it would be dangerous to keep).
+ * next event. Only the date, the notes and the repeat count clear (see
+ * `stickyValues` — a stale start time is the one field it would be dangerous
+ * to keep, and a stale count is the one that would multiply the next add).
+ *
+ * **`repeat` is a field here, not a second action.** A `createEventsAction`
+ * would have to restate the validation, the sticky-value handling, the context
+ * carrying and the access redirect, all to vary a loop bound. Instead a count
+ * of 1 — which is what a blank field means — takes the single-event path
+ * unchanged, and `weeklyOccurrences(wallClock, 1)` is defined to equal
+ * `[wallClockToInstant(wallClock)]`, so "repeating once is what was already
+ * there" is a property rather than a promise.
  *
  * A validation failure returns too, with what was typed, so a mistyped time
  * costs a correction rather than the whole form.
@@ -525,6 +681,7 @@ export async function createEventAction(
     location: String(formData.get("location") ?? ""),
     opponent: String(formData.get("opponent") ?? ""),
     notes: String(formData.get("notes") ?? ""),
+    repeat: String(formData.get("repeat") ?? ""),
   };
 
   const parsed = parseEventForm(formData);
@@ -537,7 +694,34 @@ export async function createEventAction(
     };
   }
 
-  let event: ScheduleEvent;
+  const repeat = parseRepeat(formData);
+  if (repeat === null) {
+    return {
+      status: "invalid",
+      code: "invalid-repeat",
+      field: "repeat",
+      values,
+    };
+  }
+
+  // Both arguments have already been validated — `parseEventForm` accepted the
+  // wall clock and `parseRepeat` bounded the count — so this cannot throw. It
+  // is wrapped anyway because the alternative to a typed rejection here is an
+  // unhandled error in a server action, and the two validators live far enough
+  // apart that a later change could put daylight between them.
+  let occurrences: Date[];
+  try {
+    occurrences = weeklyOccurrences(parsed.wallClock, repeat);
+  } catch {
+    return {
+      status: "invalid",
+      code: "invalid-datetime",
+      field: "startsAt",
+      values,
+    };
+  }
+
+  let events: ScheduleEvent[];
   let coachEmail: string | null = null;
 
   try {
@@ -545,10 +729,19 @@ export async function createEventAction(
       intent: "write",
       minRole: "COACH",
     });
-    event = await createEvent(teamId, parsed.input);
+
+    events =
+      occurrences.length === 1
+        ? // The single-event write, untouched — no transaction wrapper around
+          // one statement that never needed one.
+          [await createEvent(teamId, parsed.input)]
+        : await createEvents(
+            teamId,
+            occurrences.map((startsAt) => ({ ...parsed.input, startsAt })),
+          );
 
     // Read after the write, so a membership lookup failing costs the
-    // announcement its Reply-To and the coach their receipt, never the event.
+    // announcement its Reply-To and the coach their receipt, never the events.
     const members = await listTeamMembers(teamId);
     coachEmail = members.find((member) => member.userId === userId)?.email ?? null;
   } catch (error) {
@@ -564,19 +757,39 @@ export async function createEventAction(
   return {
     status: "added",
     keep: stickyValues(values),
-    // Named, not counted: after three quick adds the coach needs to know
-    // *which* one just landed, and the date is the only thing distinguishing
-    // them. Formatted through calendar.ts so it reads in the team's zone.
-    summary: `${parsed.input.type === "GAME" ? "Game" : "Practice"} on ${formatEventDateTime(parsed.input.startsAt)}`,
-    announcement: await scheduleAnnouncement(teamId, event, coachEmail),
+    summary: addedSummary(parsed.input.type, occurrences),
+    announcement: await scheduleAnnouncement(teamId, events, coachEmail),
   };
+}
+
+/**
+ * What the success banner calls what just landed.
+ *
+ * **Named, not counted**, for a single event: after three quick adds the coach
+ * needs to know *which* one just landed, and the date is the only thing
+ * distinguishing them. A run is the other way round — thirty dates will not fit
+ * in a banner and the coach can read them on the schedule below — so it is
+ * counted and spanned instead. Both go through calendar.ts so they read in the
+ * team's zone rather than the server's.
+ */
+function addedSummary(type: EventType, occurrences: readonly Date[]): string {
+  const noun = type === "GAME" ? "Game" : "Practice";
+
+  if (occurrences.length === 1) {
+    return `${noun} on ${formatEventDateTime(occurrences[0])}`;
+  }
+
+  const first = formatEventDateShort(occurrences[0]);
+  const last = formatEventDateShort(occurrences[occurrences.length - 1]);
+
+  return `${occurrences.length} ${noun.toLowerCase()}s, weekly from ${first} to ${last}`;
 }
 
 /**
  * Line up the parent announcement and hand it to `after()`.
  *
- * Called once the event exists and never before, so nothing here can undo it:
- * every failure below becomes a value in the returned state, and the event
+ * Called once the events exist and never before, so nothing here can undo them:
+ * every failure below becomes a value in the returned state, and the schedule
  * stands either way.
  *
  * The one thing worth reading twice is where the boundary sits. Resolving the
@@ -585,20 +798,27 @@ export async function createEventAction(
  * what lets the form say "Emailing 24 parents now" truthfully and still return
  * immediately, and it is why an unreadable roster is reportable on screen while
  * a bounced mailbox is only reportable by email.
+ *
+ * **A run announces once, and only about the part still ahead.** Both rules are
+ * `announceableOccurrences`: a coach entering a season that already started
+ * creates every date — the schedule is a record — and mails about none of the
+ * played ones. If that leaves nothing, this is `none`, exactly as a single
+ * back-filled event has always been.
  */
 async function scheduleAnnouncement(
   teamId: string,
-  event: ScheduleEvent,
+  events: readonly ScheduleEvent[],
   coachEmail: string | null,
 ): Promise<AddEventAnnouncement> {
   // A coach back-filling last Saturday's game should not mail the team.
-  if (!shouldAnnounceEvent(event.startsAt, new Date())) {
+  const announceable = announceableOccurrences(events, new Date());
+  if (announceable.length === 0) {
     return { status: "none" };
   }
 
   let work: AnnouncementWork | null;
   try {
-    work = await resolveAnnouncementWork(teamId, event, coachEmail);
+    work = await resolveAnnouncementWork(teamId, coachEmail);
   } catch (error) {
     unstable_rethrow(error);
     const detail = error instanceof Error ? error.message : "Unknown error";
@@ -610,10 +830,18 @@ async function scheduleAnnouncement(
     return { status: "none" };
   }
 
+  // One message either way — a batch is one email listing every date, never one
+  // email per date. See `batchEventsMessage`.
+  const resolved = work;
+  const message =
+    announceable.length === 1
+      ? singleEventMessage(resolved, announceable[0])
+      : batchEventsMessage(resolved, announceable);
+
   // `after` runs this once the response is finished — including, per Next's
   // docs, when the response was a redirect. Scheduling it cannot throw; the
   // callback is written so that running it cannot either.
-  after(() => announceEvent(work));
+  after(() => fanOut(resolved, message));
 
   return { status: "sending", recipients: work.recipients.length };
 }

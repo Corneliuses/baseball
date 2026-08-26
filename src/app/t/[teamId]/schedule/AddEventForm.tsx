@@ -6,8 +6,13 @@ import { useActionState } from "react";
 import { SubmitButton } from "@/components/SubmitButton";
 import { StatusBanner } from "@/components/StatusBanner";
 import { messageFor } from "@/lib/error-messages";
+/// Never from `calendar.ts`: this is a client component, and that module reads
+/// `process.env` at import time and carries date-fns plus the timezone data.
+/// See repeat-weekly.ts.
+import { MAX_REPEAT_WEEKS } from "@/lib/repeat-weekly";
 
 import { createEventAction } from "./actions";
+import { repeatPreview } from "./repeat-preview";
 import {
   ADD_EVENT_INITIAL_STATE,
   EMPTY_EVENT_VALUES,
@@ -133,6 +138,11 @@ export function AddEventForm({
       : null;
   const errorField = state.status === "invalid" ? state.field : null;
   const errorId = "add-event-error";
+
+  // Null unless the coach has asked for a run of two or more and given it a
+  // date to start from — there is nothing to preview about a single event.
+  const preview = repeatPreview(values.startsAt, values.repeat);
+  const previewId = "add-event-repeat-preview";
 
   /// Marks only the field the error actually names — same pattern as
   /// AddPlayerForm's `marks`. Every code maps to exactly one field, so an
@@ -282,6 +292,48 @@ export function AddEventForm({
             className={inputClass}
             {...marks("notes")}
           />
+        </div>
+
+        {/* The whole season in one submit (#70). Last, because it is the one
+            field that changes what "Add event" means — everything above
+            describes the event, and this describes how many of them there
+            are. */}
+        <div className="space-y-2">
+          <label
+            htmlFor="repeat"
+            className="block text-sm font-medium text-foreground"
+          >
+            Repeat weekly (optional)
+          </label>
+          <input
+            id="repeat"
+            name="repeat"
+            type="number"
+            min={1}
+            max={MAX_REPEAT_WEEKS}
+            step={1}
+            inputMode="numeric"
+            placeholder="1"
+            value={values.repeat}
+            onChange={(event) => set("repeat", event.target.value)}
+            className={inputClass}
+            aria-describedby={preview ? previewId : undefined}
+            {...marks("repeat")}
+          />
+          {/* Says what the submit is about to do while there is still time to
+              change it — a coach who typed 30 meaning 3 reads a different last
+              date, which is the only cheap check against a mistake that costs
+              thirty deletes. Same weeks the server will step, computed the same
+              way; see repeat-preview.ts on why it needs no timezone. */}
+          {preview ? (
+            <p id={previewId} className="text-sm text-muted-foreground">
+              {preview}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Leave blank for a single event.
+            </p>
+          )}
         </div>
       </fieldset>
 
