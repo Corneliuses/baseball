@@ -6,8 +6,13 @@ import { useActionState } from "react";
 import { SubmitButton } from "@/components/SubmitButton";
 import { StatusBanner } from "@/components/StatusBanner";
 import { messageFor } from "@/lib/error-messages";
+/// Never from `calendar.ts`: this is a client component, and that module reads
+/// `process.env` at import time and carries date-fns plus the timezone data.
+/// See repeat-weekly.ts.
+import { MAX_REPEAT_WEEKS } from "@/lib/repeat-weekly";
 
 import { createEventAction } from "./actions";
+import { repeatPreview } from "./repeat-preview";
 import {
   ADD_EVENT_INITIAL_STATE,
   EMPTY_EVENT_VALUES,
@@ -134,14 +139,45 @@ export function AddEventForm({
   const errorField = state.status === "invalid" ? state.field : null;
   const errorId = "add-event-error";
 
-  /// Marks only the field the error actually names — same pattern as
-  /// AddPlayerForm's `marks`. Every code maps to exactly one field, so an
-  /// over-long location no longer tells a screen reader the date and time
-  /// are the problem.
-  const marks = (which: keyof EventFormValues) =>
-    errorField === which
-      ? { "aria-invalid": true as const, "aria-describedby": errorId }
-      : {};
+  // Null unless the coach has asked for a run of two or more and given it a
+  // date to start from — there is nothing to preview about a single event.
+  const preview = repeatPreview(values.startsAt, values.repeat);
+  // One id for the repeat field's help line whether it is currently showing the
+  // preview or the fallback. A branch that renders two different <p>s, only one
+  // of which carries an id, is a description a screen reader loses half the
+  // time — and losing it silently, since the sighted layout is identical.
+  const repeatHelpId = "add-event-repeat-help";
+
+  /**
+   * Marks only the field the error actually names — same pattern as
+   * AddPlayerForm's `marks`. Every code maps to exactly one field, so an
+   * over-long location no longer tells a screen reader the date and time
+   * are the problem.
+   *
+   * `describedBy` is a description the field carries **permanently** — help
+   * text that is true whether or not the last submit was rejected. It is
+   * appended to the error id rather than replacing it, because
+   * `aria-describedby` is a space-separated *list* and a field can legitimately
+   * have both: "Repeat must be a whole number of weeks between 1 and 30" and
+   * "Creates 8 events, weekly through Sat, May 23".
+   *
+   * That list is the whole reason this argument exists rather than the caller
+   * writing `aria-describedby` itself. Spreading `marks` over a hand-written
+   * one silently dropped it — last attribute wins in JSX — and it dropped the
+   * preview at exactly the moment it was most worth reading, on the submit that
+   * had just been rejected.
+   */
+  const marks = (which: keyof EventFormValues, describedBy?: string) => {
+    const invalid = errorField === which;
+    const ids = [invalid ? errorId : undefined, describedBy].filter(
+      (id): id is string => typeof id === "string",
+    );
+
+    return {
+      ...(invalid ? { "aria-invalid": true as const } : {}),
+      ...(ids.length > 0 ? { "aria-describedby": ids.join(" ") } : {}),
+    };
+  };
 
   return (
     <form action={formAction} className="space-y-4">
@@ -282,6 +318,43 @@ export function AddEventForm({
             className={inputClass}
             {...marks("notes")}
           />
+        </div>
+
+        {/* The whole season in one submit (#70). Last, because it is the one
+            field that changes what "Add event" means — everything above
+            describes the event, and this describes how many of them there
+            are. */}
+        <div className="space-y-2">
+          <label
+            htmlFor="repeat"
+            className="block text-sm font-medium text-foreground"
+          >
+            Repeat weekly (optional)
+          </label>
+          <input
+            id="repeat"
+            name="repeat"
+            type="number"
+            min={1}
+            max={MAX_REPEAT_WEEKS}
+            step={1}
+            inputMode="numeric"
+            placeholder="1"
+            value={values.repeat}
+            onChange={(event) => set("repeat", event.target.value)}
+            className={inputClass}
+            {...marks("repeat", repeatHelpId)}
+          />
+          {/* One <p>, whose text swaps — never two, only one of which is
+              described. When there is a run to describe it says what the submit
+              is about to do while there is still time to change it: a coach who
+              typed 30 meaning 3 reads a different last date, which is the only
+              cheap check against a mistake that costs thirty deletes. Same
+              weeks the server will step, computed the same way; see
+              repeat-preview.ts on why it needs no timezone. */}
+          <p id={repeatHelpId} className="text-sm text-muted-foreground">
+            {preview ?? "Leave blank for a single event."}
+          </p>
         </div>
       </fieldset>
 

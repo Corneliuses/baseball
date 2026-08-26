@@ -241,6 +241,46 @@ export async function createEvent(
   });
 }
 
+/**
+ * Create a whole run of events at once — all of them, or none (#70).
+ *
+ * The repeat-weekly write. **All-or-nothing is the point**, and it is a choice
+ * this app can afford where the bulk invite cannot: an email that has gone out
+ * cannot be recalled, so that batch reports per-row outcomes and leaves the
+ * coach to reconcile them, but rows in a transaction simply never existed. A
+ * half-written season — six of twelve Saturdays on the schedule, with no record
+ * of which six were meant to be there — is a worse thing to hand a coach than a
+ * failed submit they can retry unchanged.
+ *
+ * Array-form `$transaction`, not interactive: the statements are known up front
+ * and run sequentially in one transaction, exactly as `saveBattingOrder` in
+ * roster.ts does and for the same reason. `createMany` is deliberately not used
+ * — it returns a count, and the action needs the created rows to announce them.
+ *
+ * Every statement carries `teamId` in its `data`, the same cross-team-forgery
+ * posture as every other write in this module. Errors propagate: a caller that
+ * silently got no events while its action reported success would be the worst
+ * of both.
+ *
+ * `Event` has no unique constraint on `(teamId, startsAt)`, so two runs that
+ * overlap on a date are representable and do not abort the transaction — the
+ * coach sees both events and deletes one. The only realistic failure here is
+ * the database being unreachable.
+ */
+export async function createEvents(
+  teamId: string,
+  inputs: readonly EventInput[],
+): Promise<ScheduleEvent[]> {
+  return db.$transaction(
+    inputs.map((input) =>
+      db.event.create({
+        data: { teamId, ...input },
+        select: EVENT_SELECT,
+      }),
+    ),
+  );
+}
+
 export async function updateEvent(
   teamId: string,
   eventId: string,

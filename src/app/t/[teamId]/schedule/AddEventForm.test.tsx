@@ -143,6 +143,7 @@ describe("AddEventForm after an add", () => {
       location: "Field 3",
       opponent: "Hawks",
       notes: "",
+      repeat: "",
     },
     summary: "Game on Sat, Aug 15, 2026 at 6:00 PM",
     announcement: { status: "none" },
@@ -186,6 +187,7 @@ describe("AddEventForm after a rejection", () => {
       location: "Field 3",
       opponent: "",
       notes: "Bring water",
+      repeat: "",
     },
   };
 
@@ -220,6 +222,7 @@ describe("AddEventForm after a rejection", () => {
         location: "x".repeat(201),
         opponent: "",
         notes: "",
+        repeat: "",
       },
     });
 
@@ -240,6 +243,7 @@ describe("AddEventForm opened from Duplicate", () => {
       location: "Field 3",
       opponent: "Hawks",
       notes: "Bring water",
+      repeat: "",
     },
     duplicatedFrom: "Game vs Hawks",
   };
@@ -291,6 +295,7 @@ describe("AddEventForm across successive results", () => {
         location: "Field 3",
         opponent: "Hawks",
         notes: "",
+        repeat: "",
       },
       summary: "Practice on Sat, Aug 15, 2026 at 6:00 PM",
     announcement: { status: "none" },
@@ -319,6 +324,7 @@ describe("AddEventForm across successive results", () => {
         location: "Field 3",
         opponent: "Hawks",
         notes: "",
+        repeat: "",
       },
       summary: "Game one",
     announcement: { status: "none" },
@@ -341,6 +347,7 @@ describe("AddEventForm across successive results", () => {
         location: "Field 3",
         opponent: "Hawks",
         notes: "",
+        repeat: "",
       },
       summary: "Game two",
     announcement: { status: "none" },
@@ -366,5 +373,197 @@ describe("AddEventForm across successive results", () => {
     expect(
       container.querySelector<HTMLFieldSetElement>("fieldset")?.disabled,
     ).toBe(true);
+  });
+});
+
+/// #70 — the repeat-weekly field and the promise it makes before the coach
+/// commits. The date arithmetic behind the preview is pinned in
+/// `repeat-preview.test.ts`; what belongs here is that the field exists, that
+/// the promise appears when there is one to make, and that the count never
+/// survives an add.
+describe("AddEventForm repeat-weekly", () => {
+  it("offers an optional weekly count, capped where the action caps it", () => {
+    const field = fieldFor(render({ status: "idle" }), "repeat");
+
+    expect(field).toContain('type="number"');
+    expect(field).toContain('min="1"');
+    expect(field).toContain('max="30"');
+    // Blank, not "1" — a coach adding one game should see an empty box rather
+    // than a number to reason about.
+    expect(field).toContain('value=""');
+  });
+
+  it("explains the blank state rather than leaving the box unexplained", () => {
+    expect(render({ status: "idle" })).toContain("Leave blank for a single event.");
+  });
+
+  it("sits inside the fieldset that locks during a submit", () => {
+    actionPending = true;
+    const { container } = renderDom(
+      <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
+    );
+
+    // Placement is the assertion, not `input.disabled`: a disabled fieldset
+    // disables its descendants for real, but the IDL property reflects only
+    // the element's own attribute, so the input reads false either way. What
+    // could actually regress is the field being moved out of the fieldset.
+    expect(container.querySelector("fieldset[disabled] #repeat")).not.toBeNull();
+  });
+
+  // The cheap check against a coach who typed 30 meaning 3: the last date is
+  // different, and it is on screen before the submit rather than after thirty
+  // rows exist.
+  it("says what the submit is about to do once there is a run to describe", () => {
+    const { container } = renderDom(
+      <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
+    );
+
+    fireEvent.change(container.querySelector<HTMLInputElement>("#startsAt")!, {
+      target: { value: "2026-04-04T18:00" },
+    });
+    fireEvent.change(container.querySelector<HTMLInputElement>("#repeat")!, {
+      target: { value: "8" },
+    });
+
+    expect(container.textContent).toContain(
+      "Creates 8 events, weekly through Sat, May 23.",
+    );
+    expect(container.textContent).not.toContain("Leave blank for a single event.");
+  });
+
+  it("promises nothing for a single event", () => {
+    const { container } = renderDom(
+      <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
+    );
+
+    fireEvent.change(container.querySelector<HTMLInputElement>("#startsAt")!, {
+      target: { value: "2026-04-04T18:00" },
+    });
+    fireEvent.change(container.querySelector<HTMLInputElement>("#repeat")!, {
+      target: { value: "1" },
+    });
+
+    expect(container.textContent).not.toContain("Creates");
+    expect(container.textContent).toContain("Leave blank for a single event.");
+  });
+
+  // Sticky values keep type/location/opponent; the count is the one field
+  // where keeping it turns a correct next submit into a wrong one.
+  it("clears the count after an add, so the next one is not another season", () => {
+    actionState = { status: "idle" };
+    const { rerender, container } = renderDom(
+      <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
+    );
+
+    fireEvent.change(container.querySelector<HTMLInputElement>("#repeat")!, {
+      target: { value: "8" },
+    });
+
+    actionState = {
+      status: "added",
+      keep: {
+        type: "GAME",
+        startsAt: "",
+        location: "Field 3",
+        opponent: "Hawks",
+        notes: "",
+        repeat: "",
+      },
+      summary: "8 games, weekly from Sat, Apr 4 to Sat, May 23",
+      announcement: { status: "none" },
+    };
+    rerender(<AddEventForm teamId="team-1" context={MONTH_CONTEXT} />);
+
+    expect(container.querySelector<HTMLInputElement>("#repeat")?.value).toBe("");
+    // The fields that were already sticky stay sticky.
+    expect(container.querySelector<HTMLInputElement>("#location")?.value).toBe(
+      "Field 3",
+    );
+  });
+
+  it("marks the count, not the date, when the count is what was rejected", () => {
+    const html = render({
+      status: "invalid",
+      code: "invalid-repeat",
+      field: "repeat",
+      values: { ...EMPTY_EVENT_VALUES, startsAt: "2026-04-04T18:00", repeat: "99" },
+    });
+
+    expect(fieldFor(html, "repeat")).toContain('aria-invalid="true"');
+    expect(fieldFor(html, "startsAt")).not.toContain("aria-invalid");
+    // And it hands the bad count back rather than blanking it.
+    expect(fieldFor(html, "repeat")).toContain('value="99"');
+    expect(html).toContain("between 1 and 30");
+  });
+
+  /// The help line is the same element in both states, so it is described in
+  /// both. Two <p>s where only the preview carried an id lost the fallback
+  /// entirely for a screen reader, and lost it silently — the sighted layout is
+  /// identical either way.
+  describe("its help line is always described", () => {
+    it("points at the fallback when there is no run to preview", () => {
+      const html = render({ status: "idle" });
+
+      expect(fieldFor(html, "repeat")).toContain(
+        'aria-describedby="add-event-repeat-help"',
+      );
+      expect(html).toContain(
+        '<p id="add-event-repeat-help"',
+      );
+    });
+
+    it("points at the preview once there is one", () => {
+      const { container } = renderDom(
+        <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
+      );
+
+      fireEvent.change(container.querySelector<HTMLInputElement>("#startsAt")!, {
+        target: { value: "2026-04-04T18:00" },
+      });
+      fireEvent.change(container.querySelector<HTMLInputElement>("#repeat")!, {
+        target: { value: "8" },
+      });
+
+      const repeat = container.querySelector<HTMLInputElement>("#repeat")!;
+      expect(repeat.getAttribute("aria-describedby")).toBe(
+        "add-event-repeat-help",
+      );
+      expect(
+        container.querySelector("#add-event-repeat-help")?.textContent,
+      ).toContain("Creates 8 events");
+    });
+
+    // The regression the reviewer caught: `aria-describedby` is a list, and
+    // spreading `marks` over a hand-written one dropped the help id — at
+    // exactly the moment the preview was most worth reading, on the submit that
+    // had just been rejected.
+    it("points at both the error and the help line when the count is rejected", () => {
+      const html = render({
+        status: "invalid",
+        code: "invalid-repeat",
+        field: "repeat",
+        values: { ...EMPTY_EVENT_VALUES, startsAt: "2026-04-04T18:00", repeat: "8" },
+      });
+
+      expect(fieldFor(html, "repeat")).toContain(
+        'aria-describedby="add-event-error add-event-repeat-help"',
+      );
+    });
+
+    // Fields with no permanent help text keep exactly the single id they had,
+    // which is what the two assertions in the suite above depend on.
+    it("leaves a field with no help text describing only its error", () => {
+      const html = render({
+        status: "invalid",
+        code: "invalid-datetime",
+        field: "startsAt",
+        values: EMPTY_EVENT_VALUES,
+      });
+
+      expect(fieldFor(html, "startsAt")).toContain(
+        'aria-describedby="add-event-error"',
+      );
+      expect(fieldFor(html, "location")).not.toContain("aria-describedby");
+    });
   });
 });

@@ -71,7 +71,12 @@ export function buildEventAnnouncementEmail({
 /// The opponent rides at the *end* of the subject, after the date, because a
 /// phone truncates a subject line and the date is what a parent has to see.
 /// Practices have no opponent even if the column somehow holds one.
-function opponentSuffix(
+///
+/// Exported for the repeat-weekly announcement (#70), which needs the identical
+/// rule — the trimming and the never-on-a-practice guard are the parts worth
+/// sharing, and a second copy would drift. Same argument `buildEventHeadline`
+/// makes next door.
+export function opponentSuffix(
   type: "GAME" | "PRACTICE",
   opponent: string | null,
 ): string {

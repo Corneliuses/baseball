@@ -4,13 +4,16 @@
 /// marks every export as a server function — a runtime constant there fails at
 /// `next build` rather than at `pnpm check`.
 
-/// Exactly the five fields of the add-event form, as typed.
+/// Exactly the six fields of the add-event form, as typed. `repeat` is the
+/// weekly count (#70) and is a string like the rest — it is what the number
+/// input holds, blank included, and the action parses it.
 export interface EventFormValues {
   type: string;
   startsAt: string;
   location: string;
   opponent: string;
   notes: string;
+  repeat: string;
 }
 
 export const EMPTY_EVENT_VALUES: EventFormValues = {
@@ -19,13 +22,22 @@ export const EMPTY_EVENT_VALUES: EventFormValues = {
   location: "",
   opponent: "",
   notes: "",
+  /// Blank, not "1". The field is optional and a coach adding one game should
+  /// see an empty box, not a number to reason about.
+  repeat: "",
 };
 
 /// Which input the error belongs to. Unlike the roster's `AddPlayerField`,
 /// this is never null: every `EventErrorCode` maps to exactly one of the
-/// form's five fields — there is no error here that blames the submission as
+/// form's six fields — there is no error here that blames the submission as
 /// a whole rather than one box.
-export type AddEventField = "type" | "startsAt" | "location" | "opponent" | "notes";
+export type AddEventField =
+  | "type"
+  | "startsAt"
+  | "location"
+  | "opponent"
+  | "notes"
+  | "repeat";
 
 export type AddEventState =
   | { status: "idle" }
@@ -83,6 +95,12 @@ export const ADD_EVENT_INITIAL_STATE: AddEventState = { status: "idle" };
 /// could keep. Notes are cleared because they are about one occasion; type,
 /// location and opponent are the fields the audit found barely change from
 /// game to game (Dugout Report C1).
+///
+/// **The repeat count clears too, and for a sharper version of the date's
+/// reason** (#70). A sticky "8" does not merely sit there looking stale — the
+/// next add silently becomes eight more events, and a coach who just created a
+/// season and then adds one make-up game would create eight of those. It is the
+/// one field where keeping it turns a correct next submit into a wrong one.
 export function stickyValues(values: EventFormValues): EventFormValues {
   return {
     type: values.type,
@@ -90,5 +108,6 @@ export function stickyValues(values: EventFormValues): EventFormValues {
     location: values.location,
     opponent: values.opponent,
     notes: "",
+    repeat: "",
   };
 }

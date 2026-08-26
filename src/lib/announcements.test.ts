@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  announceableOccurrences,
   buildAnnouncementRecipients,
   shouldAnnounceEvent,
 } from "@/lib/announcements";
@@ -93,5 +94,65 @@ describe("shouldAnnounceEvent", () => {
   // progress, and this is a send.
   it("stays quiet about a game that started an hour ago, grace window or not", () => {
     expect(shouldAnnounceEvent(new Date("2026-08-23T16:00:00Z"), now)).toBe(false);
+  });
+});
+
+describe("announceableOccurrences", () => {
+  const now = new Date("2026-08-23T17:00:00Z");
+
+  /// Shaped like the rows the action actually passes — an id alongside the
+  /// instant, so these assertions also pin that whole records come back rather
+  /// than bare dates.
+  const week = (weeks: number) => ({
+    id: `evt-${weeks}`,
+    startsAt: new Date(now.getTime() + weeks * 7 * 24 * 60 * 60 * 1000),
+  });
+
+  it("keeps every occurrence of a run that is entirely ahead", () => {
+    const run = [week(1), week(2), week(3)];
+
+    expect(announceableOccurrences(run, now)).toEqual(run);
+  });
+
+  // The case it exists for: a coach entering a season that already started.
+  // The played games are still created — the schedule is a record — but nobody
+  // is mailed about them.
+  it("keeps only the future half of a back-filled season", () => {
+    const run = [week(-2), week(-1), week(1), week(2)];
+
+    expect(announceableOccurrences(run, now)).toEqual([week(1), week(2)]);
+  });
+
+  it("returns nothing when the whole run has already happened", () => {
+    expect(announceableOccurrences([week(-3), week(-2), week(-1)], now)).toEqual(
+      [],
+    );
+  });
+
+  it("preserves order, so the email lists dates the way the schedule does", () => {
+    expect(announceableOccurrences([week(3), week(1), week(2)], now)).toEqual([
+      week(3),
+      week(1),
+      week(2),
+    ]);
+  });
+
+  // Same boundary as shouldAnnounceEvent, pinned here too because this is the
+  // function both announcement paths actually call.
+  it("drops an occurrence starting at exactly this instant", () => {
+    expect(
+      announceableOccurrences([{ id: "now", startsAt: new Date(now) }, week(1)], now),
+    ).toEqual([week(1)]);
+  });
+
+  // The single-event path routes through here too, so a run of one has to
+  // behave exactly like shouldAnnounceEvent on its own.
+  it("handles a run of one either way", () => {
+    expect(announceableOccurrences([week(1)], now)).toEqual([week(1)]);
+    expect(announceableOccurrences([week(-1)], now)).toEqual([]);
+  });
+
+  it("returns nothing for an empty run", () => {
+    expect(announceableOccurrences([], now)).toEqual([]);
   });
 });

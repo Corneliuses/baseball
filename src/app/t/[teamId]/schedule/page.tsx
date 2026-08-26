@@ -146,6 +146,10 @@ export default async function SchedulePage({
         location: duplicateSource.location ?? "",
         opponent: duplicateSource.opponent ?? "",
         notes: duplicateSource.notes ?? "",
+        // Never carried across a duplicate. "Add another like it" copies what
+        // an event *is*, and a repeat count is not that — it says how many to
+        // make, and duplicating one fixture asks for one.
+        repeat: "",
       }
     : EMPTY_EVENT_VALUES;
 

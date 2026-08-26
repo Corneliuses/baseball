@@ -318,6 +318,37 @@ production — the dev command can prompt, generate new migrations, and reset th
   Central-set dev machine. Never read or format `Event.startsAt` directly; go through
   `src/lib/calendar.ts`'s `TZDate`-based helpers (`wallClockToInstant`,
   `formatEventDateTime`, `dayKey`, `buildMonthGrid`, etc.).
+
+  **Adding days is the sharpest case, and `weeklyOccurrences` is the one to copy.**
+  Repeat-weekly creation (#70) steps the *day component* in `APP_TIMEZONE` —
+  `new TZDate(y, m, d + 7k, hh, mm, 0, APP_TIMEZONE)` — rather than adding `7 × 24h` to an
+  instant, because a week is not a fixed number of hours across a DST boundary: 6 PM on 7
+  March 2026 and 6 PM on the 14th are 167 hours apart, and millisecond arithmetic files
+  every game after the boundary an hour out. Nothing fails loudly; the season is just
+  wrong. Both 2026 crossings are pinned in `calendar.test.ts`. The same trap applies to any
+  future "every other week" or "same time next month".
+
+  Two smaller notes on that function. Its day arithmetic **overflows its month on purpose**
+  (day 38 of January is 7 February), which is the same rolling-forward `wallClockToInstant`
+  rejects — so the does-this-date-exist check applies to the typed date only, never to a
+  later occurrence. And `weeklyOccurrences(wc, 1)` is defined to equal
+  `[wallClockToInstant(wc)]`, which is what makes "a repeat of one is the single-event
+  behaviour that was already there" a property rather than a promise.
+- **`MAX_REPEAT_WEEKS` is in its own module (`src/lib/repeat-weekly.ts`) and has to stay
+  there.** It reads like it belongs in `calendar.ts` beside `weeklyOccurrences`, and it
+  cannot: `AddEventForm` needs it for the input's `max`, and `schedule-messages.ts` — which
+  that client component renders — names it in the `invalid-repeat` sentence. `calendar.ts`
+  reads `process.env.APP_TIMEZONE` at module scope and pulls in date-fns, `@date-fns/tz`
+  and its timezone data, so importing one number from there puts all of it in the browser
+  bundle. `AddEventForm` is the only client component that imports from `@/lib/calendar` at
+  all, and it must not start. Same reasoning as `event-form-state.ts`: a value that has to
+  cross a boundary gets its own module rather than dragging its neighbours across.
+  `repeat-preview.ts` exists for the other half of that split — the form's "Creates 8
+  events, weekly through Sat, May 23" line is pure calendar-component arithmetic on the
+  `YYYY-MM-DD` string, needing no zone, because naming a *date* seven days on is
+  zone-independent. Only the conversion to an instant needs the zone, and that stays
+  server-side. If that preview ever grows a time, it moves to the server rather than
+  growing a copy of the zone rules.
 - **`.env.example` is gitignore-exempt** via an explicit `!.env.example` negation, since
   the Next.js scaffold ignores `.env*`. Keep that negation if you touch `.gitignore`.
 - **Declaring `metadata.icons` at all turns off file-convention icons entirely.** Next
@@ -494,6 +525,16 @@ production — the dev command can prompt, generate new migrations, and reset th
   bought nothing and cost everything — recipients dedupe per guardian `User`, not per
   household, so a 16-player roster with both parents linked is 32 and *every* announcement
   would have failed, permanently, with no retry path.
+
+  **`MAX_REPEAT_WEEKS` (30) is the one cap that does *not* couple to a `maxDuration`, and
+  that is a claim rather than an oversight.** The rule above governs loops that send **per
+  row**; repeat-weekly creation (#70) writes per row and sends per *batch* — the
+  announcement is one email per guardian whether the coach created one event or thirty, so
+  30 rows in a transaction sit beside an unchanged `MAX_RECIPIENTS` of 200 and the same
+  120s of pacing. Raising it does not move the ceiling. What it *is* bounded by is
+  honesty about a forged POST: 30 is the `MAX_ROWS` precedent, enforced in `parseRepeat`
+  and again inside `weeklyOccurrences`, because the form's `max=30` is a convenience for
+  the coach and never a boundary.
 - **Adding an event announces it; editing one does not.** `createEventAction` mails every
   guardian on the roster (#45) and pushes to whoever has a subscription, which is step 2 of
   the brief's core loop. Three things hold it in place. The fan-out runs **after**
@@ -512,6 +553,19 @@ production — the dev command can prompt, generate new migrations, and reset th
   broadcast passes, and unlike the cron there is a real human sender to name.
   `src/lib/announcements.ts` holds the two rules worth testing without any of this: one email
   per household, and whether to announce at all.
+
+  **A repeat-weekly run announces once, not once per event** (#70), and the same
+  one-per-household argument is why. A twelve-game season entered in one submit would
+  otherwise put twelve messages in every family's inbox, which is exactly how
+  `buildAnnouncementRecipients`' own docstring says a family learns that this app's email
+  is noise. `EventsAnnouncementEmail` lists every date and links at the **schedule** rather
+  than an event, because a batch has no single event to answer. Both paths now share one
+  paced send loop (`fanOut`), differing only in the `AnnouncementMessage` handed to it — so
+  the pacing, the push-rides-along rule and the receipt cannot drift apart. The
+  already-past rule applies **per occurrence** via `announceableOccurrences`: back-filling
+  a season that has started creates every date and mails about none of the played ones, and
+  when that leaves exactly one, it gets the ordinary single-event message and its event
+  link back.
 - **The announcement is deferred, so the returned state cannot report it — a receipt email
   does.** `createEventAction` returns the moment the event exists, because a fan-out is not
   something to make a person watch. The cost is that everything after that has no response

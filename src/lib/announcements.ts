@@ -80,3 +80,36 @@ export function buildAnnouncementRecipients(
 export function shouldAnnounceEvent(startsAt: Date, now: Date): boolean {
   return startsAt.getTime() > now.getTime();
 }
+
+/**
+ * Which occurrences of a repeat-weekly batch (#70) are worth announcing.
+ *
+ * `shouldAnnounceEvent` per occurrence and nothing more — a refinement of that
+ * rule rather than a departure from it. The case it exists for is a coach
+ * back-filling a season that has already started: entering twelve Saturdays in
+ * April when it is June should create all twelve (the schedule is a record, and
+ * the played games belong in it) and announce only the ones still to come.
+ * Mailing families about eight games they already played is the failure
+ * `shouldAnnounceEvent` was written to prevent, and a batch is where it would
+ * happen eight times over.
+ *
+ * Order is preserved, so the announcement lists dates the way the schedule
+ * does. An empty return means "nothing to tell anyone about", which the caller
+ * treats exactly as it treats a single past event: no email, no receipt, no
+ * explanation on screen (see this module's note on that cost).
+ *
+ * Generic over anything carrying a start instant, the same shape
+ * `selectNextEvents` and `bucketEventsByDay` take, so the action can hand it
+ * the created rows and get rows back — it needs each event's id and notes to
+ * build the message, not just its date. A run of one is a legitimate call: the
+ * single-event path routes through here too, so "don't mail about a game that
+ * already happened" is decided in exactly one place.
+ */
+export function announceableOccurrences<T extends { startsAt: Date }>(
+  occurrences: readonly T[],
+  now: Date,
+): T[] {
+  return occurrences.filter((occurrence) =>
+    shouldAnnounceEvent(occurrence.startsAt, now),
+  );
+}

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const requireTeamAccess = vi.fn();
 const getEvent = vi.fn();
 const createEvent = vi.fn();
+const createEvents = vi.fn();
 const updateEvent = vi.fn();
 const deleteEvent = vi.fn();
 const guardedRosteredPlayerIds = vi.fn();
@@ -43,6 +44,7 @@ vi.mock("@/lib/team-access", () => ({
 vi.mock("@/lib/schedule", () => ({
   getEvent: (...args: unknown[]) => getEvent(...args),
   createEvent: (...args: unknown[]) => createEvent(...args),
+  createEvents: (...args: unknown[]) => createEvents(...args),
   updateEvent: (...args: unknown[]) => updateEvent(...args),
   deleteEvent: (...args: unknown[]) => deleteEvent(...args),
 }));
@@ -217,6 +219,18 @@ beforeEach(() => {
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
   getEvent.mockResolvedValue(EVENT);
   createEvent.mockResolvedValue(EVENT);
+  // Echoes the inputs back as rows, the way a real batch write does — so a
+  // test asserting on what was announced is asserting on what was written.
+  createEvents.mockImplementation(
+    (_teamId: string, inputs: { startsAt: Date }[]) =>
+      Promise.resolve(
+        inputs.map((input, index) => ({
+          ...EVENT,
+          ...input,
+          id: `event-${index + 1}`,
+        })),
+      ),
+  );
   // Nobody on the roster by default, so the tests that are about event
   // *creation* don't pay for a fan-out. The announcement suite sets its own.
   listTeamGuardians.mockResolvedValue([]);
@@ -287,6 +301,10 @@ describe("createEventAction", () => {
       opponent: "Hawks",
       // Notes are about one occasion, so they clear with the date.
       notes: "",
+      // And the repeat count clears for a sharper version of the date's
+      // reason (#70): a sticky "8" does not sit there looking stale, it makes
+      // the coach's next single add into eight more events.
+      repeat: "",
     });
   });
 
@@ -408,6 +426,206 @@ describe("createEventAction", () => {
   });
 });
 
+/// #70 — a whole run of events in one submit. The date arithmetic itself is
+/// pinned in `calendar.test.ts` (including both DST boundaries, which is the
+/// thing that actually breaks); what only exists here is the routing: which
+/// write a given count takes, what the coach is told, and what a bad count
+/// costs them.
+describe("createEventAction — repeating weekly", () => {
+  const repeating = (repeat: string) => form({ ...validEvent, repeat });
+
+  /// The instants the batch write was asked for, as ISO strings.
+  const writtenInstants = () => {
+    const [[, inputs]] = createEvents.mock.calls;
+    return (inputs as { startsAt: Date }[]).map((input) =>
+      input.startsAt.toISOString(),
+    );
+  };
+
+  describe("choosing a write", () => {
+    // The property the whole single-vs-batch split rests on. A blank field is
+    // every submit made before this feature existed, and it must not start
+    // going through a transaction.
+    it("takes the single-event write when the field is blank", async () => {
+      await addEvent(form(validEvent));
+
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(createEvents).not.toHaveBeenCalled();
+    });
+
+    it("takes the single-event write for a count of exactly 1", async () => {
+      await addEvent(repeating("1"));
+
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(createEvents).not.toHaveBeenCalled();
+    });
+
+    it("takes the batch write from 2 up, and writes it once", async () => {
+      await addEvent(repeating("4"));
+
+      expect(createEvent).not.toHaveBeenCalled();
+      // Once, not four times: all-or-nothing is the point, and four calls
+      // would be four transactions.
+      expect(createEvents).toHaveBeenCalledTimes(1);
+      expect(writtenInstants()).toHaveLength(4);
+    });
+  });
+
+  describe("what gets written", () => {
+    it("steps a week at a time from the typed start", async () => {
+      await addEvent(repeating("3"));
+
+      // 6:00 PM Central in August is 23:00Z. Three consecutive Saturdays.
+      expect(writtenInstants()).toEqual([
+        "2026-08-15T23:00:00.000Z",
+        "2026-08-22T23:00:00.000Z",
+        "2026-08-29T23:00:00.000Z",
+      ]);
+    });
+
+    it("repeats every other field unchanged across the run", async () => {
+      await addEvent(repeating("3"));
+
+      const [[teamId, inputs]] = createEvents.mock.calls;
+      expect(teamId).toBe("team-1");
+      for (const input of inputs as Record<string, unknown>[]) {
+        expect(input.type).toBe("GAME");
+        expect(input.location).toBe("Field 3");
+        expect(input.opponent).toBe("Hawks");
+        expect(input.notes).toBe("Bring water");
+      }
+    });
+
+    // The reason weeklyOccurrences steps day components rather than adding
+    // 7 x 24h to an instant. Pinned here too because this is the path that
+    // actually writes: an implementation that regressed to millisecond
+    // arithmetic would file every game after the boundary an hour out.
+    it("holds the wall clock across a DST boundary", async () => {
+      await addEvent(
+        form({ ...validEvent, startsAt: "2026-03-07T18:00", repeat: "2" }),
+      );
+
+      expect(writtenInstants()).toEqual([
+        "2026-03-08T00:00:00.000Z", // 6 PM CST
+        "2026-03-14T23:00:00.000Z", // 6 PM CDT — 167 hours later, not 168
+      ]);
+    });
+
+    it("still requires COACH and a writable team", async () => {
+      await addEvent(repeating("4"));
+
+      expect(requireTeamAccess).toHaveBeenCalledWith("team-1", WRITE_ACCESS);
+    });
+
+    it("never writes when access is refused", async () => {
+      requireTeamAccess.mockRejectedValue(
+        new TeamAccessError("Requires COACH", "insufficient-role"),
+      );
+
+      await expect(
+        redirectUrlOf(() => addEvent(repeating("4"))),
+      ).resolves.toContain("error=access");
+      expect(createEvents).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("what the coach is told", () => {
+    it("counts and spans the run, since thirty dates will not fit in a banner", async () => {
+      const state = added(await addEvent(repeating("4")));
+
+      expect(state.summary).toBe(
+        "4 games, weekly from Sat, Aug 15 to Sat, Sep 5",
+      );
+    });
+
+    it("says practices for a run of practices", async () => {
+      const state = added(
+        await addEvent(form({ ...validEvent, type: "PRACTICE", repeat: "2" })),
+      );
+
+      expect(state.summary).toContain("2 practices");
+    });
+
+    // A single add still names the one event and its full date — three quick
+    // adds look alike, and the date is what tells them apart.
+    it("still names the single event when there is only one", async () => {
+      const state = added(await addEvent(repeating("1")));
+
+      expect(state.summary).toBe("Game on Sat, Aug 15, 2026 at 6:00 PM");
+    });
+
+    it("clears the repeat count so the next add is not another whole season", async () => {
+      const state = added(await addEvent(repeating("8")));
+
+      expect(state.keep.repeat).toBe("");
+      // The fields that were already sticky stay sticky.
+      expect(state.keep.location).toBe("Field 3");
+    });
+  });
+
+  describe("rejecting a count", () => {
+    const badCounts = ["0", "-1", "31", "500", "abc", "2.5", "0x10"];
+
+    for (const repeat of badCounts) {
+      it(`rejects ${JSON.stringify(repeat)} without writing anything`, async () => {
+        const state = rejected(await addEvent(repeating(repeat)));
+
+        expect(state.code).toBe("invalid-repeat");
+        expect(createEvent).not.toHaveBeenCalled();
+        expect(createEvents).not.toHaveBeenCalled();
+      });
+    }
+
+    // Whitespace in an optional field is a blank field, not a typo to reject —
+    // the same reading `optionalText` gives location and opponent.
+    it("treats a whitespace-only count as blank, meaning one event", async () => {
+      const state = added(await addEvent(repeating("   ")));
+
+      expect(state.status).toBe("added");
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(createEvents).not.toHaveBeenCalled();
+    });
+
+    it("blames the repeat field, not the date", async () => {
+      // Before AddEventField carried "repeat", every rejection was attributed
+      // to startsAt — which would tell a screen reader the date is wrong when
+      // the count is.
+      expect(rejected(await addEvent(repeating("31"))).field).toBe("repeat");
+    });
+
+    it("hands back everything that was typed, the bad count included", async () => {
+      const state = rejected(
+        await addEvent(form({ ...validEvent, repeat: "99" })),
+      );
+
+      expect(state.values).toMatchObject({
+        startsAt: "2026-08-15T18:00",
+        location: "Field 3",
+        opponent: "Hawks",
+        repeat: "99",
+      });
+    });
+
+    it("accepts a count at the cap", async () => {
+      const state = added(await addEvent(repeating("30")));
+
+      expect(state.status).toBe("added");
+      expect(writtenInstants()).toHaveLength(30);
+    });
+
+    // A bad date is still a date error even when the count is also present —
+    // the two validators run in order and the first one to object wins.
+    it("still reports a bad date as a date error", async () => {
+      const state = rejected(
+        await addEvent(form({ ...validEvent, startsAt: "", repeat: "4" })),
+      );
+
+      expect(state.code).toBe("invalid-datetime");
+      expect(state.field).toBe("startsAt");
+    });
+  });
+});
+
 /// #45 — the announcement fan-out. The rules worth pinning here are the ones
 /// that only exist once the action, the roster and Resend are in the same
 /// place: grouping is tested in `announcements.test.ts` and wording in the two
@@ -462,6 +680,33 @@ describe("createEventAction — announcing the event", () => {
     // the page. Everything after this reports by email.
     it("reports a roster it could not read, and schedules nothing", async () => {
       listTeamGuardians.mockRejectedValue(new Error("connection lost"));
+
+      const state = await add();
+
+      expect(createEvent).toHaveBeenCalledTimes(1);
+      expect(state).toMatchObject({
+        status: "added",
+        announcement: { status: "failed" },
+      });
+      expect(afterCallbacks).toHaveLength(0);
+    });
+
+    // Composing the message sits on the request path, so its failure mode had
+    // to be chosen rather than discovered: it reports, exactly like an
+    // unreadable roster. Outside the catch it would 500 the action after the
+    // events were written — which reads to a coach as the write having failed.
+    it("reports rather than 500s if the message cannot be composed", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+      // `location` is read only when the message body is composed — not by
+      // `announceableOccurrences` (which touches `startsAt`) nor by
+      // `resolveAnnouncementWork` (which no longer sees the event at all), so
+      // this fails in the new step and nowhere earlier.
+      createEvent.mockResolvedValue({
+        ...EVENT,
+        get location(): string {
+          throw new Error("row is malformed");
+        },
+      });
 
       const state = await add();
 
@@ -705,6 +950,165 @@ describe("createEventAction — announcing the event", () => {
       await add();
 
       await expect(flushAfter()).resolves.toBeUndefined();
+    });
+  });
+
+  /// #70 — announcing a whole run. Everything above still holds; what is new is
+  /// that N events must still be N-times-nothing extra in a family's inbox.
+  describe("announcing a repeat-weekly run", () => {
+    async function addRun(repeat: string): Promise<AddEventState> {
+      return createEventAction(
+        ADD_EVENT_INITIAL_STATE,
+        form({ ...validEvent, repeat }),
+      );
+    }
+
+    /// Everything sent to a parent, ignoring the coach's own receipt.
+    const announcements = () =>
+      sendEmail.mock.calls
+        .map(([args]) => args)
+        .filter((args) => args.to !== "coach@example.com");
+
+    // The rule the whole batch email exists for. A twelve-game season entered
+    // in one submit must not put twelve messages in one family's inbox — which
+    // is exactly what looping the single-event announcement would do.
+    it("sends one email per family for the whole run, not one per event", async () => {
+      listTeamGuardians.mockResolvedValue(
+        rosterOf(guardian("u-1", "one@example.com"), guardian("u-2", "two@example.com")),
+      );
+
+      const state = await addRun("6");
+      await flushAfter();
+
+      expect(state).toMatchObject({
+        announcement: { status: "sending", recipients: 2 },
+      });
+      expect(announcements()).toHaveLength(2);
+      expect(announcements().map((args) => args.to)).toEqual([
+        "one@example.com",
+        "two@example.com",
+      ]);
+    });
+
+    it("names the count and the span in the subject", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await addRun("4");
+      await flushAfter();
+
+      expect(announcements()[0].subject).toBe(
+        "[Sharks] 4 games vs Hawks: Sat, Aug 15 – Sat, Sep 5",
+      );
+    });
+
+    it("pushes once per family too, never once per event", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await addRun("6");
+      await flushAfter();
+
+      expect(sendPushToUser).toHaveBeenCalledTimes(1);
+    });
+
+    it("links the batch to the schedule, where the whole run is", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await addRun("4");
+      await flushAfter();
+
+      // `endsWith`, like the single-event case above: no AUTH_URL is set in
+      // this suite, so absoluteUrl falls back to localhost and the base is not
+      // what is being asserted. The *path* is: a batch links at the schedule,
+      // not at any one event.
+      expect(
+        hrefsIn(announcements()[0].react).some((href) =>
+          href.endsWith("/t/team-1/schedule"),
+        ),
+      ).toBe(true);
+    });
+
+    it("still sets Reply-To and List-Unsubscribe to the coach who created it", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await addRun("4");
+      await flushAfter();
+
+      expect(announcements()[0]).toMatchObject({
+        replyTo: "coach@example.com",
+        listUnsubscribe: "coach@example.com",
+      });
+    });
+
+    it("reports the run to the coach in one receipt", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await addRun("4");
+      await flushAfter();
+
+      const receipt = sendEmail.mock.calls
+        .map(([args]) => args)
+        .find((args) => args.to === "coach@example.com");
+      expect(receipt?.subject).toBe(
+        "[Sharks] 4 games vs Hawks announced to 1 parent",
+      );
+    });
+
+    // A coach entering a season that already started: every date is created —
+    // the schedule is a record — and only the ones still ahead are announced.
+    it("announces only the occurrences still ahead of a back-filled run", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      // NOW is 10 Aug: 1 and 8 Aug are behind it, 15 and 22 Aug ahead.
+      const state = await addEvent(
+        form({ ...validEvent, startsAt: "2026-08-01T18:00", repeat: "4" }),
+      );
+      await flushAfter();
+
+      // All four were written.
+      const [[, inputs]] = createEvents.mock.calls;
+      expect(inputs).toHaveLength(4);
+      // Only the two still ahead were mentioned.
+      expect(state).toMatchObject({
+        announcement: { status: "sending", recipients: 1 },
+      });
+      expect(announcements()[0].subject).toBe(
+        "[Sharks] 2 games vs Hawks: Sat, Aug 15 – Sat, Aug 22",
+      );
+    });
+
+    // When only one occurrence is left to announce, it is one event again —
+    // and gets the single-event message, linking straight at its RSVP buttons.
+    it("falls back to the single-event message when one occurrence remains", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      await addEvent(
+        form({ ...validEvent, startsAt: "2026-08-01T18:00", repeat: "3" }),
+      );
+      await flushAfter();
+
+      expect(announcements()[0].subject).toBe(
+        "[Sharks] New game: Sat, Aug 15, 2026 at 6:00 PM vs Hawks",
+      );
+      // And it links at that event, where the RSVP buttons are — the third row
+      // of the run, which is the only one still ahead.
+      expect(
+        hrefsIn(announcements()[0].react).some((href) =>
+          href.endsWith("/t/team-1/schedule/event-3"),
+        ),
+      ).toBe(true);
+    });
+
+    it("announces nothing when the whole run has already happened", async () => {
+      listTeamGuardians.mockResolvedValue(rosterOf(guardian("u-1", "one@example.com")));
+
+      const state = await addEvent(
+        form({ ...validEvent, startsAt: "2026-06-06T18:00", repeat: "4" }),
+      );
+
+      expect(state).toMatchObject({ announcement: { status: "none" } });
+      expect(afterCallbacks).toHaveLength(0);
+      // The events still exist — back-filling a season is legitimate.
+      expect(createEvents).toHaveBeenCalledTimes(1);
     });
   });
 });

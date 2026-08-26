@@ -10,6 +10,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { EventType } from "@/generated/prisma/enums";
+import { MAX_REPEAT_WEEKS } from "./repeat-weekly";
 
 /// Pure date and calendar logic for the schedule. No database, no DOM, no
 /// React — everything here is testable without either, per AGENTS.md.
@@ -110,6 +111,82 @@ function inZone(instant: Date): TZDate {
 /// discarded — a schedule has no use for them.
 const WALL_CLOCK_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?$/;
 
+/// A wall clock taken apart, with `month` 1-12 like the rest of this module's
+/// public API. Never an instant: these are the numbers a coach typed, before
+/// any zone has been applied to them.
+type WallClockParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+/// Shape and range checks only — whether the *date* exists is a separate
+/// question, asked by `assertRealDate` below, because the two callers ask it
+/// about different days. Split out of `wallClockToInstant` when
+/// `weeklyOccurrences` needed the same parse.
+function parseWallClock(value: string): WallClockParts {
+  const match = WALL_CLOCK_PATTERN.exec(value.trim());
+  if (!match) {
+    throw new RangeError("Expected a date and time in YYYY-MM-DDTHH:mm form");
+  }
+
+  const parts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4]),
+    minute: Number(match[5]),
+  };
+
+  if (parts.month < 1 || parts.month > 12 || parts.day < 1 || parts.day > 31) {
+    throw new RangeError("Not a real calendar date");
+  }
+  if (parts.hour > 23 || parts.minute > 59) {
+    throw new RangeError("Not a real time of day");
+  }
+
+  return parts;
+}
+
+/**
+ * The parsed wall clock, `dayOffset` days later, as a zoned date.
+ *
+ * The offset is applied to the **day component**, not to an instant, and that
+ * is the whole DST story (see `weeklyOccurrences`). It also means overflow is
+ * the `Date` constructor's job: day 38 of January is 7 February, which is
+ * exactly "31 January plus seven days".
+ */
+function toZoned(parts: WallClockParts, dayOffset: number): TZDate {
+  return new TZDate(
+    parts.year,
+    parts.month - 1,
+    parts.day + dayOffset,
+    parts.hour,
+    parts.minute,
+    0,
+    APP_TIMEZONE,
+  );
+}
+
+/// Catches dates that do not exist (30 February) — the constructor rolls them
+/// forward, so the day components come back different. The hour is
+/// deliberately NOT checked: a nonexistent DST wall clock legitimately shifts.
+///
+/// Only ever asked about the day the coach typed. A later weekly occurrence
+/// legitimately overflows its month, which is the same rolling-forward this
+/// rejects, so asking it there would reject every run that crosses a month end.
+function assertRealDate(zoned: TZDate, parts: WallClockParts): void {
+  if (
+    zoned.getFullYear() !== parts.year ||
+    zoned.getMonth() !== parts.month - 1 ||
+    zoned.getDate() !== parts.day
+  ) {
+    throw new RangeError("Not a real calendar date");
+  }
+}
+
 /**
  * Interpret a `datetime-local` form value as a wall clock in `APP_TIMEZONE`
  * and return the UTC instant it denotes.
@@ -126,40 +203,57 @@ const WALL_CLOCK_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?$
  * Neither matters for youth baseball, but leaving it to chance would.
  */
 export function wallClockToInstant(value: string): Date {
-  const match = WALL_CLOCK_PATTERN.exec(value.trim());
-  if (!match) {
-    throw new RangeError("Expected a date and time in YYYY-MM-DDTHH:mm form");
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const hour = Number(match[4]);
-  const minute = Number(match[5]);
-
-  if (month < 1 || month > 12 || day < 1 || day > 31) {
-    throw new RangeError("Not a real calendar date");
-  }
-  if (hour > 23 || minute > 59) {
-    throw new RangeError("Not a real time of day");
-  }
-
-  const zoned = new TZDate(year, month - 1, day, hour, minute, 0, APP_TIMEZONE);
-
-  // Catches dates that do not exist (30 February) — the constructor rolls them
-  // forward, so the day components come back different. The hour is
-  // deliberately NOT checked: a nonexistent DST wall clock legitimately shifts.
-  if (
-    zoned.getFullYear() !== year ||
-    zoned.getMonth() !== month - 1 ||
-    zoned.getDate() !== day
-  ) {
-    throw new RangeError("Not a real calendar date");
-  }
+  const parts = parseWallClock(value);
+  const zoned = toZoned(parts, 0);
+  assertRealDate(zoned, parts);
 
   // A plain Date, never the TZDate — see the toISOString note in the module
   // docstring above.
   return new Date(zoned.getTime());
+}
+
+/**
+ * `total` weekly occurrences of one wall clock, starting at it, as UTC instants.
+ *
+ * **The wall clock is held fixed, not the elapsed time**, and that is the
+ * entire reason this function exists rather than a `+ 7 * 24h` loop at the call
+ * site. A 6 PM game seven days after 6 PM on 7 March 2026 is 6 PM on the 14th —
+ * but the clocks moved on the 8th, so only 167 hours passed. Adding a fixed
+ * number of milliseconds to an instant would file that game at 5 PM, and every
+ * game after it, for the rest of the season.
+ *
+ * Stepping the **day component** in `APP_TIMEZONE` avoids the arithmetic
+ * entirely: each occurrence is constructed independently as "this wall clock,
+ * on this date", so the offset is whatever the zone says it is that week. Both
+ * 2026 boundaries are pinned by tests.
+ *
+ * Throws `RangeError` — the same failure mode as `wallClockToInstant`, whose
+ * validation this shares — on a malformed or impossible start, or a `total`
+ * that is not a whole number in 1..MAX_REPEAT_WEEKS. `total` of 1 returns
+ * exactly `[wallClockToInstant(startWallClock)]`, which is what makes "repeat
+ * once is the behaviour that was already there" a property rather than a
+ * promise.
+ */
+export function weeklyOccurrences(
+  startWallClock: string,
+  total: number,
+): Date[] {
+  if (!Number.isInteger(total) || total < 1 || total > MAX_REPEAT_WEEKS) {
+    throw new RangeError(
+      `Expected a whole number of weeks between 1 and ${MAX_REPEAT_WEEKS}`,
+    );
+  }
+
+  const parts = parseWallClock(startWallClock);
+  const first = toZoned(parts, 0);
+  assertRealDate(first, parts);
+
+  const occurrences: Date[] = [new Date(first.getTime())];
+  for (let week = 1; week < total; week += 1) {
+    occurrences.push(new Date(toZoned(parts, week * 7).getTime()));
+  }
+
+  return occurrences;
 }
 
 /// The inverse, for pre-filling a `datetime-local` input on the edit form.
@@ -182,6 +276,15 @@ export function formatEventTime(instant: Date): string {
 /// Day heading for the chronological list, e.g. "Saturday, August 1".
 export function formatEventDayLabel(instant: Date): string {
   return format(inZone(instant), "EEEE, MMMM d");
+}
+
+/// "Sat, Apr 4" — the compact form, for places that name two dates at once and
+/// cannot spend two full labels on them. The repeat-weekly announcement's
+/// subject line (#70) is the only caller: a phone truncates a subject, so a
+/// date range there has to fit beside the count and the team name. The weekday
+/// stays because a season of Saturdays is the thing a parent is checking.
+export function formatEventDateShort(instant: Date): string {
+  return format(inZone(instant), "EEE, MMM d");
 }
 
 export function formatMonthLabel(month: CalendarMonth): string {
