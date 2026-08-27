@@ -65,7 +65,8 @@ fixes, what the team has on file for them.
 - **Framework**: Next.js 16.2 (App Router), React 19.2
 - **Database**: Neon Postgres (via Vercel Marketplace) — *not* Prisma Postgres
 - **ORM**: Prisma 7.9 with the `@prisma/adapter-pg` driver adapter
-- **Auth**: Auth.js v5 beta (`next-auth@5.0.0-beta.32`) + Prisma adapter, magic-link only
+- **Auth**: Auth.js v5 beta (`next-auth@5.0.0-beta.32`) + Prisma adapter, emailed
+  sign-in codes only (a typed code, not a tapped link — see the PWA gotcha below)
 - **Styling**: Tailwind CSS 4
 - **Drag & drop**: `@dnd-kit` (core, sortable, utilities)
 - **Animation**: `motion` v12 — import via `LazyMotion` + `m`, not the top-level `motion`
@@ -109,7 +110,7 @@ URL.
 ## Architecture
 
 Server Actions for mutations; Route Handlers only for things needing a real HTTP endpoint
-(magic-link callback, the ICS feed, push subscription registration, the reminder cron
+(the Auth.js email callback, the ICS feed, push subscription registration, the reminder cron
 target). No separate API layer.
 
 ### Team scoping
@@ -363,17 +364,24 @@ production — the dev command can prompt, generate new migrations, and reset th
   the build passes and every page renders — and only an actual iPhone shows it, by putting
   a screenshot of the page on the home screen instead of the crest. `layout.test.tsx` pins
   the declaration and `manifest.test.ts` pins the file it points at.
-- **An installed iOS Home Screen app may not share Safari's cookies — and this app is
-  magic-link only.** iOS gives a standalone web app its own storage container. If that
-  holds here, the sequence is a dead end: a parent installs from Safari, opens the app,
-  finds it signed out, requests a magic link, and the link opens in *Safari* — iOS has no
-  way to route it back to a Home Screen web app — so the session lands in the container
-  the app cannot read, every time, forever. **This is unverified**, it is the first thing
-  the real-device test in #14 must check, and it is why the app has to stay fully usable
-  without installing. If it is confirmed, the remedy is an emailed sign-in *code* the
-  person types into whichever container they are standing in, not a link; that is an auth
-  change well beyond the PWA work, designed and costed in #60. Until it is checked, treat
-  the iOS half of `InstallPrompt` as provisional.
+- **Sign-in is a typed code because an installed PWA and the email's browser can hold
+  separate cookie containers.** A tapped magic link is redeemed by whichever browser the
+  OS hands it to, and that is routinely not the container the person requested it from —
+  **confirmed in the field on Android** (sign-in from the installed app looped back to
+  the email form forever, the report behind #60's implementation) and the designed-for
+  case on iOS Home Screen apps, which iOS cannot route a link back into. So `/signin`
+  mails an 8-character code (Crockford base32, 10-minute expiry — `signin-code.ts`) that
+  the person types into `/signin/check-email`, whose action rebuilds the same
+  `/api/auth/callback/resend?token=&email=` URL the link used to carry; the gate,
+  `acceptInvitations`, and the session cookie are untouched. The pending address rides in
+  a short-lived httpOnly cookie (`pending-signin-cookie.ts`), never a query parameter.
+  Do not reintroduce a tappable link in the sign-in email, even alongside the code: both
+  would be the same token, so a mail scanner following the link would burn the typed code
+  too. The code's 40 bits and short expiry carry the security — there is no attempt
+  counter (that would need a migration), so neither may be weakened alone. The
+  invitation-accept link (`/invite/[token]`) is the one emailed link that signs someone
+  in, and it stays: it is a POST from a page, not a bare GET, and it establishes the
+  session in whichever container the parent opened it in.
 - **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting`,
   `clients.claim`, and the `push` / `notificationclick` pair — no `fetch` handler, which is
   Decision 9 and the reason there is no Workbox build step. Adding a `fetch` handler is not

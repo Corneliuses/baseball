@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { requestSignInLink } from "./actions";
+import { requestSignInCode } from "./actions";
 import { messageFor, messageTable } from "@/lib/error-messages";
 
 export const metadata = {
@@ -17,19 +17,22 @@ export const metadata = {
 
 /// `pages.error` points at this page, so Auth.js's own error screen never
 /// renders and its copy has to live here instead. Without this map a parent
-/// whose link expired lands on a bare form with no idea what went wrong.
+/// whose code expired lands on a bare form with no idea what went wrong.
 ///
-/// The two link failures say the same thing on purpose. AccessDenied only
-/// reaches this page from a click — the send path always ends on
+/// The two code failures say the same thing on purpose. AccessDenied only
+/// reaches this page from a redeem — the send path always ends on
 /// /signin/check-email — but naming the reason would still leak whether an
-/// invitation exists, so both get the neutral wording.
+/// invitation exists, so both get the neutral wording. `code-expired` is this
+/// app's own key, set by `submitSignInCode` when the pending cookie is gone.
 const ERROR_MESSAGES = messageTable({
   "invalid-email":
     "That doesn't look like an email address — check it and try again.",
+  "code-expired":
+    "That sign-in code has expired. Enter your email and we'll send a fresh one.",
   Verification:
-    "That sign-in link has expired or was already used. Enter your email and we'll send a fresh one.",
+    "That sign-in code didn't match or has expired. Enter your email and we'll send a fresh one.",
   AccessDenied:
-    "That sign-in link is no longer valid. Enter your email to try again, or ask your coach to send a new invite.",
+    "That sign-in code is no longer valid. Enter your email to try again, or ask your coach to send a new invite.",
   Configuration:
     "Something is wrong on our end, and it has been logged. Please try again in a few minutes.",
 });
@@ -53,13 +56,13 @@ export default async function SignInPage({
           <CardHeader>
             <CardTitle>Sign in</CardTitle>
             <CardDescription>
-              Enter your email and we&apos;ll send you a link that signs you in.
+              Enter your email and we&apos;ll send you a code that signs you in.
               No password to remember at the field.
             </CardDescription>
           </CardHeader>
 
           <CardContent>
-            <form action={requestSignInLink} className="space-y-4">
+            <form action={requestSignInCode} className="space-y-4">
               <input type="hidden" name="callbackUrl" value={callbackUrl ?? "/"} />
 
               <div className="space-y-2">
@@ -91,16 +94,16 @@ export default async function SignInPage({
               {/* This screen's one banana (design-plan.md §2). */}
               <SubmitButton
                 className="w-full bg-banana text-banana-foreground hover:bg-banana/90"
-                pendingLabel="Sending the link…"
+                pendingLabel="Sending the code…"
               >
-                Email me a sign-in link
+                Email me a sign-in code
               </SubmitButton>
             </form>
           </CardContent>
         </Card>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          This app is invite-only. Your coach adds you to a team, and the link
+          This app is invite-only. Your coach adds you to a team, and the code
           arrives at the address they used.
         </p>
       </div>

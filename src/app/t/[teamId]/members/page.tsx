@@ -323,7 +323,7 @@ export default async function MembersPage({
         <CardHeader>
           <CardTitle className="text-lg">Invite someone</CardTitle>
           <CardDescription>
-            Coaches and parents both receive the same one-time sign-in link.
+            Coaches and parents both receive the same one-time invitation link.
           </CardDescription>
         </CardHeader>
         <CardContent>

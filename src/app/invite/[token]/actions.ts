@@ -30,8 +30,8 @@ import { createUserSession } from "@/lib/sessions";
  * function Auth.js's `events.signIn` calls, so there is still one grant path.
  * What changes is only where the session comes from.
  *
- * The magic link is not gone — it is what `/signin` still sends, and a parent
- * whose session lapses next season signs in that way, admitted by the
+ * Ordinary sign-in is not gone — `/signin` mails a typed code (#60), and a
+ * parent whose session lapses next season signs in that way, admitted by the
  * Membership this action created.
  *
  * This is a POST for a reason. Accepting consumes the invitation, and
