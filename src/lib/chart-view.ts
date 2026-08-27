@@ -1,6 +1,6 @@
 import { Position } from "@/generated/prisma/enums";
 import { buildDiamondNames } from "@/lib/diamond-names";
-import { fieldedPositions } from "@/lib/positions";
+import { fieldedPositions, positionCapacity } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
 /// The view page's read-only render model (#8).
@@ -48,13 +48,18 @@ export type ChartViewPlayer = ChartViewEntry & {
 export type ChartView = {
   /// Rostered players in the standing batting order, ascending.
   lineup: ChartViewPlayer[];
-  /// Every position that has an assigned player, keyed by position.
-  byPosition: Map<Position, ChartViewPlayer>;
+  /// Every position that has assigned players, keyed by position — a list
+  /// because an allPlay team's LF/CF/RF each stack to three
+  /// (`positionCapacity`); everywhere else the list is a single player. Each
+  /// stack is in jersey-then-name order, since nothing persisted orders
+  /// players within a spot (`positionSlot` is a uniqueness mechanism, not
+  /// state) and an unsorted stack would reshuffle between requests.
+  byPosition: Map<Position, ChartViewPlayer[]>;
   /// Everyone the diamond doesn't seat, in the roster's jersey-then-name order.
   /// What this means depends on the team's `allPlay` setting, which is why it
-  /// isn't named here: on an allPlay team it's the outfield (LF/CF/RF are one
-  /// zone and hold everyone left over — see `droppablePositions` in chart.ts),
-  /// and otherwise it's the bench. The page decides how to say it.
+  /// isn't named here: on an allPlay team it's the general outfield (whoever
+  /// the coach hasn't pinned to a named spot — see `droppablePositions` in
+  /// chart.ts), and otherwise it's the bench. The page decides how to say it.
   unassigned: ChartViewPlayer[];
   /// True when at least one roster entry has a batting order or a position
   /// set — a partial chart (entered incrementally by hand during the
@@ -90,15 +95,14 @@ export function byJerseyThenName(
  * @param allPlay Which spots this team actually fields. The read-side twin of
  * `buildPositionsDraft`'s parameter of the same name, and it does the same job:
  * a player stored at a position the team doesn't field — an allPlay team's
- * stale LF/CF/RF or CATCHER row, hand-set during #9 or left behind when allPlay
- * was switched on — is pooled rather than seated.
+ * stale CATCHER row, hand-set during #9 or left behind when allPlay was
+ * switched on — is pooled rather than seated, as is anyone past a spot's
+ * capacity (a named outfield stack after allPlay was switched off).
  *
- * That is what keeps the two diamonds telling one story. The editor already
- * shows those players in its outfield zone, and the view page draws its zone at
- * the very coordinates a named outfield marker would occupy, so seating them
- * here would stack two markers on one spot and make both names unreadable.
- * Nobody vanishes either way — they are in the outfield, which is where the
- * coach's next save will put them.
+ * That is what keeps the two diamonds telling one story: the editor already
+ * shows those same players in its zone. Nobody vanishes either way — they are
+ * in the outfield (or on the bench), which is where the coach's next save
+ * will put them.
  */
 export function buildChartView(
   entries: readonly ChartViewEntry[],
@@ -121,21 +125,33 @@ export function buildChartView(
     .sort((a, b) => a.battingOrder! - b.battingOrder!);
 
   const fielded = fieldedPositions(allPlay);
-  const byPosition = new Map<Position, ChartViewPlayer>();
+  const byPosition = new Map<Position, ChartViewPlayer[]>();
   const unseated: ChartViewPlayer[] = [];
   for (const player of players) {
-    // First writer wins, matching buildPositionsDraft. The unique index makes a
-    // collision unreachable from a real read, but the loser is pooled rather
-    // than dropped if it ever happens.
+    // First arrivals up to the spot's capacity, matching buildPositionsDraft;
+    // anyone past it is pooled rather than dropped.
+    const seated =
+      player.position !== null ? byPosition.get(player.position) : undefined;
     if (
       player.position !== null &&
       fielded.has(player.position) &&
-      !byPosition.has(player.position)
+      (seated?.length ?? 0) < positionCapacity(player.position, allPlay)
     ) {
-      byPosition.set(player.position, player);
+      if (seated) {
+        seated.push(player);
+      } else {
+        byPosition.set(player.position, [player]);
+      }
     } else {
       unseated.push(player);
     }
+  }
+
+  // Stacks sort like the pool does, and for the same reason: `getChart` is a
+  // findMany with no orderBy, so an unsorted stack of three centre fielders
+  // would reshuffle between two requests.
+  for (const seated of byPosition.values()) {
+    seated.sort(byJerseyThenName);
   }
 
   // Sorted, not left in the order `getChart` handed over: that is a findMany

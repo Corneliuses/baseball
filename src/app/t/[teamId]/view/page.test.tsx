@@ -336,12 +336,10 @@ describe("ViewPage chart rendering", () => {
     expect(html).not.toContain(">C<");
   });
 
-  it("shows an allPlay team's stale named-outfield row in the outfield", async () => {
-    // Hand-set during #9, or left over from before allPlay was switched on.
-    // The coach's next save collapses it; until then the kid is in the
-    // outfield, which is both where the editor shows them and where that save
-    // will put them. Drawing them at CF instead would land the marker on the
-    // zone's own first coordinate, with two names on one spot.
+  it("seats an allPlay team's named-outfield row at its spot", async () => {
+    // LF/CF/RF are placeable allPlay spots since the named-outfield revision:
+    // a pinned kid draws at the spot with its abbreviation, exactly as the
+    // editor showed the coach.
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
@@ -356,12 +354,35 @@ describe("ViewPage chart rendering", () => {
     const html = await render();
 
     expect(html).toContain("Cal");
-    expect(html).toContain(">OF<");
-    expect(html).not.toContain(">CF<");
+    expect(html).toContain(">CF<");
+    expect(html).not.toContain(">OF<");
   });
 
-  it("draws one marker per player when a stale row sits beside a real outfielder", async () => {
-    // The collision case: the zone's first coordinate IS center field.
+  it("shows an allPlay team's stale catcher row in the outfield", async () => {
+    // Left over from before allPlay was switched on. The coach's next save
+    // collapses it; until then the kid is in the outfield, which is both
+    // where the editor shows them and where that save will put them.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      {
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CATCHER" as const,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Cal");
+    expect(html).toContain(">OF<");
+  });
+
+  it("draws one marker per player when a pinned kid sits beside a zone outfielder", async () => {
+    // The collision case: the zone's shallow first coordinate IS center
+    // field, so a pinned centre fielder pushes the unpinned kid to the deep
+    // row — one CF marker, one OF marker, nobody stacked.
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
@@ -382,8 +403,32 @@ describe("ViewPage chart rendering", () => {
 
     const html = await render();
 
-    expect(html.split(">OF<")).toHaveLength(3);
-    expect(html).not.toContain(">CF<");
+    // One CF marker (plus its sr-only line) and one OF marker.
+    expect(html.split(">CF<")).toHaveLength(2);
+    expect(html.split(">OF<")).toHaveLength(2);
+  });
+
+  it("stacks up to three named outfielders on one spot, fanned apart", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      ["cal", 3],
+      ["dee", 4],
+      ["eli", 5],
+    ].map(([playerId, jerseyNumber], index) => ({
+      playerId: String(playerId),
+      playerName: String(playerId),
+      jerseyNumber: Number(jerseyNumber),
+      battingOrder: index + 1,
+      position: "CENTER_FIELD" as const,
+    })));
+
+    const html = await render();
+
+    // Three markers all labelled CF, at three distinct coordinates.
+    expect(html.split(">CF<")).toHaveLength(4);
+    const translates = [...html.matchAll(/translate\((\d+(?:\.\d+)?) (\d+(?:\.\d+)?)\)/g)]
+      .map((m) => `${m[1]},${m[2]}`);
+    expect(new Set(translates).size).toBe(translates.length);
   });
 
   it("exposes an allPlay outfield to screen readers", async () => {

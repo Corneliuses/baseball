@@ -479,14 +479,27 @@ production — the dev command can prompt, generate new migrations, and reset th
   therefore posts the chart *as it loaded it* in a `baseline` field, and the action compares
   that against its own fresh read before writing, refusing on a mismatch (`chart-changed`).
   The baseline comes from `storedBattingOrder` / `storedPositions` in `chart.ts`, never from
-  the draft: both draft builders normalize (pooling stale outfield rows, packing sparse
+  the draft: both draft builders normalize (pooling stale catcher rows, packing sparse
   orders), so a draft-derived baseline would look stale on every save. If you add a third
   chart column, it needs the same guard. The read-then-write gap is knowingly left open —
   see the comment in the positions action.
+- **An allPlay outfield spot seats up to three kids, and the slot column is plumbing, not
+  state.** LF/CF/RF are placeable spots on an allPlay board (`ALL_PLAY_POSITIONS`), each
+  stacking to `OUTFIELD_SPOT_CAPACITY` (3); the catcher stays unfieldable there — the coach
+  pitches. The unique index is `[teamId, position, positionSlot]`: infield writes always use
+  slot 0 (so one-kid-per-infield-spot stays database-enforced), `savePositions` numbers a
+  stack 0..n-1 on every save, and **nothing reads the slot back** — order within a spot is
+  jersey-then-name, derived on read, and `samePositions` deliberately ignores it, so don't
+  give it meaning. Unpinned players remain the general outfield as `position = null`; the
+  up-to-three cap lives in `validatePositions` (`position-full`), because a CHECK constraint
+  isn't expressible in the schema. On `/view`, pinned kids fan around their spot
+  (`outfieldSpotCoords`) and the moment any spot is occupied the zone drops to its deep row
+  (`outfieldZoneCoords(..., {deep})`) — the shallow zone row IS the LF/CF/RF coordinates, so
+  drawing both shallow would stack two markers on one point, silently.
 - **Save and Cancel answer different questions in both chart editors**, and it is not
   redundancy. Cancel is "has the coach changed anything" (draft vs. the loaded draft); Save is
   "would writing change the database" (draft vs. `stored*`). They diverge on first render
-  whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
+  whenever the draft builder normalized something — a stale `CATCHER` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
 - **`List-Unsubscribe` is set on two sends, and which two is a claim, not an oversight.**

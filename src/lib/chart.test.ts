@@ -41,10 +41,10 @@ function fielder(entryId: string, position: Position | null = null) {
 /// can start from an arbitrary board state.
 function draftOf(
   allPlay: boolean,
-  assigned: Partial<Record<Position, string>>,
+  assigned: Partial<Record<Position, readonly string[]>>,
   pool: string[] = [],
 ): PositionsDraft {
-  return { positions: droppablePositions(allPlay), assigned, pool };
+  return { positions: droppablePositions(allPlay), allPlay, assigned, pool };
 }
 
 describe("slotCount", () => {
@@ -459,19 +459,22 @@ describe("save then reload round trip", () => {
 });
 
 describe("droppablePositions", () => {
-  it("is the five infield spots under allPlay — no catcher, and the outfield is one zone", () => {
+  it("is everything but the catcher under allPlay — the coach pitches, and LF/CF/RF are placeable spots", () => {
     expect(droppablePositions(true)).toEqual([
       "PITCHER",
       "FIRST_BASE",
       "SECOND_BASE",
       "THIRD_BASE",
       "SHORTSTOP",
+      "LEFT_FIELD",
+      "CENTER_FIELD",
+      "RIGHT_FIELD",
     ]);
   });
 
   it("is all nine when allPlay is off", () => {
     expect(droppablePositions(false)).toHaveLength(9);
-    expect(droppablePositions(false)).toContain("CENTER_FIELD");
+    expect(droppablePositions(false)).toContain("CATCHER");
   });
 });
 
@@ -481,18 +484,32 @@ describe("buildPositionsDraft", () => {
       [fielder("a", "PITCHER"), fielder("b"), fielder("c", "SHORTSTOP")],
       false,
     );
-    expect(draft.assigned).toEqual({ PITCHER: "a", SHORTSTOP: "c" });
+    expect(draft.assigned).toEqual({ PITCHER: ["a"], SHORTSTOP: ["c"] });
     expect(draft.pool).toEqual(["b"]);
   });
 
-  it("pools named outfield players under allPlay instead of seating them", () => {
+  it("stacks named outfield players under allPlay, in entry order", () => {
+    const draft = buildPositionsDraft(
+      [
+        fielder("a", "PITCHER"),
+        fielder("b", "LEFT_FIELD"),
+        fielder("c", "LEFT_FIELD"),
+        fielder("d"),
+      ],
+      true,
+    );
+    expect(draft.assigned).toEqual({ PITCHER: ["a"], LEFT_FIELD: ["b", "c"] });
+    expect(draft.pool).toEqual(["d"]);
+  });
+
+  it("pools a catcher row under allPlay instead of seating it", () => {
     // Hand-set during #9, or left behind when allPlay was switched on. The
     // coach sees them in the outfield zone before anything is written.
     const draft = buildPositionsDraft(
-      [fielder("a", "PITCHER"), fielder("b", "LEFT_FIELD"), fielder("c")],
+      [fielder("a", "PITCHER"), fielder("b", "CATCHER"), fielder("c")],
       true,
     );
-    expect(draft.assigned).toEqual({ PITCHER: "a" });
+    expect(draft.assigned).toEqual({ PITCHER: ["a"] });
     expect(draft.pool).toEqual(["b", "c"]);
   });
 
@@ -504,13 +521,40 @@ describe("buildPositionsDraft", () => {
     expect(draft.pool).toEqual(["c", "a", "b"]);
   });
 
-  it("pools a second claimant rather than dropping them", () => {
-    const draft = buildPositionsDraft(
+  it("pools a claimant past a spot's capacity rather than dropping them", () => {
+    const infield = buildPositionsDraft(
       [fielder("a", "PITCHER"), fielder("b", "PITCHER")],
       true,
     );
-    expect(draft.assigned).toEqual({ PITCHER: "a" });
-    expect(draft.pool).toEqual(["b"]);
+    expect(infield.assigned).toEqual({ PITCHER: ["a"] });
+    expect(infield.pool).toEqual(["b"]);
+
+    // A named outfield stack of three is over capacity the instant allPlay is
+    // switched off — first arrivals keep the spot, the rest wait in the pool.
+    const outfield = buildPositionsDraft(
+      [
+        fielder("a", "CENTER_FIELD"),
+        fielder("b", "CENTER_FIELD"),
+        fielder("c", "CENTER_FIELD"),
+      ],
+      false,
+    );
+    expect(outfield.assigned).toEqual({ CENTER_FIELD: ["a"] });
+    expect(outfield.pool).toEqual(["b", "c"]);
+  });
+
+  it("caps an outfield stack at three even under allPlay", () => {
+    const draft = buildPositionsDraft(
+      [
+        fielder("a", "CENTER_FIELD"),
+        fielder("b", "CENTER_FIELD"),
+        fielder("c", "CENTER_FIELD"),
+        fielder("d", "CENTER_FIELD"),
+      ],
+      true,
+    );
+    expect(draft.assigned).toEqual({ CENTER_FIELD: ["a", "b", "c"] });
+    expect(draft.pool).toEqual(["d"]);
   });
 
   it("handles an empty roster and a fully unset chart", () => {
@@ -523,32 +567,38 @@ describe("buildPositionsDraft", () => {
 });
 
 describe("positionOf", () => {
-  const base = draftOf(false, { PITCHER: "a" }, ["x"]);
+  const base = draftOf(false, { PITCHER: ["a"] }, ["x"]);
 
   it("finds a seated player, and reports null otherwise", () => {
     expect(positionOf(base, "a")).toBe("PITCHER");
     expect(positionOf(base, "x")).toBe(null);
     expect(positionOf(base, "nope")).toBe(null);
   });
+
+  it("finds every member of an outfield stack", () => {
+    const stacked = draftOf(true, { CENTER_FIELD: ["a", "b"] });
+    expect(positionOf(stacked, "a")).toBe("CENTER_FIELD");
+    expect(positionOf(stacked, "b")).toBe("CENTER_FIELD");
+  });
 });
 
 describe("placeAtPosition", () => {
-  const base = draftOf(false, { PITCHER: "a", CATCHER: "b" }, ["x", "y"]);
+  const base = draftOf(false, { PITCHER: ["a"], CATCHER: ["b"] }, ["x", "y"]);
 
   it("swaps two seated players", () => {
     const next = placeAtPosition(base, "a", "CATCHER");
-    expect(next.assigned).toEqual({ PITCHER: "b", CATCHER: "a" });
+    expect(next.assigned).toEqual({ PITCHER: ["b"], CATCHER: ["a"] });
     expect(next.pool).toEqual(["x", "y"]);
   });
 
   it("moves a seated player to an empty spot, emptying their old one", () => {
     const next = placeAtPosition(base, "a", "SHORTSTOP");
-    expect(next.assigned).toEqual({ CATCHER: "b", SHORTSTOP: "a" });
+    expect(next.assigned).toEqual({ CATCHER: ["b"], SHORTSTOP: ["a"] });
   });
 
   it("swaps a pooled player with a seated one", () => {
     const next = placeAtPosition(base, "x", "PITCHER");
-    expect(next.assigned).toEqual({ PITCHER: "x", CATCHER: "b" });
+    expect(next.assigned).toEqual({ PITCHER: ["x"], CATCHER: ["b"] });
     // The displaced player takes the dragged player's place in the pool.
     expect(next.pool).toEqual(["a", "y"]);
   });
@@ -556,15 +606,45 @@ describe("placeAtPosition", () => {
   it("seats a pooled player at an empty spot", () => {
     const next = placeAtPosition(base, "y", "SHORTSTOP");
     expect(next.assigned).toEqual({
-      PITCHER: "a",
-      CATCHER: "b",
-      SHORTSTOP: "y",
+      PITCHER: ["a"],
+      CATCHER: ["b"],
+      SHORTSTOP: ["y"],
     });
     expect(next.pool).toEqual(["x"]);
   });
 
-  it("ignores a drop on the player's own position", () => {
+  it("lets a pooled player join an outfield spot that has room, displacing nobody", () => {
+    const allPlay = draftOf(true, { LEFT_FIELD: ["a", "b"] }, ["x"]);
+    const next = placeAtPosition(allPlay, "x", "LEFT_FIELD");
+    expect(next.assigned).toEqual({ LEFT_FIELD: ["a", "b", "x"] });
+    expect(next.pool).toEqual([]);
+  });
+
+  it("lets a seated player join an outfield spot that has room", () => {
+    const allPlay = draftOf(true, { PITCHER: ["a"], CENTER_FIELD: ["b"] });
+    const next = placeAtPosition(allPlay, "a", "CENTER_FIELD");
+    expect(next.assigned).toEqual({ CENTER_FIELD: ["b", "a"] });
+  });
+
+  it("swaps with a full outfield spot's most recent arrival", () => {
+    const allPlay = draftOf(true, { RIGHT_FIELD: ["a", "b", "c"] }, ["x"]);
+    const next = placeAtPosition(allPlay, "x", "RIGHT_FIELD");
+    expect(next.assigned).toEqual({ RIGHT_FIELD: ["a", "b", "x"] });
+    // The displaced player takes the dragged player's place in the pool.
+    expect(next.pool).toEqual(["c"]);
+  });
+
+  it("caps an infield spot at one under allPlay — the old swap grammar", () => {
+    const allPlay = draftOf(true, { PITCHER: ["a"] }, ["x"]);
+    const next = placeAtPosition(allPlay, "x", "PITCHER");
+    expect(next.assigned).toEqual({ PITCHER: ["x"] });
+    expect(next.pool).toEqual(["a"]);
+  });
+
+  it("ignores a drop on the player's own position, stacked or not", () => {
     expect(placeAtPosition(base, "a", "PITCHER")).toBe(base);
+    const stacked = draftOf(true, { CENTER_FIELD: ["a", "b"] });
+    expect(placeAtPosition(stacked, "a", "CENTER_FIELD")).toBe(stacked);
   });
 
   it("ignores unknown entries", () => {
@@ -573,25 +653,36 @@ describe("placeAtPosition", () => {
 
   it("refuses a position this board doesn't have", () => {
     // The structural half of Decision 1: an allPlay draft cannot be talked
-    // into holding an outfield assignment, whatever calls it.
-    const allPlay = draftOf(true, { PITCHER: "a" }, ["x"]);
-    expect(placeAtPosition(allPlay, "x", "LEFT_FIELD")).toBe(allPlay);
+    // into holding a catcher assignment, whatever calls it.
+    const allPlay = draftOf(true, { PITCHER: ["a"] }, ["x"]);
+    expect(placeAtPosition(allPlay, "x", "CATCHER")).toBe(allPlay);
   });
 
   it("never mutates its input", () => {
     placeAtPosition(base, "x", "PITCHER");
-    expect(base.assigned).toEqual({ PITCHER: "a", CATCHER: "b" });
+    expect(base.assigned).toEqual({ PITCHER: ["a"], CATCHER: ["b"] });
     expect(base.pool).toEqual(["x", "y"]);
+
+    const stacked = draftOf(true, { RIGHT_FIELD: ["a", "b", "c"] }, ["x"]);
+    placeAtPosition(stacked, "x", "RIGHT_FIELD");
+    expect(stacked.assigned).toEqual({ RIGHT_FIELD: ["a", "b", "c"] });
+    expect(stacked.pool).toEqual(["x"]);
   });
 });
 
 describe("unassignPosition", () => {
-  const base = draftOf(true, { PITCHER: "a", CATCHER: "b" }, ["x"]);
+  const base = draftOf(true, { PITCHER: ["a"], LEFT_FIELD: ["b", "c"] }, ["x"]);
 
   it("empties the spot and appends the player to the pool", () => {
     const next = unassignPosition(base, "a");
-    expect(next.assigned).toEqual({ CATCHER: "b" });
+    expect(next.assigned).toEqual({ LEFT_FIELD: ["b", "c"] });
     expect(next.pool).toEqual(["x", "a"]);
+  });
+
+  it("removes one player from a stack, keeping the rest seated", () => {
+    const next = unassignPosition(base, "b");
+    expect(next.assigned).toEqual({ PITCHER: ["a"], LEFT_FIELD: ["c"] });
+    expect(next.pool).toEqual(["x", "b"]);
   });
 
   it("is a no-op for a pooled or unknown player", () => {
@@ -600,54 +691,80 @@ describe("unassignPosition", () => {
   });
 
   it("never mutates its input", () => {
-    unassignPosition(base, "a");
-    expect(base.assigned).toEqual({ PITCHER: "a", CATCHER: "b" });
+    unassignPosition(base, "b");
+    expect(base.assigned).toEqual({ PITCHER: ["a"], LEFT_FIELD: ["b", "c"] });
   });
 });
 
 describe("samePositions", () => {
   it("compares the diamond and ignores pool order", () => {
-    expect(samePositions({ PITCHER: "a" }, { PITCHER: "a" })).toBe(true);
-    expect(samePositions({ PITCHER: "a" }, { PITCHER: "b" })).toBe(false);
-    expect(samePositions({ PITCHER: "a" }, {})).toBe(false);
+    expect(samePositions({ PITCHER: ["a"] }, { PITCHER: ["a"] })).toBe(true);
+    expect(samePositions({ PITCHER: ["a"] }, { PITCHER: ["b"] })).toBe(false);
+    expect(samePositions({ PITCHER: ["a"] }, {})).toBe(false);
     expect(samePositions({}, {})).toBe(true);
     expect(
-      samePositions({ PITCHER: "a", CATCHER: "b" }, { CATCHER: "b", PITCHER: "a" }),
+      samePositions(
+        { PITCHER: ["a"], CATCHER: ["b"] },
+        { CATCHER: ["b"], PITCHER: ["a"] },
+      ),
     ).toBe(true);
+  });
+
+  it("ignores arrival order within a stack — nothing persisted distinguishes it", () => {
+    expect(
+      samePositions({ CENTER_FIELD: ["a", "b"] }, { CENTER_FIELD: ["b", "a"] }),
+    ).toBe(true);
+    expect(
+      samePositions({ CENTER_FIELD: ["a", "b"] }, { CENTER_FIELD: ["a", "c"] }),
+    ).toBe(false);
+    expect(
+      samePositions({ CENTER_FIELD: ["a", "b"] }, { CENTER_FIELD: ["a"] }),
+    ).toBe(false);
+  });
+
+  it("treats an absent key and an empty stack as the same board", () => {
+    expect(samePositions({ CENTER_FIELD: [] }, {})).toBe(true);
   });
 });
 
 describe("storedPositions", () => {
-  it("reads the positions the rows actually hold", () => {
+  it("reads the positions the rows actually hold, stacks included", () => {
     expect(
       storedPositions([
         { entryId: "a", position: "PITCHER" },
         { entryId: "b", position: null },
         { entryId: "c", position: "SHORTSTOP" },
+        { entryId: "d", position: "CENTER_FIELD" },
+        { entryId: "e", position: "CENTER_FIELD" },
       ]),
-    ).toEqual({ PITCHER: "a", SHORTSTOP: "c" });
+    ).toEqual({
+      PITCHER: ["a"],
+      SHORTSTOP: ["c"],
+      CENTER_FIELD: ["d", "e"],
+    });
   });
 
   it("keeps a position the board can't drop on", () => {
     // The whole point: buildPositionsDraft pools this row under allPlay, so
-    // only storedPositions can still see that the database says CENTER_FIELD.
-    const entries = [{ entryId: "a", position: "CENTER_FIELD" as const }];
+    // only storedPositions can still see that the database says CATCHER.
+    const entries = [{ entryId: "a", position: "CATCHER" as const }];
 
-    expect(storedPositions(entries)).toEqual({ CENTER_FIELD: "a" });
+    expect(storedPositions(entries)).toEqual({ CATCHER: ["a"] });
     expect(buildPositionsDraft(entries, true).assigned).toEqual({});
   });
 
   it("differs from a freshly built allPlay draft exactly when a stale row exists", () => {
     // This inequality is what enables Save on load; the equality below is what
     // keeps it disabled when there is genuinely nothing to write.
-    const stale = [{ entryId: "a", position: "LEFT_FIELD" as const }];
+    const stale = [{ entryId: "a", position: "CATCHER" as const }];
     expect(
       samePositions(buildPositionsDraft(stale, true).assigned, storedPositions(stale)),
     ).toBe(false);
 
     const clean = [
       { entryId: "a", position: "PITCHER" as const },
-      { entryId: "b", position: null },
+      { entryId: "b", position: "LEFT_FIELD" as const },
+      { entryId: "c", position: null },
     ];
     expect(
       samePositions(buildPositionsDraft(clean, true).assigned, storedPositions(clean)),
@@ -676,22 +793,22 @@ describe("storedPositions", () => {
 });
 
 describe("resolvePositionDrop", () => {
-  const base = draftOf(false, { PITCHER: "a", CATCHER: "b" }, ["x"]);
+  const base = draftOf(false, { PITCHER: ["a"], CATCHER: ["b"] }, ["x"]);
 
   it("drops onto a position target by its enum name", () => {
     const next = resolvePositionDrop(base, "x", "SHORTSTOP");
-    expect(next.assigned.SHORTSTOP).toBe("x");
+    expect(next.assigned.SHORTSTOP).toEqual(["x"]);
     expect(next.pool).toEqual([]);
   });
 
   it("drops onto a seated player's chip by resolving to their position", () => {
     const next = resolvePositionDrop(base, "a", "b");
-    expect(next.assigned).toEqual({ PITCHER: "b", CATCHER: "a" });
+    expect(next.assigned).toEqual({ PITCHER: ["b"], CATCHER: ["a"] });
   });
 
   it("drops onto the zone", () => {
     const next = resolvePositionDrop(base, "a", POSITION_POOL_ID);
-    expect(next.assigned).toEqual({ CATCHER: "b" });
+    expect(next.assigned).toEqual({ CATCHER: ["b"] });
     expect(next.pool).toEqual(["x", "a"]);
   });
 
@@ -701,48 +818,82 @@ describe("resolvePositionDrop", () => {
     expect(resolvePositionDrop(base, "a", "not-a-target")).toBe(base);
   });
 
-  it("ignores an outfield target under allPlay", () => {
+  it("stacks onto an outfield target under allPlay", () => {
+    const allPlay = draftOf(true, { RIGHT_FIELD: ["a"] }, ["x"]);
+    const next = resolvePositionDrop(allPlay, "x", "RIGHT_FIELD");
+    expect(next.assigned).toEqual({ RIGHT_FIELD: ["a", "x"] });
+  });
+
+  it("resolves a drop on a stacked player's chip to their spot, joining while there is room", () => {
+    const allPlay = draftOf(true, { RIGHT_FIELD: ["a", "b"] }, ["x"]);
+    const next = resolvePositionDrop(allPlay, "x", "b");
+    expect(next.assigned).toEqual({ RIGHT_FIELD: ["a", "b", "x"] });
+  });
+
+  it("ignores a catcher target under allPlay", () => {
     const allPlay = draftOf(true, {}, ["x"]);
-    expect(resolvePositionDrop(allPlay, "x", "RIGHT_FIELD")).toBe(allPlay);
+    expect(resolvePositionDrop(allPlay, "x", "CATCHER")).toBe(allPlay);
   });
 });
 
 describe("nextDroppableId", () => {
-  const infield = droppablePositions(true);
+  const allPlayBoard = droppablePositions(true);
 
   it("cycles forward through the positions and then the zone", () => {
-    expect(nextDroppableId(infield, "PITCHER", 1)).toBe("FIRST_BASE");
-    expect(nextDroppableId(infield, "SHORTSTOP", 1)).toBe(POSITION_POOL_ID);
-    expect(nextDroppableId(infield, POSITION_POOL_ID, 1)).toBe("PITCHER");
+    expect(nextDroppableId(allPlayBoard, "PITCHER", 1)).toBe("FIRST_BASE");
+    expect(nextDroppableId(allPlayBoard, "SHORTSTOP", 1)).toBe("LEFT_FIELD");
+    expect(nextDroppableId(allPlayBoard, "RIGHT_FIELD", 1)).toBe(
+      POSITION_POOL_ID,
+    );
+    expect(nextDroppableId(allPlayBoard, POSITION_POOL_ID, 1)).toBe("PITCHER");
   });
 
   it("cycles backward too", () => {
-    expect(nextDroppableId(infield, "FIRST_BASE", -1)).toBe("PITCHER");
-    expect(nextDroppableId(infield, "PITCHER", -1)).toBe(POSITION_POOL_ID);
+    expect(nextDroppableId(allPlayBoard, "FIRST_BASE", -1)).toBe("PITCHER");
+    expect(nextDroppableId(allPlayBoard, "PITCHER", -1)).toBe(POSITION_POOL_ID);
   });
 
-  it("reaches the outfield only when allPlay is off", () => {
-    expect(nextDroppableId(droppablePositions(false), "SHORTSTOP", 1)).toBe(
-      "LEFT_FIELD",
+  it("reaches the catcher only when allPlay is off", () => {
+    expect(nextDroppableId(droppablePositions(false), "PITCHER", 1)).toBe(
+      "CATCHER",
     );
+    expect(nextDroppableId(allPlayBoard, "PITCHER", 1)).toBe("FIRST_BASE");
   });
 
   it("starts at the first target for an id that isn't a droppable", () => {
-    expect(nextDroppableId(infield, "some-entry-id", 1)).toBe("PITCHER");
+    expect(nextDroppableId(allPlayBoard, "some-entry-id", 1)).toBe("PITCHER");
   });
 });
 
 describe("validatePositions", () => {
-  const roster = ["a", "b", "c"];
+  const roster = ["a", "b", "c", "d", "e"];
 
   it("accepts a chart and returns assignments in scorebook order", () => {
     expect(
-      validatePositions({ SHORTSTOP: "c", PITCHER: "a" }, roster, true),
+      validatePositions({ SHORTSTOP: ["c"], PITCHER: ["a"] }, roster, true),
     ).toEqual({
       ok: true,
       assignments: [
-        { entryId: "a", position: "PITCHER" },
-        { entryId: "c", position: "SHORTSTOP" },
+        { entryId: "a", position: "PITCHER", positionSlot: 0 },
+        { entryId: "c", position: "SHORTSTOP", positionSlot: 0 },
+      ],
+    });
+  });
+
+  it("numbers an outfield stack's slots in submitted order", () => {
+    expect(
+      validatePositions(
+        { CENTER_FIELD: ["b", "d", "e"], PITCHER: ["a"] },
+        roster,
+        true,
+      ),
+    ).toEqual({
+      ok: true,
+      assignments: [
+        { entryId: "a", position: "PITCHER", positionSlot: 0 },
+        { entryId: "b", position: "CENTER_FIELD", positionSlot: 0 },
+        { entryId: "d", position: "CENTER_FIELD", positionSlot: 1 },
+        { entryId: "e", position: "CENTER_FIELD", positionSlot: 2 },
       ],
     });
   });
@@ -752,57 +903,79 @@ describe("validatePositions", () => {
       ok: true,
       assignments: [],
     });
-    expect(validatePositions({ PITCHER: "a" }, roster, false)).toEqual({
+    expect(validatePositions({ PITCHER: ["a"] }, roster, false)).toEqual({
       ok: true,
-      assignments: [{ entryId: "a", position: "PITCHER" }],
+      assignments: [{ entryId: "a", position: "PITCHER", positionSlot: 0 }],
     });
   });
 
   it("rejects ids not on this roster", () => {
-    expect(validatePositions({ PITCHER: "intruder" }, roster, true)).toEqual({
+    expect(validatePositions({ PITCHER: ["intruder"] }, roster, true)).toEqual({
       ok: false,
       reason: "unknown-entry",
     });
   });
 
-  it("rejects the same player at two positions", () => {
+  it("rejects the same player at two positions, or twice in one stack", () => {
     expect(
-      validatePositions({ PITCHER: "a", SHORTSTOP: "a" }, roster, true),
+      validatePositions({ PITCHER: ["a"], SHORTSTOP: ["a"] }, roster, true),
+    ).toEqual({ ok: false, reason: "duplicate-entry" });
+    expect(
+      validatePositions({ CENTER_FIELD: ["a", "a"] }, roster, true),
     ).toEqual({ ok: false, reason: "duplicate-entry" });
   });
 
   it("rejects the catcher for an allPlay team — the coach pitches", () => {
-    expect(validatePositions({ CATCHER: "a" }, roster, true)).toEqual({
+    expect(validatePositions({ CATCHER: ["a"] }, roster, true)).toEqual({
       ok: false,
       reason: "invalid-position",
     });
   });
 
   it("accepts the catcher when allPlay is off", () => {
-    expect(validatePositions({ CATCHER: "a" }, roster, false)).toEqual({
+    expect(validatePositions({ CATCHER: ["a"] }, roster, false)).toEqual({
       ok: true,
-      assignments: [{ entryId: "a", position: "CATCHER" }],
+      assignments: [{ entryId: "a", position: "CATCHER", positionSlot: 0 }],
     });
   });
 
-  it("rejects a named outfield position for an allPlay team", () => {
-    // allPlay toggled on mid-edit: the coach should see the board they're
-    // actually saving, not have three assignments quietly dropped.
-    expect(validatePositions({ LEFT_FIELD: "a" }, roster, true)).toEqual({
+  it("accepts up to three at a named outfield spot for an allPlay team, and rejects a fourth", () => {
+    expect(
+      validatePositions({ LEFT_FIELD: ["a", "b", "c"] }, roster, true),
+    ).toEqual({
+      ok: true,
+      assignments: [
+        { entryId: "a", position: "LEFT_FIELD", positionSlot: 0 },
+        { entryId: "b", position: "LEFT_FIELD", positionSlot: 1 },
+        { entryId: "c", position: "LEFT_FIELD", positionSlot: 2 },
+      ],
+    });
+    expect(
+      validatePositions({ LEFT_FIELD: ["a", "b", "c", "d"] }, roster, true),
+    ).toEqual({ ok: false, reason: "position-full" });
+  });
+
+  it("caps that same outfield spot at one when allPlay is off", () => {
+    // allPlay toggled off mid-edit: the stack the editor built is no longer a
+    // board this team can field, and the coach should see what it has become.
+    expect(validatePositions({ LEFT_FIELD: ["a"] }, roster, false)).toEqual({
+      ok: true,
+      assignments: [{ entryId: "a", position: "LEFT_FIELD", positionSlot: 0 }],
+    });
+    expect(
+      validatePositions({ LEFT_FIELD: ["a", "b"] }, roster, false),
+    ).toEqual({ ok: false, reason: "position-full" });
+  });
+
+  it("rejects two players at one infield spot whatever the setting", () => {
+    expect(validatePositions({ PITCHER: ["a", "b"] }, roster, true)).toEqual({
       ok: false,
-      reason: "invalid-position",
-    });
-  });
-
-  it("accepts that same outfield position when allPlay is off", () => {
-    expect(validatePositions({ LEFT_FIELD: "a" }, roster, false)).toEqual({
-      ok: true,
-      assignments: [{ entryId: "a", position: "LEFT_FIELD" }],
+      reason: "position-full",
     });
   });
 
   it("rejects a key that isn't a position at all", () => {
-    expect(validatePositions({ SHORTSTOPP: "a" }, roster, false)).toEqual({
+    expect(validatePositions({ SHORTSTOPP: ["a"] }, roster, false)).toEqual({
       ok: false,
       reason: "invalid-position",
     });
@@ -825,43 +998,55 @@ describe("positions save then reload round trip", () => {
     );
   }
 
-  it("reloads an allPlay board to exactly what was persisted", () => {
-    const roster = ["a", "b", "c"];
+  it("reloads an allPlay board, stacked outfield included, to exactly what was persisted", () => {
+    const roster = ["a", "b", "c", "d", "e"];
     const result = validatePositions(
-      { PITCHER: "a", SHORTSTOP: "b" },
+      { PITCHER: ["a"], SHORTSTOP: ["b"], CENTER_FIELD: ["c", "d"] },
       roster,
       true,
     );
     if (!result.ok) throw new Error("expected ok");
 
     const draft = reload(roster, result.assignments, true);
-    expect(draft.assigned).toEqual({ PITCHER: "a", SHORTSTOP: "b" });
-    // 'c' persisted as null and comes back in the outfield zone.
-    expect(draft.pool).toEqual(["c"]);
+    expect(draft.assigned).toEqual({
+      PITCHER: ["a"],
+      SHORTSTOP: ["b"],
+      CENTER_FIELD: ["c", "d"],
+    });
+    // 'e' persisted as null and comes back in the general outfield zone.
+    expect(draft.pool).toEqual(["e"]);
   });
 
   it("survives a second save with no edits (idempotent)", () => {
     const roster = ["a", "b", "c"];
-    const first = validatePositions({ PITCHER: "a", SHORTSTOP: "c" }, roster, false);
+    const first = validatePositions(
+      { PITCHER: ["a"], SHORTSTOP: ["c"] },
+      roster,
+      false,
+    );
     if (!first.ok) throw new Error("expected ok");
 
     const draft = reload(roster, first.assignments, false);
-    const second = validatePositions(draft.assigned as Record<string, string>, roster, false);
+    const second = validatePositions(
+      draft.assigned as Record<string, string[]>,
+      roster,
+      false,
+    );
     if (!second.ok) throw new Error("expected ok");
 
     expect(second.assignments).toEqual(first.assignments);
   });
 
-  it("collapses an allPlay team's stale outfield row on the next save", () => {
+  it("collapses an allPlay team's stale catcher row on the next save", () => {
     const roster = ["a", "b"];
     const draft = buildPositionsDraft(
-      [fielder("a", "PITCHER"), fielder("b", "LEFT_FIELD")],
+      [fielder("a", "PITCHER"), fielder("b", "CATCHER")],
       true,
     );
     expect(draft.pool).toEqual(["b"]);
 
     const result = validatePositions(
-      draft.assigned as Record<string, string>,
+      draft.assigned as Record<string, string[]>,
       roster,
       true,
     );
@@ -869,7 +1054,7 @@ describe("positions save then reload round trip", () => {
     // leaves them null — in the outfield, where the editor already showed them.
     expect(result).toEqual({
       ok: true,
-      assignments: [{ entryId: "a", position: "PITCHER" }],
+      assignments: [{ entryId: "a", position: "PITCHER", positionSlot: 0 }],
     });
   });
 });

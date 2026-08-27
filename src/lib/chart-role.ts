@@ -50,13 +50,14 @@ export type ChartRoleOptions = {
  *
  * The position label goes through the team's fielded set rather than straight
  * to `POSITION_LABELS`, for the same reason `computeReadiness` filters
- * uncovered spots through it: an allPlay team's stale `CENTER_FIELD` or
- * `CATCHER` row is not a spot that team fields. Printing "CF" beside the name
- * would assert a position the readiness page simultaneously refuses to check —
- * and contradict the view page and the editor, which both show that player in
- * the outfield. On an allPlay team everyone outside the infield is in the
- * outfield, `position = null` included, which is exactly what the next save
- * will write.
+ * uncovered spots through it: an allPlay team's stale `CATCHER` row is not a
+ * spot that team fields. Printing "C" beside the name would assert a position
+ * the readiness page simultaneously refuses to check — and contradict the
+ * view page and the editor, which both show that player in the outfield. A
+ * named outfield row IS fielded there since the spots became placeable, so a
+ * kid pinned to centre field reads "CF"; everyone else off the chart is in
+ * the general outfield, `position = null` included, which is exactly what the
+ * next save will write.
  */
 export function chartRole(
   entry: Pick<ChartViewEntry, "battingOrder" | "position">,

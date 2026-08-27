@@ -10,7 +10,7 @@ import {
   storedPositions,
   validatePositions,
 } from "@/lib/chart";
-import { ALL_POSITIONS } from "@/lib/positions";
+import { ALL_POSITIONS, OUTFIELD_SPOT_CAPACITY } from "@/lib/positions";
 import { getChart, savePositions } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
@@ -26,9 +26,13 @@ function extractTeamId(formData: FormData): string {
 }
 
 /**
- * The submitted board: entry id per filled position. Bounded like
- * `orderSchema` next door — nine positions is the whole enum, and entry ids
- * are cuids, so 64 characters is already generous.
+ * The submitted board: entry ids per filled position — an array per spot,
+ * since an allPlay outfield spot stacks to `OUTFIELD_SPOT_CAPACITY` (which is
+ * also the biggest stack any real board can hold, so it bounds every array;
+ * whether a given position may hold more than one is `validatePositions`'
+ * question, not this shape's). Bounded like `orderSchema` next door — nine
+ * positions is the whole enum, and entry ids are cuids, so 64 characters is
+ * already generous.
  *
  * **Neither bound is a DoS guard**, and it would be wrong to add more of them
  * believing otherwise: `JSON.parse` above has already materialized the entire
@@ -40,7 +44,10 @@ function extractTeamId(formData: FormData): string {
  * never be a real board from reaching `validatePositions` shaped like one.
  */
 const positionsSchema = z
-  .record(z.string(), z.string().min(1).max(64))
+  .record(
+    z.string(),
+    z.array(z.string().min(1).max(64)).max(OUTFIELD_SPOT_CAPACITY),
+  )
   .refine((board) => Object.keys(board).length <= ALL_POSITIONS.length);
 
 /**

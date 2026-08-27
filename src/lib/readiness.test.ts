@@ -245,13 +245,13 @@ describe("computeReadiness and the positions a team actually fields", () => {
   });
 
   it("does not uncover a spot an allPlay team never fields", () => {
-    // A stale CENTER_FIELD row — hand-seeded during #9, or left behind when
-    // allPlay was switched on. That kid is in the outfield zone everywhere else
-    // in the app; reporting CF uncovered would hand the coach a hole they have
-    // no way to fill.
+    // A stale CATCHER row — hand-seeded during #9, or left behind when allPlay
+    // was switched on. That kid is in the outfield zone everywhere else in the
+    // app; reporting C uncovered would hand the coach a hole they have no way
+    // to fill.
     const stale: ChartEntry[] = [
       { playerId: "ava", playerName: "Ava", battingOrder: 1, position: "PITCHER" },
-      { playerId: "cal", playerName: "Cal", battingOrder: 2, position: "CENTER_FIELD" },
+      { playerId: "cal", playerName: "Cal", battingOrder: 2, position: "CATCHER" },
     ];
     const rsvps = new Map<string, RsvpState>([
       ["ava", "attending"],
@@ -264,6 +264,50 @@ describe("computeReadiness and the positions a team actually fields", () => {
     // Still named as out — nobody disappears, only the phantom hole does.
     expect(result.declined.map((e) => e.playerId)).toEqual(["cal"]);
     expect(result.ready).toBe(false);
+  });
+
+  it("uncovers an allPlay team's named outfield spot when its only kid declined", () => {
+    // LF/CF/RF are fielded allPlay spots since the named-outfield revision, so
+    // a pinned centre fielder staying home is a real hole worth naming.
+    const chart: ChartEntry[] = [
+      { playerId: "ava", playerName: "Ava", battingOrder: 1, position: "PITCHER" },
+      { playerId: "cal", playerName: "Cal", battingOrder: 2, position: "CENTER_FIELD" },
+    ];
+    const rsvps = new Map<string, RsvpState>([["cal", "declined"]]);
+
+    const result = computeReadiness(chart, rsvps, true);
+
+    expect(result.uncoveredPositions).toEqual(["CENTER_FIELD"]);
+    expect(result.ready).toBe(false);
+  });
+
+  it("keeps a stacked outfield spot covered while any kid there is still coming", () => {
+    // Named outfield spots seat up to three. One of two centre fielders
+    // staying home doesn't empty centre field — but both of them does.
+    const chart: ChartEntry[] = [
+      { playerId: "cal", playerName: "Cal", battingOrder: 1, position: "CENTER_FIELD" },
+      { playerId: "dee", playerName: "Dee", battingOrder: 2, position: "CENTER_FIELD" },
+    ];
+
+    const oneOut = computeReadiness(
+      chart,
+      new Map<string, RsvpState>([["cal", "declined"]]),
+      true,
+    );
+    expect(oneOut.uncoveredPositions).toEqual([]);
+    // The decline itself still surfaces; only the hole is not claimed.
+    expect(oneOut.declined.map((e) => e.playerId)).toEqual(["cal"]);
+    expect(oneOut.ready).toBe(false);
+
+    const bothOut = computeReadiness(
+      chart,
+      new Map<string, RsvpState>([
+        ["cal", "declined"],
+        ["dee", "declined"],
+      ]),
+      true,
+    );
+    expect(bothOut.uncoveredPositions).toEqual(["CENTER_FIELD"]);
   });
 
   it("does uncover that same spot for a team that fields it", () => {

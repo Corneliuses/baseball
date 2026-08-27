@@ -179,8 +179,17 @@ model RosterEntry {
   /// Standing batting order slot. Null = not in the batting order.
   battingOrder Int?
 
-  /// Standing defensive position. Null = bench / dugout.
+  /// Standing defensive position. Null = bench / dugout — or, on an allPlay
+  /// team, the general outfield: a kid the coach hasn't pinned to LF/CF/RF.
   position Position?
+
+  /// Which of a position's spots this entry holds. Always 0 for an infield
+  /// position; 0–2 for LF/CF/RF on an allPlay team, where each named outfield
+  /// spot holds up to three kids. Meaningless (and reset to 0) while
+  /// `position` is null. Purely a uniqueness mechanism: readers never order by
+  /// it — display order within a shared spot is jersey-then-name, derived on
+  /// read — and `savePositions` numbers it 0..n-1 per position on every save.
+  positionSlot Int @default(0)
 
   createdAt DateTime @default(now())
 
@@ -189,7 +198,13 @@ model RosterEntry {
 
   @@unique([playerId, teamId])
   @@unique([teamId, battingOrder])
-  @@unique([teamId, position])
+  /// Was `[teamId, position]` until the allPlay outfield grew named spots:
+  /// up to three kids can share LF/CF/RF there, so the slot joins the key.
+  /// Infield writes always use slot 0, which keeps "one kid per infield
+  /// position" database-enforced exactly as before; the up-to-three cap is
+  /// validatePositions' job (chart.ts), since a CHECK constraint isn't
+  /// expressible here.
+  @@unique([teamId, position, positionSlot])
   @@unique([teamId, jerseyNumber])
   @@index([teamId])
 }

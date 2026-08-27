@@ -1,5 +1,9 @@
 import { Position } from "@/generated/prisma/enums";
-import { ALL_POSITIONS, fieldedPositions } from "@/lib/positions";
+import {
+  ALL_POSITIONS,
+  fieldedPositions,
+  positionCapacity,
+} from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
 /// The next-game readiness check.
@@ -44,8 +48,11 @@ export type Readiness<T extends ChartEntry> = {
   /// Chart-affecting players who haven't answered. Reported, never alarming:
   /// these are the players `uncoveredPositions` deliberately says nothing about.
   awaiting: T[];
-  /// Positions left empty because the assigned player **declined**. In
-  /// scorebook order, and limited to the spots this team actually fields.
+  /// Positions left empty because everyone assigned there **declined** — for
+  /// most spots that is the one assigned player, but an allPlay team's named
+  /// outfield spots seat up to three, and a spot with a teammate still
+  /// standing on it is not uncovered. In scorebook order, and limited to the
+  /// spots this team actually fields.
   uncoveredPositions: Position[];
   /// The batting order for this game with declined players removed and ranks
   /// closed up. No-response players stay in it — see `chartState` below.
@@ -118,24 +125,34 @@ export function computeReadiness<T extends ChartEntry>(
   // named in `declined`; nobody disappears, only the phantom hole does.
   const fielded = fieldedPositions(allPlay);
 
-  const assigned = new Map<Position, T>();
+  const assigned = new Map<Position, T[]>();
   for (const entry of chart) {
-    // First writer wins, matching buildChartView. The unique index makes a
-    // collision unreachable from a real read.
+    // First arrivals up to the spot's capacity, matching buildChartView —
+    // one everywhere except an allPlay team's outfield spots.
+    const holders = entry.position !== null ? assigned.get(entry.position) : undefined;
     if (
       entry.position !== null &&
       fielded.has(entry.position) &&
-      !assigned.has(entry.position)
+      (holders?.length ?? 0) < positionCapacity(entry.position, allPlay)
     ) {
-      assigned.set(entry.position, entry);
+      if (holders) {
+        holders.push(entry);
+      } else {
+        assigned.set(entry.position, [entry]);
+      }
     }
   }
 
   // Filtered from ALL_POSITIONS rather than assembled, so the result is in
-  // scorebook order however the chart rows arrived.
+  // scorebook order however the chart rows arrived. A stacked spot is
+  // uncovered only when EVERY kid standing there declined: one of three
+  // centre fielders staying home doesn't empty centre field.
   const uncoveredPositions = ALL_POSITIONS.filter((position) => {
-    const holder = assigned.get(position);
-    return holder !== undefined && stateOf(holder) === "declined";
+    const holders = assigned.get(position);
+    return (
+      holders !== undefined &&
+      holders.every((holder) => stateOf(holder) === "declined")
+    );
   });
 
   const inOrder = chart

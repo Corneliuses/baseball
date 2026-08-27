@@ -1,11 +1,17 @@
 import { describe, it, expect } from "vitest";
 
+import type { Position } from "@/generated/prisma/enums";
+import { OUTFIELD_POSITIONS } from "@/lib/positions";
+
 import {
   DIAMOND_GEOMETRY,
   FIELD_ART,
   POSITION_COORDS,
+  outfieldHaloRadius,
+  outfieldSpotCoords,
   outfieldZoneCoords,
   positionPercent,
+  zoneHaloRadius,
 } from "./diamond-geometry";
 
 /// The back point of the infield polygon. Nothing in the outfield zone may
@@ -144,6 +150,199 @@ describe("outfieldZoneCoords", () => {
         expect(y + DIAMOND_GEOMETRY.markerRadius).toBeLessThanOrEqual(
           INFIELD_BACK,
         );
+      }
+    }
+  });
+
+  it("skips its shallow row in deep mode, leaving it to the named spots", () => {
+    // The shallow row sits AT the LF/CF/RF coordinates; when a named spot has
+    // players on it, a shallow zone marker would land on top of them.
+    const shallowRow = Math.max(...outfieldZoneCoords(3).map((c) => c.y));
+    for (let count = 1; count <= 8; count += 1) {
+      const coords = outfieldZoneCoords(count, { deep: true });
+      expect(coords).toHaveLength(count);
+      for (const { y } of coords) {
+        expect(y).toBeGreaterThan(shallowRow);
+        expect(y + DIAMOND_GEOMETRY.markerRadius).toBeLessThanOrEqual(
+          INFIELD_BACK,
+        );
+      }
+    }
+  });
+});
+
+describe("outfieldSpotCoords", () => {
+  const distance = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+  ) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  it("returns nothing for a non-outfield position or an empty spot", () => {
+    expect(outfieldSpotCoords("PITCHER", 2)).toEqual([]);
+    expect(outfieldSpotCoords("CENTER_FIELD", 0)).toEqual([]);
+  });
+
+  it("puts a lone kid exactly on the spot — indistinguishable from the fixed diamond", () => {
+    for (const position of OUTFIELD_POSITIONS) {
+      const [coord] = outfieldSpotCoords(position, 1);
+      expect(coord.x).toBeCloseTo(POSITION_COORDS[position].x);
+      expect(coord.y).toBeCloseTo(POSITION_COORDS[position].y);
+    }
+  });
+
+  it("fans a pair wide enough to keep the full guarded halo", () => {
+    // A pair 55px apart clears haloRadius 25 with the 3px stroke: the rings
+    // neither touch each other nor reach the neighbouring marker.
+    const reach =
+      DIAMOND_GEOMETRY.haloRadius + DIAMOND_GEOMETRY.haloStrokeWidth / 2;
+    for (const position of OUTFIELD_POSITIONS) {
+      const [a, b] = outfieldSpotCoords(position, 2);
+      const gap = distance(a, b);
+      expect(gap).toBeGreaterThanOrEqual(2 * reach);
+      expect(gap).toBeGreaterThanOrEqual(
+        reach + DIAMOND_GEOMETRY.markerRadius,
+      );
+    }
+  });
+
+  it("keeps three full spots — nine markers — clear of each other", () => {
+    // Neighbouring markers must never overlap: two 20px-radius circles need
+    // 40px of separation. The tightest observed pair is a trio's own
+    // neighbours at ~40.4px, the same crowded-zone floor the two-row zone
+    // reaches at 15–16 players.
+    const all = OUTFIELD_POSITIONS.flatMap((position) =>
+      outfieldSpotCoords(position, 3),
+    );
+    expect(all).toHaveLength(9);
+    for (let i = 0; i < all.length; i += 1) {
+      for (let j = i + 1; j < all.length; j += 1) {
+        expect(distance(all[i], all[j])).toBeGreaterThanOrEqual(
+          2 * DIAMOND_GEOMETRY.markerRadius,
+        );
+      }
+    }
+  });
+
+  it("keeps every fanned marker inside the box and clear of the infield", () => {
+    for (const position of OUTFIELD_POSITIONS) {
+      for (let count = 1; count <= 3; count += 1) {
+        for (const { x, y } of outfieldSpotCoords(position, count)) {
+          expect(x - DIAMOND_GEOMETRY.markerRadius).toBeGreaterThanOrEqual(0);
+          expect(x + DIAMOND_GEOMETRY.markerRadius).toBeLessThanOrEqual(
+            DIAMOND_GEOMETRY.width,
+          );
+          expect(y - DIAMOND_GEOMETRY.markerRadius).toBeGreaterThanOrEqual(0);
+          expect(y + DIAMOND_GEOMETRY.markerRadius).toBeLessThanOrEqual(
+            INFIELD_BACK,
+          );
+        }
+      }
+    }
+  });
+
+  it("stays clear of a deep zone row drawn below the spots", () => {
+    // The mixed board: full named spots plus up to 8 unpinned kids in the one
+    // remaining row. No marker pair may overlap across the two layouts.
+    const spots = OUTFIELD_POSITIONS.flatMap((position) =>
+      outfieldSpotCoords(position, 3),
+    );
+    for (let zoneCount = 1; zoneCount <= 8; zoneCount += 1) {
+      const zone = outfieldZoneCoords(zoneCount, { deep: true });
+      for (const spot of spots) {
+        for (const marker of zone) {
+          expect(distance(spot, marker)).toBeGreaterThanOrEqual(
+            2 * DIAMOND_GEOMETRY.markerRadius,
+          );
+        }
+      }
+    }
+  });
+});
+
+describe("outfieldHaloRadius", () => {
+  it("gives a lone pinned outfielder the full halo", () => {
+    expect(outfieldHaloRadius(outfieldSpotCoords("CENTER_FIELD", 1))).toBe(
+      DIAMOND_GEOMETRY.haloRadius,
+    );
+  });
+
+  it("keeps the full halo for a fanned pair", () => {
+    expect(outfieldHaloRadius(outfieldSpotCoords("LEFT_FIELD", 2))).toBe(
+      DIAMOND_GEOMETRY.haloRadius,
+    );
+  });
+
+  it("returns null for a centre-field trio — the crowded-zone degradation", () => {
+    // CF's fan runs along the arc's flat middle, so its trio neighbours stand
+    // just 40px apart: no ring worth reading fits. The marker still bolds the
+    // name and steps up, and the sr-only mirror still says "(your player)".
+    expect(outfieldHaloRadius(outfieldSpotCoords("CENTER_FIELD", 3))).toBeNull();
+  });
+
+  it("keeps a shrunken ring for a corner trio, where the arc's slope buys room", () => {
+    // LF/RF fans descend the bow, so the same 40px of x-spread is ~50px of
+    // real distance — enough for a smaller-than-standard ring.
+    for (const position of ["LEFT_FIELD", "RIGHT_FIELD"] as const) {
+      const radius = outfieldHaloRadius(outfieldSpotCoords(position, 3));
+      expect(radius).not.toBeNull();
+      expect(radius!).toBeLessThan(DIAMOND_GEOMETRY.haloRadius);
+    }
+  });
+
+  it("is what zoneHaloRadius computes for the plain zone", () => {
+    for (const count of [1, 3, 5, 8, 12, 15]) {
+      expect(outfieldHaloRadius(outfieldZoneCoords(count))).toEqual(
+        zoneHaloRadius(count),
+      );
+    }
+  });
+
+  it("never lets a ring touch another outfield or infield marker, whatever the board", () => {
+    // Every mixed board a real roster can produce: 0–3 kids per named spot,
+    // the rest in the zone (deep when any spot is taken).
+    const reachOf = (radius: number) =>
+      radius + DIAMOND_GEOMETRY.haloStrokeWidth / 2;
+    const infield = (
+      ["PITCHER", "FIRST_BASE", "SECOND_BASE", "THIRD_BASE", "SHORTSTOP"] as Position[]
+    ).map((position) => POSITION_COORDS[position]);
+
+    for (const lf of [0, 1, 2, 3]) {
+      for (const cf of [0, 1, 2, 3]) {
+        for (const rf of [0, 1, 2, 3]) {
+          for (const zoneCount of [0, 2, 5, 8]) {
+            const coords = [
+              ...outfieldSpotCoords("LEFT_FIELD", lf),
+              ...outfieldSpotCoords("CENTER_FIELD", cf),
+              ...outfieldSpotCoords("RIGHT_FIELD", rf),
+              ...outfieldZoneCoords(zoneCount, {
+                deep: lf + cf + rf > 0,
+              }),
+            ];
+            const radius = outfieldHaloRadius(coords);
+            if (radius === null) {
+              continue;
+            }
+            const reach = reachOf(radius);
+            for (let i = 0; i < coords.length; i += 1) {
+              for (let j = i + 1; j < coords.length; j += 1) {
+                const gap = Math.hypot(
+                  coords[i].x - coords[j].x,
+                  coords[i].y - coords[j].y,
+                );
+                expect(gap).toBeGreaterThanOrEqual(2 * reach);
+              }
+              for (const fielder of infield) {
+                const gap = Math.hypot(
+                  coords[i].x - fielder.x,
+                  coords[i].y - fielder.y,
+                );
+                expect(gap).toBeGreaterThanOrEqual(
+                  reach + DIAMOND_GEOMETRY.markerRadius,
+                );
+              }
+            }
+          }
+        }
       }
     }
   });

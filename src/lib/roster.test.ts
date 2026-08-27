@@ -631,8 +631,8 @@ describe("savePositions", () => {
     updateRosterEntry.mockReturnValueOnce("upd-a").mockReturnValueOnce("upd-b");
 
     await savePositions("team-1", [
-      { entryId: "entry-a", position: "PITCHER" },
-      { entryId: "entry-b", position: "SECOND_BASE" },
+      { entryId: "entry-a", position: "PITCHER", positionSlot: 0 },
+      { entryId: "entry-b", position: "SECOND_BASE", positionSlot: 0 },
     ]);
 
     // Moving one player onto a position another player is moving off of would
@@ -644,25 +644,25 @@ describe("savePositions", () => {
 
     expect(updateManyRosterEntries).toHaveBeenCalledWith({
       where: { teamId: "team-1" },
-      data: { position: null },
+      data: { position: null, positionSlot: 0 },
     });
   });
 
   it("scopes every phase-2 update by teamId", async () => {
     await savePositions("team-1", [
-      { entryId: "entry-a", position: "CATCHER" },
-      { entryId: "entry-b", position: "SHORTSTOP" },
+      { entryId: "entry-a", position: "CATCHER", positionSlot: 0 },
+      { entryId: "entry-b", position: "SHORTSTOP", positionSlot: 0 },
     ]);
 
     expect(updateRosterEntry).toHaveBeenNthCalledWith(1, {
       where: { id: "entry-a", teamId: "team-1" },
-      data: { position: "CATCHER" },
+      data: { position: "CATCHER", positionSlot: 0 },
     });
     // A forged or stale entryId matches no row under this where clause and
     // throws P2025, rolling the whole save back.
     expect(updateRosterEntry).toHaveBeenNthCalledWith(2, {
       where: { id: "entry-b", teamId: "team-1" },
-      data: { position: "SHORTSTOP" },
+      data: { position: "SHORTSTOP", positionSlot: 0 },
     });
   });
 
@@ -677,16 +677,39 @@ describe("savePositions", () => {
     // An allPlay team: five infielders placed, everyone else in the outfield.
     // The outfielders get no statement at all, which is what makes the saved
     // chart identical to the board the coach was looking at.
-    await savePositions("team-1", [{ entryId: "entry-a", position: "PITCHER" }]);
+    await savePositions("team-1", [
+      { entryId: "entry-a", position: "PITCHER", positionSlot: 0 },
+    ]);
 
     expect(updateRosterEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes each outfield stack member to their own slot", async () => {
+    // The widened unique index is (teamId, position, positionSlot), so three
+    // centre fielders coexist only because their slots differ.
+    await savePositions("team-1", [
+      { entryId: "entry-a", position: "CENTER_FIELD", positionSlot: 0 },
+      { entryId: "entry-b", position: "CENTER_FIELD", positionSlot: 1 },
+      { entryId: "entry-c", position: "CENTER_FIELD", positionSlot: 2 },
+    ]);
+
+    expect(updateRosterEntry).toHaveBeenNthCalledWith(2, {
+      where: { id: "entry-b", teamId: "team-1" },
+      data: { position: "CENTER_FIELD", positionSlot: 1 },
+    });
+    expect(updateRosterEntry).toHaveBeenNthCalledWith(3, {
+      where: { id: "entry-c", teamId: "team-1" },
+      data: { position: "CENTER_FIELD", positionSlot: 2 },
+    });
   });
 
   it("propagates transaction failures", async () => {
     transaction.mockRejectedValue(Object.assign(new Error("gone"), { code: "P2025" }));
 
     await expect(
-      savePositions("team-1", [{ entryId: "entry-a", position: "PITCHER" }]),
+      savePositions("team-1", [
+        { entryId: "entry-a", position: "PITCHER", positionSlot: 0 },
+      ]),
     ).rejects.toMatchObject({ code: "P2025" });
   });
 });

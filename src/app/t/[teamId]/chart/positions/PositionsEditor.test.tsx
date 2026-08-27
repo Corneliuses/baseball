@@ -23,14 +23,14 @@ function entry(
   return { entryId, playerName: `Player-${entryId}`, jerseyNumber, position };
 }
 
-function fieldOf(name: string): Record<string, string> {
+function fieldOf(name: string): Record<string, string[]> {
   const form = screen.getByRole("button", { name: "Save positions" }).closest("form")!;
   return JSON.parse(
     form.querySelector<HTMLInputElement>(`input[name="${name}"]`)!.value,
   );
 }
 
-function payloadOf(): Record<string, string> {
+function payloadOf(): Record<string, string[]> {
   return fieldOf("positions");
 }
 
@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe("PositionsEditor", () => {
-  it("renders five infield targets and an Outfield zone when allPlay is true", () => {
+  it("renders eight targets — no catcher — and an Outfield zone when allPlay is true", () => {
     render(
       <PositionsEditor
         teamId="team-1"
@@ -49,16 +49,18 @@ describe("PositionsEditor", () => {
     );
 
     const field = screen.getByRole("region", { name: "Diamond" });
-    // P, 1B, 2B, 3B, SS — the outfield is one zone, not three spots, and an
-    // allPlay team has no catcher because the coach pitches.
-    for (const label of ["P", "1B", "2B", "3B", "SS"]) {
+    // P, 1B, 2B, 3B, SS and the three named outfield spots. An allPlay team
+    // has no catcher because the coach pitches; unplaced players wait in the
+    // general Outfield zone.
+    for (const label of ["P", "1B", "2B", "3B", "SS", "LF", "CF", "RF"]) {
       expect(field).toHaveTextContent(label);
     }
-    expect(field).not.toHaveTextContent("LF");
-    expect(field).not.toHaveTextContent("RF");
     expect(
       field.querySelector('[data-position="CATCHER"]'),
     ).not.toBeInTheDocument();
+    expect(
+      field.querySelector('[data-position="CENTER_FIELD"]'),
+    ).toBeInTheDocument();
 
     const zone = screen.getByRole("region", { name: "Outfield" });
     expect(zone).toHaveTextContent("Player-b");
@@ -66,6 +68,30 @@ describe("PositionsEditor", () => {
     expect(
       screen.queryByRole("region", { name: "Substitutes" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("seats an allPlay outfield stack of up to three inside one spot", () => {
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[
+          entry("a", "CENTER_FIELD"),
+          entry("b", "CENTER_FIELD"),
+          entry("c", "CENTER_FIELD"),
+          entry("d"),
+        ]}
+      />,
+    );
+
+    const spot = document.querySelector('[data-position="CENTER_FIELD"]')!;
+    for (const name of ["Player-a", "Player-b", "Player-c"]) {
+      expect(spot).toHaveTextContent(name);
+    }
+    expect(screen.getByRole("region", { name: "Outfield" })).toHaveTextContent(
+      "Player-d",
+    );
+    expect(payloadOf()).toEqual({ CENTER_FIELD: ["a", "b", "c"] });
   });
 
   it("marks the catcher's empty spot with a filled circle under allPlay", () => {
@@ -134,12 +160,12 @@ describe("PositionsEditor", () => {
     expect(zone).toHaveTextContent("Player-b");
   });
 
-  it("pools an allPlay team's stale outfield player instead of seating them", () => {
+  it("pools an allPlay team's stale catcher instead of seating them", () => {
     render(
       <PositionsEditor
         teamId="team-1"
         allPlay={true}
-        entries={[entry("a", "CENTER_FIELD")]}
+        entries={[entry("a", "CATCHER")]}
       />,
     );
 
@@ -151,8 +177,8 @@ describe("PositionsEditor", () => {
     expect(payloadOf()).toEqual({});
   });
 
-  it("offers Save for a stale outfield row the coach hasn't touched", () => {
-    // The row still says CENTER_FIELD and the payload above says {}, so saving
+  it("offers Save for a stale catcher row the coach hasn't touched", () => {
+    // The row still says CATCHER and the payload above says {}, so saving
     // WOULD change the database. Gating Save on "has the coach moved anyone"
     // strands the row: the board already looks right, so there is nothing the
     // coach can do to make the editor dirty short of an unrelated change.
@@ -160,7 +186,7 @@ describe("PositionsEditor", () => {
       <PositionsEditor
         teamId="team-1"
         allPlay={true}
-        entries={[entry("a", "CENTER_FIELD")]}
+        entries={[entry("a", "CATCHER")]}
       />,
     );
 
@@ -180,10 +206,10 @@ describe("PositionsEditor", () => {
       />,
     );
 
-    expect(fieldOf("baseline")).toEqual({ PITCHER: "a" });
+    expect(fieldOf("baseline")).toEqual({ PITCHER: ["a"] });
   });
 
-  it("puts a stale outfield row in the baseline even though the board can't show it", () => {
+  it("puts a stale catcher row in the baseline even though the board can't show it", () => {
     // The whole reason the baseline is storedPositions and not the draft: the
     // action compares it against a fresh read, so a baseline that had already
     // dropped this row would look stale on every single save.
@@ -191,12 +217,12 @@ describe("PositionsEditor", () => {
       <PositionsEditor
         teamId="team-1"
         allPlay={true}
-        entries={[entry("a", "CENTER_FIELD")]}
+        entries={[entry("a", "CATCHER")]}
       />,
     );
 
     expect(payloadOf()).toEqual({});
-    expect(fieldOf("baseline")).toEqual({ CENTER_FIELD: "a" });
+    expect(fieldOf("baseline")).toEqual({ CATCHER: ["a"] });
   });
 
   it("leaves Save disabled when the board already matches what is stored", () => {
@@ -221,8 +247,8 @@ describe("PositionsEditor", () => {
       />,
     );
 
-    // Five infield spots, one filled.
-    expect(screen.getAllByText("Open")).toHaveLength(4);
+    // Eight spots on an allPlay board, one filled.
+    expect(screen.getAllByText("Open")).toHaveLength(7);
   });
 
   it("shows only first names on the diamond and full names in the zone", () => {
@@ -267,7 +293,7 @@ describe("PositionsEditor", () => {
     ).toBe("team-1");
     // Only the diamond is posted; the zone is everyone else, and the server
     // nulls them in phase 1 of the write.
-    expect(payloadOf()).toEqual({ PITCHER: "a", SHORTSTOP: "b" });
+    expect(payloadOf()).toEqual({ PITCHER: ["a"], SHORTSTOP: ["b"] });
   });
 
   it("gives every player a keyboard drag handle", () => {
@@ -457,7 +483,7 @@ describe("PositionsEditor decline badges", () => {
       />,
     );
 
-    expect(payloadOf()).toEqual({ PITCHER: "a", SHORTSTOP: "b" });
+    expect(payloadOf()).toEqual({ PITCHER: ["a"], SHORTSTOP: ["b"] });
     expect(screen.getByRole("button", { name: "Save positions" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   });

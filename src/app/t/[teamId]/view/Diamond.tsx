@@ -1,8 +1,9 @@
 import {
   DIAMOND_GEOMETRY,
   POSITION_COORDS,
+  outfieldHaloRadius,
+  outfieldSpotCoords,
   outfieldZoneCoords,
-  zoneHaloRadius,
 } from "@/components/diamond-geometry";
 import { FieldArt } from "@/components/FieldArt";
 import {
@@ -19,6 +20,7 @@ import type { ChartViewPlayer } from "@/lib/chart-view";
 import {
   ALL_PLAY_INFIELD_POSITIONS,
   ALL_POSITIONS,
+  OUTFIELD_POSITIONS,
   OUTFIELD_ZONE_LABEL,
   POSITION_LABELS,
 } from "@/lib/positions";
@@ -162,11 +164,11 @@ export function Diamond({
   showRsvp = true,
   guardedPlayerIds = EMPTY_GUARDED,
 }: {
-  /// Seated players, keyed by position. Only ever holds spots this team
-  /// fields — `buildChartView` pools the rest, including an allPlay team's
-  /// stale LF/CF/RF or CATCHER row, so the markers below cannot collide with
-  /// the zone drawn at those same coordinates.
-  byPosition: Map<Position, ChartViewPlayer>;
+  /// Seated players, keyed by position — a list per spot, because an allPlay
+  /// team's LF/CF/RF each stack to three. Only ever holds spots this team
+  /// fields: `buildChartView` pools the rest, including an allPlay team's
+  /// stale CATCHER row, so the markers below cannot collide with the zone.
+  byPosition: Map<Position, ChartViewPlayer[]>;
   allPlay: boolean;
   /// Everyone the diamond doesn't seat. Drawn as the outfield zone on an
   /// allPlay team, and ignored otherwise — a benched player belongs on neither.
@@ -181,17 +183,38 @@ export function Diamond({
   /// the one they saw before #49.
   guardedPlayerIds?: ReadonlySet<string>;
 }) {
-  // An allPlay team fields neither a catcher nor three named outfielders: the
-  // coach pitches, and the outfield is one zone holding everyone the infield
-  // leaves over (#11, Decision 1). Drawing C or LF/CF/RF as "Open" would be
-  // doubly wrong for them — the spots aren't open, they don't exist — so those
-  // players come from `outfield` instead, and C gets the disc.
+  // An allPlay team fields no catcher — the coach pitches — so C is drawn as
+  // the disc, never as "Open" (#11, Decision 1). Its LF/CF/RF are real spots
+  // since the named-outfield revision, but they draw differently from the
+  // fixed positions: a spot seats up to three (fanned around the coordinate
+  // via `outfieldSpotCoords`), and an EMPTY one draws nothing at all — the
+  // spots are optional, the general zone still covers the grass, and an
+  // "Open" marker would both claim a hole nobody is required to fill and
+  // collide with the zone drawn at those same coordinates.
   const drawn = allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS;
+  const spots: readonly [Position, ChartViewPlayer[]][] = allPlay
+    ? OUTFIELD_POSITIONS.map(
+        (position) => [position, byPosition.get(position) ?? []] as const,
+      )
+    : [];
+  const spotMarkers = spots.flatMap(([position, players]) =>
+    outfieldSpotCoords(position, players.length).map((coord, index) => ({
+      position,
+      player: players[index],
+      ...coord,
+    })),
+  );
   const zone = allPlay ? outfield : [];
-  const zoneCoords = outfieldZoneCoords(zone.length);
-  // One radius for the whole zone: it is a function of how many markers share
-  // those two rows, not of which marker is guarded.
-  const zoneHalo = zoneHaloRadius(zone.length);
+  // The zone's shallow row sits AT the LF/CF/RF coordinates, so the moment a
+  // named spot has players standing on it, the unpinned kids move to the deep
+  // row instead of stacking on top of them.
+  const zoneCoords = outfieldZoneCoords(zone.length, {
+    deep: spotMarkers.length > 0,
+  });
+  // One radius for the whole outfield — spot fans and zone rows together: it
+  // is a function of how tightly the markers pack, not of which marker is
+  // guarded.
+  const zoneHalo = outfieldHaloRadius([...spotMarkers, ...zoneCoords]);
 
   return (
     <>
@@ -222,7 +245,9 @@ export function Diamond({
 
         {drawn.map((position) => {
           const { x, y } = POSITION_COORDS[position];
-          const player = byPosition.get(position);
+          // A fixed position seats one player; the array is the outfield
+          // spots' shape, which render through spotMarkers below.
+          const player = byPosition.get(position)?.[0];
           return (
             <Marker
               key={position}
@@ -235,6 +260,19 @@ export function Diamond({
             />
           );
         })}
+
+        {spotMarkers.map(({ position, player, x, y }) => (
+          <Marker
+            key={player.playerId}
+            x={x}
+            y={y}
+            label={POSITION_LABELS[position]}
+            player={player}
+            showRsvp={showRsvp}
+            isGuarded={guardedPlayerIds.has(player.playerId)}
+            haloRadius={zoneHalo}
+          />
+        ))}
 
         {zone.map((player, index) => (
           <Marker
@@ -256,7 +294,7 @@ export function Diamond({
       <ul className="sr-only">
         {allPlay ? <li>{NO_CATCHER_TEXT}</li> : null}
         {drawn.map((position) => {
-          const player = byPosition.get(position);
+          const player = byPosition.get(position)?.[0];
           return (
             <li key={position}>
               {POSITION_LABELS[position]}:{" "}
@@ -264,6 +302,16 @@ export function Diamond({
             </li>
           );
         })}
+        {spots
+          .filter(([, players]) => players.length > 0)
+          .map(([position, players]) => (
+            <li key={position}>
+              {POSITION_LABELS[position]}:{" "}
+              {players
+                .map((player) => announce(player, showRsvp, guardedPlayerIds))
+                .join("; ")}
+            </li>
+          ))}
         {zone.length > 0 ? (
           <li>
             Outfield:{" "}

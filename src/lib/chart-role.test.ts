@@ -82,8 +82,14 @@ describe("chartRole on an allPlay team", () => {
     );
   });
 
-  it("reads a stale CENTER_FIELD or CATCHER row as OF", () => {
-    expect(chartRole(entry(5, "CENTER_FIELD"), allPlay)).toBe("Bats 5th · OF");
+  it("reads a named outfield row as its own spot — CF, not OF", () => {
+    // LF/CF/RF are placeable allPlay spots since the named-outfield revision,
+    // so a pinned kid's line says which one.
+    expect(chartRole(entry(5, "CENTER_FIELD"), allPlay)).toBe("Bats 5th · CF");
+    expect(chartRole(entry(null, "LEFT_FIELD"), allPlay)).toBe("LF");
+  });
+
+  it("reads a stale CATCHER row as OF — the coach pitches", () => {
     expect(chartRole(entry(5, "CATCHER"), allPlay)).toBe("Bats 5th · OF");
   });
 

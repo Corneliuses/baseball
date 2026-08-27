@@ -93,9 +93,9 @@ describe("buildChartView", () => {
   it("maps assigned positions to their player", () => {
     const view = buildChartView(fullChart, noRsvps, false);
 
-    expect(view.byPosition.get("SHORTSTOP")?.playerId).toBe("ava");
-    expect(view.byPosition.get("PITCHER")?.playerId).toBe("ben");
-    expect(view.byPosition.get("FIRST_BASE")?.playerId).toBe("cy");
+    expect(view.byPosition.get("SHORTSTOP")?.[0].playerId).toBe("ava");
+    expect(view.byPosition.get("PITCHER")?.[0].playerId).toBe("ben");
+    expect(view.byPosition.get("FIRST_BASE")?.[0].playerId).toBe("cy");
     expect(view.byPosition.has("CATCHER")).toBe(false);
   });
 
@@ -123,7 +123,7 @@ describe("buildChartView", () => {
       "declined",
       "no-response",
     ]);
-    expect(view.byPosition.get("SHORTSTOP")?.rsvpState).toBe("declined");
+    expect(view.byPosition.get("SHORTSTOP")?.[0].rsvpState).toBe("declined");
   });
 
   it("never reorders, renumbers, or drops anyone based on rsvp state", () => {
@@ -189,28 +189,50 @@ describe("buildChartView", () => {
     expect(buildChartView([], noRsvps, false).hasChart).toBe(false);
   });
 
-  it("pools an allPlay team's stale named-outfield row instead of seating it", () => {
-    // The view page draws its outfield zone at the very coordinates a named
-    // outfield marker occupies, so seating this player would stack two markers
-    // on one spot and make both names unreadable. The editor already shows them
-    // in its zone; this is what keeps the two diamonds telling one story.
-    const stale: ChartViewEntry[] = [
-      {
-        entryId: "re-cal",
-        playerId: "cal",
-        playerName: "Cal",
-        jerseyNumber: 3,
-        battingOrder: 1,
-        position: "CENTER_FIELD",
-      },
-    ];
+  it("seats an allPlay team's named-outfield rows, stacked and sorted", () => {
+    // LF/CF/RF are placeable spots under allPlay since the named-outfield
+    // revision. The stack sorts jersey-then-name for the same reason the
+    // pool does: getChart has no orderBy, and an unsorted stack reshuffles
+    // between requests.
+    const named = (playerId: string, jerseyNumber: number | null): ChartViewEntry => ({
+      entryId: `re-${playerId}`,
+      playerId,
+      playerName: playerId,
+      jerseyNumber,
+      battingOrder: null,
+      position: "CENTER_FIELD",
+    });
 
-    const view = buildChartView(stale, noRsvps, true);
+    const view = buildChartView([named("zoe", 9), named("cal", 3)], noRsvps, true);
 
-    expect(view.byPosition.has("CENTER_FIELD")).toBe(false);
-    expect(view.unassigned.map((p) => p.playerId)).toEqual(["cal"]);
-    // Nobody vanishes, and the chart still counts as set.
+    expect(view.byPosition.get("CENTER_FIELD")?.map((p) => p.playerId)).toEqual([
+      "cal",
+      "zoe",
+    ]);
+    expect(view.unassigned).toEqual([]);
     expect(view.hasChart).toBe(true);
+  });
+
+  it("pools anyone past an outfield spot's capacity instead of dropping them", () => {
+    const named = (playerId: string, jerseyNumber: number): ChartViewEntry => ({
+      entryId: `re-${playerId}`,
+      playerId,
+      playerName: playerId,
+      jerseyNumber,
+      battingOrder: null,
+      position: "CENTER_FIELD",
+    });
+
+    const four = [named("a", 1), named("b", 2), named("c", 3), named("d", 4)];
+    const view = buildChartView(four, noRsvps, true);
+
+    expect(view.byPosition.get("CENTER_FIELD")).toHaveLength(3);
+    expect(view.unassigned.map((p) => p.playerId)).toEqual(["d"]);
+
+    // allPlay off: the same spot holds one, so three of the four pool.
+    const selective = buildChartView(four, noRsvps, false);
+    expect(selective.byPosition.get("CENTER_FIELD")).toHaveLength(1);
+    expect(selective.unassigned).toHaveLength(3);
   });
 
   it("pools an allPlay team's stale catcher row — the coach pitches", () => {
@@ -245,16 +267,16 @@ describe("buildChartView", () => {
 
     const view = buildChartView(named, noRsvps, false);
 
-    expect(view.byPosition.get("CENTER_FIELD")?.playerId).toBe("cal");
+    expect(view.byPosition.get("CENTER_FIELD")?.[0].playerId).toBe("cal");
     expect(view.unassigned).toEqual([]);
   });
 
   it("keeps the allPlay infield seated", () => {
     const view = buildChartView(fullChart, noRsvps, true);
 
-    expect(view.byPosition.get("SHORTSTOP")?.playerId).toBe("ava");
-    expect(view.byPosition.get("PITCHER")?.playerId).toBe("ben");
-    expect(view.byPosition.get("FIRST_BASE")?.playerId).toBe("cy");
+    expect(view.byPosition.get("SHORTSTOP")?.[0].playerId).toBe("ava");
+    expect(view.byPosition.get("PITCHER")?.[0].playerId).toBe("ben");
+    expect(view.byPosition.get("FIRST_BASE")?.[0].playerId).toBe("cy");
     expect(view.unassigned.map((p) => p.playerId)).toEqual(["eli"]);
   });
 
@@ -362,7 +384,7 @@ describe("buildChartView diamond names", () => {
 
     const view = buildChartView(entries, noRsvps, false);
 
-    expect(view.byPosition.get("SHORTSTOP")?.diamondName).toBe("Ava C.");
+    expect(view.byPosition.get("SHORTSTOP")?.[0].diamondName).toBe("Ava C.");
     expect(view.unassigned[0].diamondName).toBe("Ava R.");
   });
 

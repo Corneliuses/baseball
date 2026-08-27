@@ -90,7 +90,7 @@ describe("savePositionsAction", () => {
   it("requires COACH write access before touching anything", async () => {
     await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a"}' }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["a"]}' }),
       ),
     );
 
@@ -105,14 +105,14 @@ describe("savePositionsAction", () => {
       savePositionsAction(
         form({
           teamId: "team-1",
-          positions: '{"SHORTSTOP":"c","PITCHER":"a"}',
+          positions: '{"SHORTSTOP":["c"],"PITCHER":["a"]}',
         }),
       ),
     );
 
     expect(savePositions).toHaveBeenCalledWith("team-1", [
-      { entryId: "a", position: "PITCHER" },
-      { entryId: "c", position: "SHORTSTOP" },
+      { entryId: "a", position: "PITCHER", positionSlot: 0 },
+      { entryId: "c", position: "SHORTSTOP", positionSlot: 0 },
     ]);
     expect(url).toBe("/t/team-1/chart/positions?saved=1");
     expect(revalidatePath).toHaveBeenCalledWith(
@@ -131,7 +131,15 @@ describe("savePositionsAction", () => {
   });
 
   it("rejects unparseable and malformed payloads without hitting the database", async () => {
-    for (const positions of ["not json", '["a"]', '{"PITCHER":3}']) {
+    for (const positions of [
+      "not json",
+      '["a"]',
+      '{"PITCHER":3}',
+      // The old single-id-per-position shape: a form predating the stacked
+      // outfield posts strings, and the schema should refuse rather than
+      // guess at what the coach meant.
+      '{"PITCHER":"a"}',
+    ]) {
       const url = await redirectUrlOf(
         savePositionsAction(form({ teamId: "team-1", positions })),
       );
@@ -161,7 +169,7 @@ describe("savePositionsAction", () => {
     // Ten pairs can't be a real board however they're spelled, so this dies at
     // the schema rather than arriving at validatePositions looking plausible.
     const tooMany = Object.fromEntries(
-      Array.from({ length: 10 }, (_, i) => [`K${i}`, "entry"]),
+      Array.from({ length: 10 }, (_, i) => [`K${i}`, ["entry"]]),
     );
 
     const url = await redirectUrlOf(
@@ -179,7 +187,7 @@ describe("savePositionsAction", () => {
       savePositionsAction(
         form({
           teamId: "team-1",
-          positions: JSON.stringify({ PITCHER: "x".repeat(65) }),
+          positions: JSON.stringify({ PITCHER: ["x".repeat(65)] }),
         }),
       ),
     );
@@ -192,7 +200,7 @@ describe("savePositionsAction", () => {
     // The cap is the enum's length, not one less than it — an off-by-one here
     // would reject exactly the boards a non-allPlay team saves.
     const full = Object.fromEntries(
-      ALL_POSITIONS.map((position, i) => [position, `re-${i}`]),
+      ALL_POSITIONS.map((position, i) => [position, [`re-${i}`]]),
     );
     getChart.mockResolvedValue(ALL_POSITIONS.map((_, i) => chartEntry(`re-${i}`)));
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: false });
@@ -205,7 +213,11 @@ describe("savePositionsAction", () => {
 
     expect(savePositions).toHaveBeenCalledWith(
       "team-1",
-      ALL_POSITIONS.map((position, i) => ({ entryId: `re-${i}`, position })),
+      ALL_POSITIONS.map((position, i) => ({
+        entryId: `re-${i}`,
+        position,
+        positionSlot: 0,
+      })),
     );
   });
 
@@ -222,7 +234,7 @@ describe("savePositionsAction", () => {
 
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a"}', baseline: "{}" }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["a"]}', baseline: "{}" }),
       ),
     );
 
@@ -243,15 +255,15 @@ describe("savePositionsAction", () => {
       savePositionsAction(
         form({
           teamId: "team-1",
-          positions: '{"PITCHER":"a","SHORTSTOP":"b"}',
-          baseline: '{"SHORTSTOP":"b"}',
+          positions: '{"PITCHER":["a"],"SHORTSTOP":["b"]}',
+          baseline: '{"SHORTSTOP":["b"]}',
         }),
       ),
     );
 
     expect(savePositions).toHaveBeenCalledWith("team-1", [
-      { entryId: "a", position: "PITCHER" },
-      { entryId: "b", position: "SHORTSTOP" },
+      { entryId: "a", position: "PITCHER", positionSlot: 0 },
+      { entryId: "b", position: "SHORTSTOP", positionSlot: 0 },
     ]);
   });
 
@@ -264,8 +276,8 @@ describe("savePositionsAction", () => {
       savePositionsAction(
         form({
           teamId: "team-1",
-          positions: '{"PITCHER":"a"}',
-          baseline: '{"PITCHER":"a"}',
+          positions: '{"PITCHER":["a"]}',
+          baseline: '{"PITCHER":["a"]}',
         }),
       ),
     );
@@ -280,7 +292,7 @@ describe("savePositionsAction", () => {
 
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a"}', baseline: "{}" }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["a"]}', baseline: "{}" }),
       ),
     );
 
@@ -310,7 +322,7 @@ describe("savePositionsAction", () => {
   it("rejects an entry that is not on this team's roster", async () => {
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"intruder"}' }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["intruder"]}' }),
       ),
     );
 
@@ -321,7 +333,7 @@ describe("savePositionsAction", () => {
   it("rejects the same player standing at two positions", async () => {
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a","SHORTSTOP":"a"}' }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["a"],"SHORTSTOP":["a"]}' }),
       ),
     );
 
@@ -329,12 +341,43 @@ describe("savePositionsAction", () => {
     expect(savePositions).not.toHaveBeenCalled();
   });
 
-  it("rejects a named outfield spot for an allPlay team, using the freshly loaded flag", async () => {
+  it("saves a stacked outfield spot for an allPlay team, numbering its slots", async () => {
+    await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: '{"LEFT_FIELD":["a","b","c"]}' }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith("team-1", [
+      { entryId: "a", position: "LEFT_FIELD", positionSlot: 0 },
+      { entryId: "b", position: "LEFT_FIELD", positionSlot: 1 },
+      { entryId: "c", position: "LEFT_FIELD", positionSlot: 2 },
+    ]);
+  });
+
+  it("rejects a stacked outfield spot once allPlay is off, using the freshly loaded flag", async () => {
     // The client can't be trusted for allPlay: this payload is what an editor
     // loaded before the setting was toggled would post.
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      allPlay: false,
+      archivedAt: null,
+    });
+
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"LEFT_FIELD":"a"}' }),
+        form({ teamId: "team-1", positions: '{"LEFT_FIELD":["a","b"]}' }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=position-full");
+    expect(savePositions).not.toHaveBeenCalled();
+  });
+
+  it("rejects a catcher for an allPlay team", async () => {
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: '{"CATCHER":["a"]}' }),
       ),
     );
 
@@ -342,22 +385,18 @@ describe("savePositionsAction", () => {
     expect(savePositions).not.toHaveBeenCalled();
   });
 
-  it("accepts that same spot once allPlay is off", async () => {
-    getTeamById.mockResolvedValue({
-      id: "team-1",
-      allPlay: false,
-      archivedAt: null,
-    });
-
-    await redirectUrlOf(
+  it("rejects a stack deeper than any spot allows at the schema, before validation", async () => {
+    const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"LEFT_FIELD":"a"}' }),
+        form({
+          teamId: "team-1",
+          positions: '{"LEFT_FIELD":["a","b","c","d"]}',
+        }),
       ),
     );
 
-    expect(savePositions).toHaveBeenCalledWith("team-1", [
-      { entryId: "a", position: "LEFT_FIELD" },
-    ]);
+    expect(url).toBe("/t/team-1/chart/positions?error=invalid-positions");
+    expect(getChart).not.toHaveBeenCalled();
   });
 
   it("redirects to access on TeamAccessError", async () => {
@@ -367,7 +406,7 @@ describe("savePositionsAction", () => {
 
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a"}' }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["a"]}' }),
       ),
     );
 
@@ -382,7 +421,7 @@ describe("savePositionsAction", () => {
 
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a"}' }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["a"]}' }),
       ),
     );
 
@@ -399,7 +438,7 @@ describe("savePositionsAction", () => {
 
     const url = await redirectUrlOf(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a"}' }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["a"]}' }),
       ),
     );
 
@@ -411,7 +450,7 @@ describe("savePositionsAction", () => {
 
     await expect(
       savePositionsAction(
-        form({ teamId: "team-1", positions: '{"PITCHER":"a"}' }),
+        form({ teamId: "team-1", positions: '{"PITCHER":["a"]}' }),
       ),
     ).rejects.toThrow("connection lost");
     expect(revalidatePath).not.toHaveBeenCalled();

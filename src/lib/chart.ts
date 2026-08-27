@@ -1,12 +1,17 @@
 import type { Position } from "@/generated/prisma/enums";
-import { ALL_PLAY_INFIELD_POSITIONS, ALL_POSITIONS } from "@/lib/positions";
+import {
+  ALL_PLAY_POSITIONS,
+  ALL_POSITIONS,
+  positionCapacity,
+} from "@/lib/positions";
 
 /// Pure chart editing logic: the batting order (#10) and the positions
 /// diamond (#11).
 ///
 /// The batting draft model is a fixed array of slots (index i = batting slot
 /// i + 1) plus an unassigned pool; the positions draft model is a
-/// position → entry map plus a pool. Both hold `RosterEntry` ids. Everything
+/// position → entry-ids map plus a pool (one id per spot, except an allPlay
+/// team's outfield spots, which stack to three). Both hold `RosterEntry` ids. Everything
 /// here is DB-free and DOM-free: each dnd-kit component is a thin shell that
 /// maps drag events onto these functions (`resolveDrop`,
 /// `resolvePositionDrop`), and the server actions re-run the matching
@@ -298,13 +303,23 @@ export type PositionsDraft = {
   /// The droppable positions on this board, in scorebook order. Carried on the
   /// draft rather than passed alongside it so every mutation below can reject
   /// a position the board doesn't have — under allPlay that is what makes
-  /// "an outfield assignment is unrepresentable" structural instead of a rule
+  /// "a catcher assignment is unrepresentable" structural instead of a rule
   /// each caller has to remember.
   positions: readonly Position[];
-  /// position → entry id, for filled spots only.
-  assigned: Partial<Record<Position, string>>;
+  /// Whether this is an allPlay board — carried for the same reason as
+  /// `positions`: per-spot capacity (`positionCapacity`) is a property of the
+  /// board, and a mutation that had to be told the capacity per call could be
+  /// told the wrong one.
+  allPlay: boolean;
+  /// position → entry ids, for filled spots only — a key is present only while
+  /// its array is non-empty. One entry everywhere except an allPlay team's
+  /// LF/CF/RF, which stack to `OUTFIELD_SPOT_CAPACITY`. Array order is arrival
+  /// order and is presentation only: nothing persisted distinguishes two
+  /// orderings of the same spot (see `samePositions`).
+  assigned: Partial<Record<Position, readonly string[]>>;
   /// Everyone else, in the order the caller supplied (roster order): the
-  /// outfield zone under allPlay, the bench otherwise. Both persist as null.
+  /// general outfield zone under allPlay, the bench otherwise. Both persist as
+  /// null.
   pool: string[];
 };
 
@@ -316,18 +331,16 @@ export type PositionChartEntry = {
 /**
  * Which positions are drop targets.
  *
- * Under allPlay the outfield is ONE zone holding every remaining player
- * (product-brief.md:94), and `RosterEntry_teamId_position_key` allows only one
- * player per named position — so LF/CF/RF are not droppable and are never
- * written for an allPlay team. Those players persist as `position = null`,
- * which is unambiguous because an allPlay team has no bench.
- *
- * An allPlay team has no catcher either — the coach pitches — so C is not
- * droppable there for the same reason, and a catcher lands in the outfield
- * along with everyone else off the infield.
+ * An allPlay team has no catcher — the coach pitches — so C is not droppable
+ * there, and a catcher row lands in the general outfield along with everyone
+ * else the board doesn't seat. LF/CF/RF ARE droppable under allPlay (revised
+ * with the named-outfield-spots change): each stacks to
+ * `OUTFIELD_SPOT_CAPACITY`, and whoever the coach leaves unpinned persists as
+ * `position = null` — the general outfield zone, which is unambiguous because
+ * an allPlay team has no bench.
  */
 export function droppablePositions(allPlay: boolean): readonly Position[] {
-  return allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS;
+  return allPlay ? ALL_PLAY_POSITIONS : ALL_POSITIONS;
 }
 
 /// Where `entryId` currently stands, or null if they're in the pool or absent.
@@ -336,7 +349,7 @@ export function positionOf(
   entryId: string,
 ): Position | null {
   for (const position of draft.positions) {
-    if (draft.assigned[position] === entryId) {
+    if (draft.assigned[position]?.includes(entryId)) {
       return position;
     }
   }
@@ -347,12 +360,12 @@ export function positionOf(
  * Initial draft from the current chart.
  *
  * An entry whose stored position isn't droppable on this board lands in the
- * pool — that is how an allPlay team's stale LF/CF/RF rows (hand-set during
- * #9, or left behind when allPlay was switched on) show up in the outfield
- * zone. They are only collapsed to null when the coach actually saves, so
- * nothing changes behind their back. A position claimed twice can't come out
- * of the database (unique index), but the second entry is pooled rather than
- * dropped if it ever does.
+ * pool — that is how an allPlay team's stale CATCHER row (hand-set during #9,
+ * or left behind when allPlay was switched on) shows up in the outfield zone.
+ * It is only collapsed to null when the coach actually saves, so nothing
+ * changes behind their back. Likewise a spot holding more entries than its
+ * capacity (a named outfield stack after allPlay was switched OFF) keeps the
+ * first arrivals and pools the rest rather than dropping anyone.
  */
 export function buildPositionsDraft(
   entries: readonly PositionChartEntry[],
@@ -360,7 +373,7 @@ export function buildPositionsDraft(
 ): PositionsDraft {
   const positions = droppablePositions(allPlay);
   const droppable = new Set(positions);
-  const assigned: Partial<Record<Position, string>> = {};
+  const assigned: Partial<Record<Position, string[]>> = {};
   const pool: string[] = [];
 
   for (const entry of entries) {
@@ -368,29 +381,30 @@ export function buildPositionsDraft(
     if (
       position !== null &&
       droppable.has(position) &&
-      assigned[position] === undefined
+      (assigned[position]?.length ?? 0) < positionCapacity(position, allPlay)
     ) {
-      assigned[position] = entry.entryId;
+      (assigned[position] ??= []).push(entry.entryId);
     } else {
       pool.push(entry.entryId);
     }
   }
 
-  return { positions, assigned, pool };
+  return { positions, allPlay, assigned, pool };
 }
 
 /**
  * Put `entryId` at `position`, the one mutation the diamond performs — the
- * same swap grammar as `placeInSlot`:
+ * swap grammar of `placeInSlot`, generalised to spots with room to spare:
  *
- *   - entry stood elsewhere → the two SWAP (the displaced player takes the
- *     dragged player's old position, which may leave that spot empty).
- *   - entry was pooled, position occupied → still a swap: the displaced player
- *     takes the entry's place in the pool.
- *   - entry was pooled, position empty → the entry just takes it.
+ *   - position has room (an allPlay outfield spot below capacity, or any
+ *     empty spot) → the entry simply joins it, leaving wherever it stood.
+ *   - position is full → the entry SWAPS with the spot's most recent arrival:
+ *     the displaced player takes the dragged player's old place (their old
+ *     position, or their spot in the pool). At capacity 1 this is exactly the
+ *     old grammar, so the infield behaves as it always has.
  *
- * Positions off this board, unknown entries, and self-drops return the draft
- * unchanged. Never mutates its input.
+ * Positions off this board, unknown entries, and drops onto a spot the entry
+ * already holds return the draft unchanged. Never mutates its input.
  */
 export function placeAtPosition(
   draft: PositionsDraft,
@@ -412,27 +426,37 @@ export function placeAtPosition(
 
   const assigned = { ...draft.assigned };
   const pool = [...draft.pool];
-  const occupant = assigned[position];
+  const target = [...(assigned[position] ?? [])];
+  const capacity = positionCapacity(position, draft.allPlay);
 
-  assigned[position] = entryId;
+  // Room to join, or a full spot's last arrival to displace.
+  const displaced =
+    target.length < capacity ? undefined : target.pop();
+  target.push(entryId);
+  assigned[position] = target;
+
   if (from !== null) {
-    if (occupant !== undefined) {
-      assigned[from] = occupant;
+    const source = (assigned[from] ?? []).filter((id) => id !== entryId);
+    if (displaced !== undefined) {
+      source.push(displaced);
+    }
+    if (source.length > 0) {
+      assigned[from] = source;
     } else {
       delete assigned[from];
     }
-  } else if (occupant !== undefined) {
-    pool.splice(fromPool, 1, occupant);
+  } else if (displaced !== undefined) {
+    pool.splice(fromPool, 1, displaced);
   } else {
     pool.splice(fromPool, 1);
   }
 
-  return { positions: draft.positions, assigned, pool };
+  return { positions: draft.positions, allPlay: draft.allPlay, assigned, pool };
 }
 
 /// Drop onto the zone: the entry leaves the diamond. Under allPlay that means
-/// the outfield, otherwise the bench — both are `position = null`. No-op for an
-/// entry already pooled.
+/// the general outfield, otherwise the bench — both are `position = null`.
+/// No-op for an entry already pooled.
 export function unassignPosition(
   draft: PositionsDraft,
   entryId: string,
@@ -443,19 +467,38 @@ export function unassignPosition(
   }
 
   const assigned = { ...draft.assigned };
-  delete assigned[from];
-  return { positions: draft.positions, assigned, pool: [...draft.pool, entryId] };
+  const remaining = (assigned[from] ?? []).filter((id) => id !== entryId);
+  if (remaining.length > 0) {
+    assigned[from] = remaining;
+  } else {
+    delete assigned[from];
+  }
+  return {
+    positions: draft.positions,
+    allPlay: draft.allPlay,
+    assigned,
+    pool: [...draft.pool, entryId],
+  };
 }
 
 /// Compare two boards. Only the diamond matters — pool order is presentation,
-/// since every pooled player persists as the same null. Spans all nine
-/// positions, not just the droppable ones, so it can also compare a draft
-/// against what the database holds (see `storedPositions`).
+/// since every pooled player persists as the same null — and WHO holds a spot
+/// matters while the order they arrived in does not: nothing persisted
+/// distinguishes two orderings of one outfield stack (`positionSlot` is a
+/// uniqueness mechanism, renumbered on every save). Spans all nine positions,
+/// not just the droppable ones, so it can also compare a draft against what
+/// the database holds (see `storedPositions`).
 export function samePositions(
-  a: Partial<Record<Position, string>>,
-  b: Partial<Record<Position, string>>,
+  a: Partial<Record<Position, readonly string[]>>,
+  b: Partial<Record<Position, readonly string[]>>,
 ): boolean {
-  return ALL_POSITIONS.every((position) => a[position] === b[position]);
+  return ALL_POSITIONS.every((position) => {
+    const atA = a[position] ?? [];
+    const atB = b[position] ?? [];
+    return (
+      atA.length === atB.length && atA.every((entryId) => atB.includes(entryId))
+    );
+  });
 }
 
 /**
@@ -464,20 +507,21 @@ export function samePositions(
  *
  * This is the only honest answer to "would saving change anything?", and it is
  * not `buildPositionsDraft(...).assigned`: that pools an allPlay team's stale
- * LF/CF/RF row, so a freshly-loaded draft compares equal to itself while the
- * stored row still says CENTER_FIELD. Gating Save on the draft alone would
- * disable the one button that collapses that row, stranding it until the coach
+ * CATCHER row (and any over-capacity outfield stack left by an allPlay
+ * toggle), so a freshly-loaded draft compares equal to itself while the
+ * stored row still says CATCHER. Gating Save on the draft alone would disable
+ * the one button that collapses that row, stranding it until the coach
  * happened to make an unrelated change.
  */
 export function storedPositions(
   entries: readonly PositionChartEntry[],
-): Partial<Record<Position, string>> {
-  const stored: Partial<Record<Position, string>> = {};
+): Partial<Record<Position, string[]>> {
+  const stored: Partial<Record<Position, string[]>> = {};
   for (const entry of entries) {
-    // First writer wins, matching buildPositionsDraft. The unique index makes
-    // a collision unreachable from a real read.
-    if (entry.position !== null && stored[entry.position] === undefined) {
-      stored[entry.position] = entry.entryId;
+    // Every row is kept, capacity or not — this is the database's answer, and
+    // `samePositions` is order-insensitive, so entry order doesn't matter.
+    if (entry.position !== null) {
+      (stored[entry.position] ??= []).push(entry.entryId);
     }
   }
   return stored;
@@ -536,20 +580,25 @@ export function nextDroppableId(
 export type PositionAssignment = {
   entryId: string;
   position: Position;
+  /// 0 everywhere except an allPlay outfield stack, where the spot's players
+  /// number 0..n-1 in submitted order. Exists to satisfy the unique index
+  /// `[teamId, position, positionSlot]`; nothing reads it back.
+  positionSlot: number;
 };
 
 export type PositionsInvalidReason =
   | "unknown-entry"
   | "duplicate-entry"
-  | "invalid-position";
+  | "invalid-position"
+  | "position-full";
 
 export type PositionsValidation =
   | { ok: true; assignments: PositionAssignment[] }
   | { ok: false; reason: PositionsInvalidReason };
 
 /**
- * Validate a submitted position → entry map against the roster and allPlay
- * flag the server loaded itself.
+ * Validate a submitted position → entry-ids map against the roster and
+ * allPlay flag the server loaded itself.
  *
  * **A partial chart is valid.** Unlike `validateBattingOrder`, there is no
  * "everyone must be placed" rule to enforce under allPlay: an empty shortstop
@@ -557,12 +606,16 @@ export type PositionsValidation =
  * outfield. "No chart set yet" is a real state the view page renders (#8), and
  * #9's weekend produced half-entered charts on purpose.
  *
- * A named outfield position submitted for an allPlay team is `invalid-position`
- * rather than something to quietly drop — it means the setting was toggled
- * mid-edit, and the coach should see the board they're actually saving.
+ * A CATCHER submitted for an allPlay team is `invalid-position` rather than
+ * something to quietly drop — it means the setting was toggled mid-edit, and
+ * the coach should see the board they're actually saving. A spot holding more
+ * entries than `positionCapacity` allows is `position-full` by the same logic:
+ * the honest boards the editor builds can't produce it (two at shortstop, or
+ * four at an outfield spot — including three at LF/CF/RF the instant allPlay
+ * is toggled off), so the coach should see what the board has become.
  */
 export function validatePositions(
-  submitted: Readonly<Record<string, string>>,
+  submitted: Readonly<Record<string, readonly string[]>>,
   rosterEntryIds: readonly string[],
   allPlay: boolean,
 ): PositionsValidation {
@@ -582,18 +635,23 @@ export function validatePositions(
   // Scorebook order, not the submitted key order, so the write is the same
   // regardless of how the client happened to serialize the map.
   for (const position of positions) {
-    const entryId = submitted[position];
-    if (entryId === undefined) {
+    const entryIds = submitted[position];
+    if (entryIds === undefined) {
       continue;
     }
-    if (!roster.has(entryId)) {
-      return { ok: false, reason: "unknown-entry" };
+    if (entryIds.length > positionCapacity(position, allPlay)) {
+      return { ok: false, reason: "position-full" };
     }
-    if (seen.has(entryId)) {
-      return { ok: false, reason: "duplicate-entry" };
+    for (const [positionSlot, entryId] of entryIds.entries()) {
+      if (!roster.has(entryId)) {
+        return { ok: false, reason: "unknown-entry" };
+      }
+      if (seen.has(entryId)) {
+        return { ok: false, reason: "duplicate-entry" };
+      }
+      seen.add(entryId);
+      assignments.push({ entryId, position, positionSlot });
     }
-    seen.add(entryId);
-    assignments.push({ entryId, position });
   }
 
   return { ok: true, assignments };
