@@ -1,3 +1,6 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SubmitButton } from "@/components/SubmitButton";
 import {
@@ -10,6 +13,7 @@ import {
 
 import { requestSignInCode } from "./actions";
 import { messageFor, messageTable } from "@/lib/error-messages";
+import { readPendingSignIn } from "@/lib/pending-signin-cookie";
 
 export const metadata = {
   title: "Sign in — Youth Baseball Team Manager",
@@ -24,6 +28,10 @@ export const metadata = {
 /// /signin/check-email — but naming the reason would still leak whether an
 /// invitation exists, so both get the neutral wording. `code-expired` is this
 /// app's own key, set by `submitSignInCode` when the pending cookie is gone.
+///
+/// `Verification` keeps its wording for the case where the code really is
+/// spent, but most arrivals never see it: with a live pending cookie the
+/// loader below sends them back to the entry form instead.
 const ERROR_MESSAGES = messageTable({
   "invalid-email":
     "That doesn't look like an email address — check it and try again.",
@@ -46,6 +54,24 @@ export default async function SignInPage({
   searchParams: Promise<{ error?: string; callbackUrl?: string }>;
 }) {
   const { error, callbackUrl } = await searchParams;
+
+  // A wrong-but-well-formed code lands here, because `pages.error` is global
+  // and Auth.js has nowhere else to send a failed redeem. Bouncing it back to
+  // the entry form is the difference between "type that again" and "we have
+  // thrown away the code you were holding, ask for another email" — the
+  // mailed code and this cookie expire together, so a live cookie means there
+  // is still something worth retyping.
+  //
+  // Only `Verification`. `AccessDenied` means the gate refused the address,
+  // and no amount of retyping changes that.
+  if (error === "Verification") {
+    const cookieStore = await cookies();
+    const pending = readPendingSignIn((name) => cookieStore.get(name)?.value);
+
+    if (pending) {
+      redirect("/signin/check-email?error=wrong-code");
+    }
+  }
 
   const errorMessage = messageFor(ERROR_MESSAGES, error, FALLBACK_ERROR_MESSAGE);
 

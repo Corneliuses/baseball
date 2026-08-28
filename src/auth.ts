@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 
+import { withSingleLiveCode } from "@/lib/auth-adapter";
 import { db } from "@/lib/db";
 import { acceptInvitations, loadSignInContext } from "@/lib/invitations";
 import { resendProvider } from "@/lib/resend-provider";
@@ -33,7 +34,10 @@ import {
 /// actually fires, which is only the "request a sign-in code" step of sign-in.
 
 export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
-  adapter: PrismaAdapter(db),
+  // Wrapped so requesting a code invalidates the address's previous one. The
+  // 40-bit code assumes exactly one live code per address; the table's unique
+  // indexes do not provide that on their own. See lib/auth-adapter.ts.
+  adapter: withSingleLiveCode(PrismaAdapter(db)),
 
   providers: [resendProvider()],
 

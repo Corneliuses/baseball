@@ -382,6 +382,30 @@ production — the dev command can prompt, generate new migrations, and reset th
   invitation-accept link (`/invite/[token]`) is the one emailed link that signs someone
   in, and it stays: it is a POST from a page, not a bare GET, and it establishes the
   session in whichever container the parent opened it in.
+
+  **Three things hold that code up, and none of them is optional.** The 40 bits assume
+  *one* live code per address, which `VerificationToken` does not give for free — it is
+  unique on `(identifier, token)`, not on `identifier`, so every request would otherwise
+  add another live code and divide the guessing work. `withSingleLiveCode`
+  (`auth-adapter.ts`) wraps the Prisma adapter to delete the address's other codes before
+  minting one; length, expiry and that wrapper stand or fall together. Second, the pending
+  cookie is read through `readPendingSignIn`, which takes the first name that **parses**
+  and tries `__Secure-` first: taking the first that merely *existed* let junk planted in
+  the bare `pending-signin` name shadow the real cookie and lock someone out of signing in
+  entirely. Third, `resend-provider.ts` imports the mail stack *inside* the send path —
+  `src/auth.ts` is in every page's graph, so a static `@/lib/email` import puts the Resend
+  SDK and React Email there too.
+
+  **A wrong code goes back to the code form, not to the email form.** `pages.error` is
+  global, so Auth.js can only fail a redeem to `/signin`; that loader bounces
+  `?error=Verification` on to `/signin/check-email?error=wrong-code` when the pending
+  cookie is still alive, because the cookie and the mailed code expire together — a live
+  cookie means there is still a code worth retyping, and sending the parent back for a
+  second email throws away a working one. `AccessDenied` is deliberately not bounced: the
+  gate refused the address, and retyping cannot change that. The entry form itself is
+  `useActionState` (`CodeEntryForm` + `check-email-state.ts`), so a mistype keeps the
+  characters — the convention every typed-into form here follows, and the reason
+  `?error=invalid-code` no longer exists.
 - **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting`,
   `clients.claim`, and the `push` / `notificationclick` pair — no `fetch` handler, which is
   Decision 9 and the reason there is no Workbox build step. Adding a `fetch` handler is not

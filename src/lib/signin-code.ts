@@ -18,6 +18,13 @@
 /// a migration), so guesses are unlimited inside the expiry window. 2^40
 /// against a 10-minute window is comfortably out of online-guessing reach; a
 /// 6-digit code's 20 bits would not be.
+///
+/// That argument assumes **one** live code per address, which the token table
+/// does not give for free: it is unique on `(identifier, token)`, not on
+/// `identifier`, so repeated requests would otherwise pile up live codes and
+/// divide the guessing work by however many. `withSingleLiveCode`
+/// (`auth-adapter.ts`) is what actually holds N at 1, and the three — length,
+/// expiry, one-live-code — stand or fall together.
 export const SIGNIN_CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 export const SIGNIN_CODE_LENGTH = 8;

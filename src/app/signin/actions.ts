@@ -7,15 +7,16 @@ import { z } from "zod";
 import { signIn } from "@/auth";
 import { safeCallbackUrl } from "@/lib/callback-url";
 import {
-  PENDING_SIGNIN_COOKIE_NAMES,
   normalizeSignInEmail,
-  parsePendingSignIn,
   pendingSignInCookieName,
   pendingSignInCookieOptions,
+  readPendingSignIn,
   serializePendingSignIn,
 } from "@/lib/pending-signin-cookie";
 import { usesSecureCookies } from "@/lib/session-cookie";
 import { normalizeSignInCode } from "@/lib/signin-code";
+
+import type { CheckEmailState } from "./check-email-state";
 
 const emailSchema = z.email();
 
@@ -87,28 +88,34 @@ export async function requestSignInCode(formData: FormData) {
  * (a bespoke code table, a direct session write) would duplicate the gate and
  * the invitation wiring into a second sign-in path — see #60.
  *
- * A wrong-but-well-formed code fails inside Auth.js and lands on
- * /signin?error=Verification; a mistyped one is caught here and returns to
- * the entry form. Neither reveals whether the address is invited, and neither
- * burns the real code — `useVerificationToken` deletes the row only on a
- * successful match.
+ * `useActionState`-shaped, so a mistype comes back as typed state with the
+ * characters still in the box. A redirect would have wiped them, and eight
+ * characters retyped on a phone is where people stop.
+ *
+ * A wrong-but-well-formed code cannot be judged here — only Auth.js can say
+ * whether it matches — so it goes to the callback and comes back through
+ * `/signin`, which bounces it to the entry form while the code is still live.
+ * Neither path reveals whether the address is invited, and neither burns the
+ * real code: `useVerificationToken` deletes the row only on a match.
  */
-export async function submitSignInCode(formData: FormData) {
+export async function submitSignInCode(
+  _state: CheckEmailState,
+  formData: FormData,
+): Promise<CheckEmailState> {
   const cookieStore = await cookies();
-  const raw = PENDING_SIGNIN_COOKIE_NAMES.map(
-    (name) => cookieStore.get(name)?.value,
-  ).find((value) => value !== undefined);
+  const pending = readPendingSignIn((name) => cookieStore.get(name)?.value);
 
-  const pending = parsePendingSignIn(raw);
   if (!pending) {
     // The cookie and the code expire together, so no address here means no
     // live code to redeem — start over rather than invite a doomed submit.
     redirect("/signin?error=code-expired");
   }
 
-  const code = normalizeSignInCode(formData.get("code"));
+  const typed = String(formData.get("code") ?? "");
+  const code = normalizeSignInCode(typed);
+
   if (!code) {
-    redirect("/signin/check-email?error=invalid-code");
+    return { status: "invalid", code: "invalid-code", value: typed };
   }
 
   redirect(

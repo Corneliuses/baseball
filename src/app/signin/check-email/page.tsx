@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 
 import { PageContainer } from "@/components/layout/PageContainer";
-import { SubmitButton } from "@/components/SubmitButton";
 import {
   Card,
   CardContent,
@@ -10,22 +9,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { messageFor, messageTable } from "@/lib/error-messages";
-import {
-  PENDING_SIGNIN_COOKIE_NAMES,
-  parsePendingSignIn,
-} from "@/lib/pending-signin-cookie";
+import { messageFor } from "@/lib/error-messages";
+import { readPendingSignIn } from "@/lib/pending-signin-cookie";
 
-import { submitSignInCode } from "../actions";
+import { CODE_ENTRY_MESSAGES } from "../signin-messages";
+import { CodeEntryForm } from "./CodeEntryForm";
 
 export const metadata = {
   title: "Enter your code — Youth Baseball Team Manager",
 };
-
-const ERROR_MESSAGES = messageTable({
-  "invalid-code":
-    "That doesn't look like a code — it's 8 letters and numbers, like K3M7-QP2X.",
-});
 
 /// Where every sign-in attempt lands, invited or not — now as the code-entry
 /// form (#60). The wording deliberately stops short of promising that an
@@ -36,20 +28,21 @@ const ERROR_MESSAGES = messageTable({
 ///
 /// The pending cookie expires with the code, so a stale tab or a direct visit
 /// gets the start-over card instead of a form whose submission can only fail.
+///
+/// `?error=` here is only ever `wrong-code`, put there by `/signin` when
+/// Auth.js rejects a redeem while this cookie is still live. A mistyped code
+/// never reaches the query string at all — the form owns that failure and
+/// keeps the characters (see `CodeEntryForm`).
 export default async function CheckEmailPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const errorMessage = messageFor(ERROR_MESSAGES, error);
+  const errorMessage = messageFor(CODE_ENTRY_MESSAGES, error);
 
   const cookieStore = await cookies();
-  const pending = parsePendingSignIn(
-    PENDING_SIGNIN_COOKIE_NAMES.map(
-      (name) => cookieStore.get(name)?.value,
-    ).find((value) => value !== undefined),
-  );
+  const pending = readPendingSignIn((name) => cookieStore.get(name)?.value);
 
   if (!pending) {
     return (
@@ -93,51 +86,7 @@ export default async function CheckEmailPage({
           </CardHeader>
 
           <CardContent>
-            <form action={submitSignInCode} className="space-y-4">
-              <div className="space-y-2">
-                <label
-                  htmlFor="code"
-                  className="block text-sm font-medium text-foreground"
-                >
-                  Sign-in code
-                </label>
-                <input
-                  id="code"
-                  name="code"
-                  type="text"
-                  // The one autofill hint that matters: on a phone the code
-                  // arrives as a notification, and this lets the keyboard
-                  // offer it without a trip to the mail app.
-                  autoComplete="one-time-code"
-                  autoCapitalize="characters"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  required
-                  maxLength={12}
-                  placeholder="K3M7-QP2X"
-                  aria-describedby={errorMessage ? "code-error" : undefined}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-lg tracking-widest text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {errorMessage ? (
-                  <p
-                    id="code-error"
-                    role="alert"
-                    className="text-sm text-destructive"
-                  >
-                    {errorMessage}
-                  </p>
-                ) : null}
-              </div>
-
-              {/* This screen's one banana (design-plan.md §2), matching the
-                  request form it follows. */}
-              <SubmitButton
-                className="w-full bg-banana text-banana-foreground hover:bg-banana/90"
-                pendingLabel="Signing you in…"
-              >
-                Sign in
-              </SubmitButton>
-            </form>
+            <CodeEntryForm serverMessage={errorMessage} />
           </CardContent>
         </Card>
 
@@ -150,7 +99,8 @@ export default async function CheckEmailPage({
           <p>
             <Link href="/signin" className="font-medium text-primary underline">
               Use a different address
-            </Link>
+            </Link>{" "}
+            — asking for a new code replaces the one we already sent.
           </p>
         </div>
       </div>

@@ -1,8 +1,5 @@
 import Resend from "next-auth/providers/resend";
 
-import { SignInCodeEmail } from "@/emails/SignInCodeEmail";
-import { buildSignInCodeEmail } from "@/emails/signin-code-email";
-import { sendEmail } from "@/lib/email";
 import {
   SIGNIN_CODE_MAX_AGE_SECONDS,
   generateSignInCode,
@@ -26,6 +23,15 @@ import {
 /// mails a link built from the callback URL, and there must be nothing in
 /// the email to follow — code *and* link would be the same token, so a mail
 /// scanner following the link would burn the code too.
+///
+/// The mail stack is imported **inside** the send path, not at the top of
+/// this file, and that is the same argument one level down: `src/auth.ts`
+/// imports this module, and every page calls `auth()`. Static imports of
+/// `@/lib/email` and the React Email template would therefore pull the Resend
+/// SDK and `@react-email/components` into the graph of every page render —
+/// paid on each cold start, by a signed-out visitor who triggers no email at
+/// all. `@/lib/signin-code` stays static: it is pure, tiny, and
+/// `generateVerificationToken` has to be able to return synchronously.
 ///
 /// Lives outside src/auth.ts, which is otherwise deliberately thin: this
 /// file avoids the top-level `next-auth` package import (only the
@@ -65,6 +71,13 @@ export function resendProvider() {
     ) {
       requireEnv("RESEND_API_KEY");
       requireEnv("EMAIL_FROM");
+
+      const [{ sendEmail }, { SignInCodeEmail }, { buildSignInCodeEmail }] =
+        await Promise.all([
+          import("@/lib/email"),
+          import("@/emails/SignInCodeEmail"),
+          import("@/emails/signin-code-email"),
+        ]);
 
       const content = buildSignInCodeEmail({ code: params.token });
       const result = await sendEmail({

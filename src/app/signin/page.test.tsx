@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 // The real action pulls in Auth.js and the Prisma client; the page only needs
@@ -7,7 +7,34 @@ vi.mock("./actions", () => ({
   requestSignInCode: vi.fn(),
 }));
 
+const cookieGet = vi.fn();
+
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: (...args: unknown[]) => cookieGet(...args) }),
+}));
+
+// redirect() throws in Next; reproduce that so a "bounced" assertion cannot
+// pass by accident.
+vi.mock("next/navigation", () => ({
+  redirect: (url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  },
+}));
+
 import SignInPage from "./page";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  cookieGet.mockReturnValue(undefined);
+});
+
+function pendingCookie() {
+  cookieGet.mockImplementation((name: string) =>
+    name === "__Secure-pending-signin"
+      ? { value: JSON.stringify({ email: "a@b.com", callbackUrl: "/" }) }
+      : undefined,
+  );
+}
 
 async function renderPage(
   searchParams: { error?: string; callbackUrl?: string } = {},
@@ -116,6 +143,37 @@ describe("SignInPage", () => {
         "aria-describedby",
         "email-error",
       );
+    });
+  });
+
+  // A wrong-but-well-formed code fails inside Auth.js, which has only this
+  // page to fail to. While the pending cookie is alive the mailed code is
+  // too, so the parent is sent back to retype it rather than being told to
+  // ask for a second email.
+  describe("a failed redeem with a live pending sign-in", () => {
+    it("bounces back to the code form", async () => {
+      pendingCookie();
+
+      await expect(renderPage({ error: "Verification" })).rejects.toThrow(
+        "NEXT_REDIRECT:/signin/check-email?error=wrong-code",
+      );
+    });
+
+    it("stays here when there is no pending sign-in left", async () => {
+      await renderPage({ error: "Verification" });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /didn't match or has expired/i,
+      );
+    });
+
+    // The gate refused the address; retyping the code cannot change that.
+    it("does not bounce a denied address", async () => {
+      pendingCookie();
+
+      await renderPage({ error: "AccessDenied" });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/no longer valid/i);
     });
   });
 

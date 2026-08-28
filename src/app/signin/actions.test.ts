@@ -31,6 +31,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { requestSignInCode, submitSignInCode } from "./actions";
+import { CHECK_EMAIL_INITIAL_STATE } from "./check-email-state";
 
 function form(entries: Record<string, string>) {
   const data = new FormData();
@@ -138,22 +139,26 @@ describe("submitSignInCode", () => {
     );
   }
 
+  function submit(code: string) {
+    return submitSignInCode(CHECK_EMAIL_INITIAL_STATE, form({ code }));
+  }
+
   it("starts over when the pending cookie is gone", async () => {
-    const destination = await redirectOf(
-      submitSignInCode(form({ code: "K3M7QP2X" })),
-    );
+    const destination = await redirectOf(submit("K3M7QP2X"));
 
     expect(destination).toBe("/signin?error=code-expired");
   });
 
-  it("returns to the entry form for something that cannot be a code", async () => {
+  // The value comes back with the state instead of being thrown away by a
+  // redirect: eight characters retyped on a phone is where people give up.
+  it("returns a mistyped code as state, keeping what was typed", async () => {
     pendingCookie();
 
-    const destination = await redirectOf(
-      submitSignInCode(form({ code: "nope" })),
-    );
-
-    expect(destination).toBe("/signin/check-email?error=invalid-code");
+    await expect(submit("nope")).resolves.toEqual({
+      status: "invalid",
+      code: "invalid-code",
+      value: "nope",
+    });
   });
 
   // The whole trick of #60: rebuild the URL the magic link used to carry.
@@ -163,14 +168,34 @@ describe("submitSignInCode", () => {
   it("redeems a typed code against the Auth.js email callback", async () => {
     pendingCookie();
 
-    const destination = await redirectOf(
-      submitSignInCode(form({ code: "k3m7 qp2x" })),
-    );
+    const destination = await redirectOf(submit("k3m7 qp2x"));
 
     const url = new URL(destination, "https://app.example");
     expect(url.pathname).toBe("/api/auth/callback/resend");
     expect(url.searchParams.get("token")).toBe("K3M7QP2X");
     expect(url.searchParams.get("email")).toBe("parent@example.com");
     expect(url.searchParams.get("callbackUrl")).toBe("/t/team-a");
+  });
+
+  // Junk in the unprefixed name used to shadow the real cookie and lock the
+  // person out of signing in with nothing on screen to explain it.
+  it("ignores a planted unprefixed cookie", async () => {
+    cookieGet.mockImplementation((name: string) =>
+      name === "pending-signin"
+        ? { value: "not json" }
+        : {
+            value: JSON.stringify({
+              email: "parent@example.com",
+              callbackUrl: "/",
+            }),
+          },
+    );
+
+    const destination = await redirectOf(submit("K3M7QP2X"));
+
+    expect(destination).toContain("/api/auth/callback/resend");
+    expect(new URL(destination, "https://app.example").searchParams.get("email")).toBe(
+      "parent@example.com",
+    );
   });
 });

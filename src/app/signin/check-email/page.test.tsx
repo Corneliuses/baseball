@@ -70,12 +70,21 @@ describe("CheckEmailPage", () => {
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
-    it("explains a mistyped code", async () => {
-      await renderPage({ error: "invalid-code" });
+    // Auth.js rejected a redeem and /signin bounced it back here rather than
+    // making the parent ask for a second email, so the message has to say the
+    // mailed code is still good.
+    it("explains a wrong code without sending the parent back for another", async () => {
+      await renderPage({ error: "wrong-code" });
 
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        /doesn't look like a code/i,
-      );
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent(/didn't match/i);
+      expect(alert).toHaveTextContent(/still works/i);
+    });
+
+    it("keeps the entry form on screen alongside that message", async () => {
+      await renderPage({ error: "wrong-code" });
+
+      expect(screen.getByLabelText("Sign-in code")).toBeInTheDocument();
     });
 
     // Same hardening as every other ?error= page: inherited keys must hit
@@ -94,6 +103,15 @@ describe("CheckEmailPage", () => {
       expect(
         screen.getByRole("link", { name: /use a different address/i }),
       ).toHaveAttribute("href", "/signin");
+    });
+
+    // withSingleLiveCode makes this true rather than merely tidy: a second
+    // request deletes the first code, and someone holding both emails needs
+    // to know which one still works.
+    it("says a new code replaces the one already sent", async () => {
+      await renderPage();
+
+      expect(screen.getByText(/replaces the one we already sent/i)).toBeInTheDocument();
     });
   });
 

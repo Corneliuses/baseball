@@ -134,7 +134,7 @@ Run `pnpm check` before pushing — it chains lint, typecheck, and tests.
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Prisma 7 on Neon
-Postgres · Auth.js v5 magic links · `@dnd-kit` · Motion · Resend · `web-push` · Vitest ·
+Postgres · Auth.js v5 emailed sign-in codes · `@dnd-kit` · Motion · Resend · `web-push` · Vitest ·
 deployed on Vercel.
 
 Every one of those was chosen deliberately, with alternatives considered and rejected in
