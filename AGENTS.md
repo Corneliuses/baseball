@@ -388,7 +388,11 @@ production — the dev command can prompt, generate new migrations, and reset th
   unique on `(identifier, token)`, not on `identifier`, so every request would otherwise
   add another live code and divide the guessing work. `withSingleLiveCode`
   (`auth-adapter.ts`) wraps the Prisma adapter to delete the address's other codes before
-  minting one; length, expiry and that wrapper stand or fall together. Second, the pending
+  minting one; length, expiry and that wrapper stand or fall together. Prune-then-create
+  is two statements, so *concurrent* requests for one address can still both survive —
+  knowingly left open in #81, where the atomic fix (a unique index on `identifier` plus an
+  upsert) needs a migration, and where the reason the obvious patch is worse is written
+  down. Second, the pending
   cookie is read through `readPendingSignIn`, which takes the first name that **parses**
   and tries `__Secure-` first: taking the first that merely *existed* let junk planted in
   the bare `pending-signin` name shadow the real cookie and lock someone out of signing in

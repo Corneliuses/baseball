@@ -2,7 +2,7 @@ import type { Adapter, VerificationToken } from "next-auth/adapters";
 
 import { db } from "./db";
 
-/// One live sign-in code per address, enforced at the adapter.
+/// One live sign-in code per address — as far as two statements can manage.
 ///
 /// `VerificationToken` is unique on `(identifier, token)` and on `token`, but
 /// **not** on `identifier` alone, so every `/signin` POST used to mint another
@@ -18,6 +18,22 @@ import { db } from "./db";
 /// So the wrapper prunes before it creates. A person who asks for a second
 /// code invalidates their first, which is also what the wording on
 /// `/signin/check-email` implies.
+///
+/// **Sequential requests, not concurrent ones.** Prune-then-create is two
+/// statements, so `A.prune → B.prune → A.create → B.create` leaves both codes
+/// live. That is knowingly left open (#81), and the reason it is not patched
+/// here is that every available patch is worse. Pruning again *after* the
+/// create, excluding one's own token, has an interleaving that deletes both
+/// rows and leaves **zero** working codes — and `sendToken` runs
+/// `Promise.all([sendRequest, createToken])`, so both people have already been
+/// mailed a code by then. A transaction does not help either: at Postgres
+/// READ COMMITTED neither sees the other's uncommitted insert. The honest fix
+/// is a unique index on `identifier` and an upsert, which needs a migration.
+///
+/// What is left is bounded by *overlap* rather than by request count — the
+/// milliseconds between the two statements — where the unguarded version grew
+/// N with every request across the whole ten-minute window, no concurrency
+/// needed. See `signin-code.ts` for what N costs the entropy argument.
 ///
 /// The other side of that: anyone who can make the app send to an address can
 /// invalidate the code outstanding for it. That grants nothing new — the same
@@ -42,7 +58,8 @@ async function pruneCodesInDatabase(identifier: string) {
 
 /**
  * Wrap an adapter so creating a verification token first deletes every other
- * token held for that identifier.
+ * token held for that identifier. Read the note above on what that does and
+ * does not guarantee before relying on it.
  *
  * A prune failure is deliberately not swallowed: it is a database failure, and
  * `createVerificationToken` is about to hit the same database anyway. Letting

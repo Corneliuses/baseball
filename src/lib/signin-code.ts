@@ -23,8 +23,10 @@
 /// does not give for free: it is unique on `(identifier, token)`, not on
 /// `identifier`, so repeated requests would otherwise pile up live codes and
 /// divide the guessing work by however many. `withSingleLiveCode`
-/// (`auth-adapter.ts`) is what actually holds N at 1, and the three — length,
-/// expiry, one-live-code — stand or fall together.
+/// (`auth-adapter.ts`) is what holds N down — at 1 for sequential requests,
+/// and at the number that *overlap* its prune-then-create window otherwise
+/// (#81). The three — length, expiry, one-live-code — stand or fall together,
+/// so weakening any one of them means redoing this arithmetic.
 export const SIGNIN_CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 export const SIGNIN_CODE_LENGTH = 8;

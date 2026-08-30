@@ -34,6 +34,11 @@ describe("withSingleLiveCode", () => {
     expect(prune).toHaveBeenCalledWith("parent@example.com");
     // Order is the whole point: pruning after the create would delete the
     // code that was just handed to the person.
+    //
+    // This is the *sequential* guarantee, which is all two statements can
+    // give. Two requests that interleave between the prune and the create
+    // both survive — see #81 and the note in auth-adapter.ts for why the
+    // fixes that fit in this wrapper are worse than the gap.
     expect(order).toEqual(["prune", "create"]);
   });
 
