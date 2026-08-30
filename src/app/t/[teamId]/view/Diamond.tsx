@@ -1,6 +1,7 @@
 import {
   DIAMOND_GEOMETRY,
   POSITION_COORDS,
+  deepZoneFits,
   outfieldHaloRadius,
   outfieldSpotCoords,
   outfieldZoneCoords,
@@ -31,6 +32,17 @@ import {
 
 const EMPTY_GUARDED: ReadonlySet<string> = new Set();
 
+/// One outfielder as the SVG draws them: who, what abbreviation goes inside
+/// their circle, and where they stand. The three layouts below all produce
+/// this same shape, so the render and the halo measurement never have to know
+/// which one ran.
+type OutfieldMarker = {
+  player: ChartViewPlayer;
+  label: string;
+  x: number;
+  y: number;
+};
+
 const MARKER_RADIUS = DIAMOND_GEOMETRY.markerRadius;
 const NAME_OFFSET = DIAMOND_GEOMETRY.nameOffset;
 const TAG_OFFSET = DIAMOND_GEOMETRY.tagOffset;
@@ -57,10 +69,10 @@ function Marker({
   /// point (#49). Purely a property of who is reading, never of the roster
   /// spot, so nothing here is stored.
   isGuarded?: boolean;
-  /// The ring's radius, or null when the board is too crowded for one to fit.
-  /// Fixed positions always get `DIAMOND_GEOMETRY.haloRadius`; the outfield
-  /// zone's shrinks with the count (`zoneHaloRadius`), because that zone packs
-  /// its markers closer as the roster grows.
+  /// The ring's radius, or null when the guarded markers stand too close
+  /// together for one to fit. Fixed positions always get
+  /// `DIAMOND_GEOMETRY.haloRadius`; the outfield's shrinks as its markers pack
+  /// closer (`outfieldHaloRadius`).
   haloRadius?: number | null;
 }) {
   const style = player ? RSVP_STYLE[player.rsvpState] : null;
@@ -197,24 +209,70 @@ export function Diamond({
         (position) => [position, byPosition.get(position) ?? []] as const,
       )
     : [];
-  const spotMarkers = spots.flatMap(([position, players]) =>
-    outfieldSpotCoords(position, players.length).map((coord, index) => ({
-      position,
-      player: players[index],
-      ...coord,
-    })),
+  const pinned = spots.flatMap(([position, players]) =>
+    players.map((player) => ({ position, player })),
   );
   const zone = allPlay ? outfield : [];
-  // The zone's shallow row sits AT the LF/CF/RF coordinates, so the moment a
-  // named spot has players standing on it, the unpinned kids move to the deep
-  // row instead of stacking on top of them.
-  const zoneCoords = outfieldZoneCoords(zone.length, {
-    deep: spotMarkers.length > 0,
-  });
-  // One radius for the whole outfield — spot fans and zone rows together: it
-  // is a function of how tightly the markers pack, not of which marker is
-  // guarded.
-  const zoneHalo = outfieldHaloRadius([...spotMarkers, ...zoneCoords]);
+
+  // Three ways the outfield can be laid out, and the third one exists because
+  // the second cannot always fit.
+  //
+  //   - Nothing pinned: the zone takes its own two rows, whose shallow row IS
+  //     the LF/CF/RF coordinates. An all-unpinned outfield of three therefore
+  //     reads as the standard diamond, which is the point.
+  //   - Something pinned, and the rest fit below: pinned kids fan around their
+  //     spot and the zone drops to its deep row, because a shallow zone marker
+  //     would land on top of them.
+  //   - Something pinned and the rest DON'T fit (`deepZoneFits`): one deep row
+  //     is all there is, and nine in it overlap. So this board gives up the
+  //     pinned coordinates and lays every outfielder — pinned and unpinned —
+  //     out in the ordinary two-row zone, each keeping its own label. The
+  //     assignment is still readable (the marker says LF, not OF); only the
+  //     exact spot is spent, which is the right thing to spend when the
+  //     alternative is two names drawn on one point.
+  //
+  // Reachable without an outlandish roster: pinning outfielders before placing
+  // the infield leaves nine unpinned on a twelve-player team.
+  const crowded = pinned.length > 0 && !deepZoneFits(zone.length);
+  const outfieldMarkers: OutfieldMarker[] = crowded
+    ? (() => {
+        const everyone = [
+          ...pinned.map(({ position, player }) => ({
+            player,
+            label: POSITION_LABELS[position],
+          })),
+          ...zone.map((player) => ({ player, label: OUTFIELD_ZONE_LABEL })),
+        ];
+        return outfieldZoneCoords(everyone.length).map((coord, index) => ({
+          ...everyone[index],
+          ...coord,
+        }));
+      })()
+    : [
+        ...spots.flatMap(([position, players]) =>
+          outfieldSpotCoords(position, players.length).map((coord, index) => ({
+            player: players[index],
+            label: POSITION_LABELS[position],
+            ...coord,
+          })),
+        ),
+        ...outfieldZoneCoords(zone.length, { deep: pinned.length > 0 }).map(
+          (coord, index) => ({
+            player: zone[index],
+            label: OUTFIELD_ZONE_LABEL,
+            ...coord,
+          }),
+        ),
+      ];
+
+  // One radius for the whole outfield, measured around the guarded markers
+  // themselves: a crowded cluster on the far side of the field must not erase
+  // the ring around a kid standing alone at LF. Fixed positions keep the full
+  // radius — they are budgeted for it in DIAMOND_GEOMETRY.
+  const guardedMarkers = outfieldMarkers.filter((marker) =>
+    guardedPlayerIds.has(marker.player.playerId),
+  );
+  const outfieldHalo = outfieldHaloRadius(outfieldMarkers, guardedMarkers);
 
   return (
     <>
@@ -261,29 +319,16 @@ export function Diamond({
           );
         })}
 
-        {spotMarkers.map(({ position, player, x, y }) => (
+        {outfieldMarkers.map(({ player, label, x, y }) => (
           <Marker
             key={player.playerId}
             x={x}
             y={y}
-            label={POSITION_LABELS[position]}
+            label={label}
             player={player}
             showRsvp={showRsvp}
             isGuarded={guardedPlayerIds.has(player.playerId)}
-            haloRadius={zoneHalo}
-          />
-        ))}
-
-        {zone.map((player, index) => (
-          <Marker
-            key={player.playerId}
-            x={zoneCoords[index].x}
-            y={zoneCoords[index].y}
-            label={OUTFIELD_ZONE_LABEL}
-            player={player}
-            showRsvp={showRsvp}
-            isGuarded={guardedPlayerIds.has(player.playerId)}
-            haloRadius={zoneHalo}
+            haloRadius={outfieldHalo}
           />
         ))}
       </svg>

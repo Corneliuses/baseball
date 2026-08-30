@@ -1,9 +1,5 @@
 import { Position } from "@/generated/prisma/enums";
-import {
-  ALL_POSITIONS,
-  fieldedPositions,
-  positionCapacity,
-} from "@/lib/positions";
+import { ALL_POSITIONS, fieldedPositions } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
 /// The next-game readiness check.
@@ -125,21 +121,28 @@ export function computeReadiness<T extends ChartEntry>(
   // named in `declined`; nobody disappears, only the phantom hole does.
   const fielded = fieldedPositions(allPlay);
 
+  // EVERY row stored at a fielded position, with no cap applied — unlike
+  // `buildChartView`, which has to pick which of them the diamond seats.
+  //
+  // Deliberate, and the reason is determinism. `getChart` is a findMany with no
+  // orderBy, so an over-capacity spot (three kids left at CF after allPlay was
+  // switched off) hands this function its rows in whatever order Postgres
+  // chose. Truncating to the capacity would then make "is CF uncovered" depend
+  // on which row came back first — the same team, the same RSVPs, a different
+  // answer on a refresh. Asking about all of them instead is order-independent
+  // by construction, and it is also the more honest question: a spot with
+  // somebody coming to stand on it is not a hole, whichever of them the
+  // diamond happens to draw.
   const assigned = new Map<Position, T[]>();
   for (const entry of chart) {
-    // First arrivals up to the spot's capacity, matching buildChartView —
-    // one everywhere except an allPlay team's outfield spots.
-    const holders = entry.position !== null ? assigned.get(entry.position) : undefined;
-    if (
-      entry.position !== null &&
-      fielded.has(entry.position) &&
-      (holders?.length ?? 0) < positionCapacity(entry.position, allPlay)
-    ) {
-      if (holders) {
-        holders.push(entry);
-      } else {
-        assigned.set(entry.position, [entry]);
-      }
+    if (entry.position === null || !fielded.has(entry.position)) {
+      continue;
+    }
+    const holders = assigned.get(entry.position);
+    if (holders) {
+      holders.push(entry);
+    } else {
+      assigned.set(entry.position, [entry]);
     }
   }
 

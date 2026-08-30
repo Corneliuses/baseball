@@ -281,6 +281,42 @@ describe("computeReadiness and the positions a team actually fields", () => {
     expect(result.ready).toBe(false);
   });
 
+  it("answers the same whatever order the chart rows arrive in", () => {
+    // The regression: an over-capacity spot (three kids left at CF after
+    // allPlay was switched off) used to be truncated to its capacity over
+    // `getChart`'s unordered rows, so "is CF uncovered" depended on which row
+    // came back first — the same team and the same RSVPs, a different answer
+    // on a refresh. Every row stored there is asked instead.
+    const at = (playerId: string): ChartEntry => ({
+      playerId,
+      playerName: playerId,
+      battingOrder: null,
+      position: "CENTER_FIELD",
+    });
+    const rows = [at("cal"), at("dee"), at("eli")];
+    // One of the three is coming; the other two are out.
+    const rsvps = new Map<string, RsvpState>([
+      ["cal", "declined"],
+      ["dee", "attending"],
+      ["eli", "declined"],
+    ]);
+
+    for (const order of [rows, [...rows].reverse(), [rows[1], rows[2], rows[0]]]) {
+      expect(computeReadiness(order, rsvps, false).uncoveredPositions).toEqual(
+        [],
+      );
+    }
+
+    const allOut = new Map<string, RsvpState>(
+      rows.map((row) => [row.playerId, "declined" as RsvpState]),
+    );
+    for (const order of [rows, [...rows].reverse()]) {
+      expect(computeReadiness(order, allOut, false).uncoveredPositions).toEqual([
+        "CENTER_FIELD",
+      ]);
+    }
+  });
+
   it("keeps a stacked outfield spot covered while any kid there is still coming", () => {
     // Named outfield spots seat up to three. One of two centre fielders
     // staying home doesn't empty centre field — but both of them does.

@@ -20,13 +20,13 @@ import { chartRole, isBenched } from "@/lib/chart-role";
 import {
   byJerseyThenName,
   hasChartSet,
+  seatedEntryIds,
   type ChartViewEntry,
 } from "@/lib/chart-view";
 import { sortDirectory } from "@/lib/directory-rules";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import { listCoachContacts } from "@/lib/memberships";
-import { fieldedPositions } from "@/lib/positions";
 import { getChart } from "@/lib/roster";
 import { buildRsvpStateMapsByEvent } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listRsvpsForEvents } from "@/lib/rsvps";
@@ -197,12 +197,22 @@ export default async function TeamHomePage({
   // team, Substitute on a selective one.
   const hasChart = hasChartSet(chartEntries);
 
-  // The spots this team actually fields — the player-card hero's framing
-  // question, asked once here rather than per kid. Same rule chartRole applies
-  // inside: a stale CENTER_FIELD or CATCHER row on an allPlay team is not a
-  // spot, so that kid frames in the outfield zone, where both big boards
-  // already draw them.
-  const fielded = fieldedPositions(team.allPlay);
+  // Which roster spots the diamond actually seats, asked once here rather than
+  // per kid — and asked of `/view`'s own seating rule rather than re-derived,
+  // because this page and that one must not describe the same kid differently.
+  //
+  // Not simply "is this a position the team fields": a spot has a capacity, and
+  // a board can hold more rows than it — three kids saved at CF the moment
+  // allPlay is switched off. Reading the column straight would tell all three
+  // families "CF" while /view seats one and lists two as substitutes.
+  const seated = seatedEntryIds(chartEntries, team.allPlay);
+
+  /// The same entry as the diamond understands it: the position column when the
+  /// board really seats this kid there, and null — the outfield, or the bench —
+  /// when it doesn't. `chartRole` and `isBenched` both read `position`, so
+  /// handing them the raw row is what let the two pages disagree.
+  const asSeated = (entry: ChartViewEntry): ChartViewEntry =>
+    seated.has(entry.entryId) ? entry : { ...entry, position: null };
 
   // Archived teams reject every write regardless of role, so the buttons are
   // hidden rather than shown and refused — AC 4. The summaries and any answer
@@ -292,10 +302,14 @@ export default async function TeamHomePage({
           </h3>
           <ul className="space-y-3">
             {myKids.map((entry, index) => {
+              const seatedEntry = asSeated(entry);
               const roleLine = hasChart
-                ? chartRole(entry, team.allPlay, { benchLabel: "Substitute" })
+                ? chartRole(seatedEntry, team.allPlay, {
+                    benchLabel: "Substitute",
+                  })
                 : "No chart set yet";
-              const celebrate = hasChart && !isBenched(entry, team.allPlay);
+              const celebrate =
+                hasChart && !isBenched(seatedEntry, team.allPlay);
 
               // Where the hero frames the kid, by the diamonds' own rules: a
               // fielded position at its spot, anyone else on an allPlay team
@@ -306,8 +320,8 @@ export default async function TeamHomePage({
               // gated on `celebrate`: with no chart there is no spot, and a
               // substitute's card stays quiet.
               const heroPosition =
-                entry.position !== null && fielded.has(entry.position)
-                  ? entry.position
+                seatedEntry.position !== null
+                  ? seatedEntry.position
                   : team.allPlay
                     ? null
                     : undefined;

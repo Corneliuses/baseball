@@ -7,6 +7,7 @@ import {
   DIAMOND_GEOMETRY,
   FIELD_ART,
   POSITION_COORDS,
+  deepZoneFits,
   outfieldHaloRadius,
   outfieldSpotCoords,
   outfieldZoneCoords,
@@ -158,7 +159,7 @@ describe("outfieldZoneCoords", () => {
     // The shallow row sits AT the LF/CF/RF coordinates; when a named spot has
     // players on it, a shallow zone marker would land on top of them.
     const shallowRow = Math.max(...outfieldZoneCoords(3).map((c) => c.y));
-    for (let count = 1; count <= 8; count += 1) {
+    for (let count = 1; count <= 16; count += 1) {
       const coords = outfieldZoneCoords(count, { deep: true });
       expect(coords).toHaveLength(count);
       for (const { y } of coords) {
@@ -166,6 +167,54 @@ describe("outfieldZoneCoords", () => {
         expect(y + DIAMOND_GEOMETRY.markerRadius).toBeLessThanOrEqual(
           INFIELD_BACK,
         );
+      }
+    }
+  });
+
+  it("keeps deep-row markers apart only up to deepZoneFits, and says so", () => {
+    // The deep row is one row — a third would reach the middle infielders — so
+    // it runs out, and `deepZoneFits` is the honest boundary rather than a
+    // count the caller has to know. Asserting BOTH directions is the point:
+    // testing only up to the last passing count is the anti-pattern
+    // CROWDED_ZONE_SIZES already warns about, and it is exactly how a 36px
+    // deep row shipped.
+    const minGap = (coords: { x: number; y: number }[]) => {
+      let gap = Infinity;
+      for (let i = 0; i < coords.length; i += 1) {
+        for (let j = i + 1; j < coords.length; j += 1) {
+          gap = Math.min(
+            gap,
+            Math.hypot(coords[i].x - coords[j].x, coords[i].y - coords[j].y),
+          );
+        }
+      }
+      return gap;
+    };
+
+    for (let count = 1; count <= 16; count += 1) {
+      const gap = minGap(outfieldZoneCoords(count, { deep: true }));
+      if (deepZoneFits(count)) {
+        expect(gap).toBeGreaterThanOrEqual(2 * DIAMOND_GEOMETRY.markerRadius);
+      } else {
+        // Not a bug to fix here — it is why `Diamond` stops using this layout
+        // and falls back to the ordinary two-row zone for the whole outfield.
+        expect(gap).toBeLessThan(2 * DIAMOND_GEOMETRY.markerRadius);
+      }
+    }
+  });
+
+  it("holds the whole outfield without overlap in the layout deep mode falls back to", () => {
+    // The crowded board's escape hatch: pinned and unpinned kids together in
+    // the ordinary two-row zone. It must scale past any real roster, since
+    // that is the case that reached it.
+    for (let count = 1; count <= 16; count += 1) {
+      const coords = outfieldZoneCoords(count);
+      for (let i = 0; i < coords.length; i += 1) {
+        for (let j = i + 1; j < coords.length; j += 1) {
+          expect(
+            Math.hypot(coords[i].x - coords[j].x, coords[i].y - coords[j].y),
+          ).toBeGreaterThanOrEqual(2 * DIAMOND_GEOMETRY.markerRadius);
+        }
       }
     }
   });
@@ -223,6 +272,28 @@ describe("outfieldSpotCoords", () => {
     }
   });
 
+  it("keeps every fanned marker inside the band that keeps its NAME on the box", () => {
+    // The regression: a symmetric corner trio put its outer marker at x=35.
+    // The 40px circle still fitted, so nothing looked broken — but names are
+    // centred under their marker, and maxSpread exists precisely to stop one
+    // running off the 400-wide box. The fan slides inward instead.
+    // The band is `maxSpread` either side of the centre line, read off the
+    // widest row the zone itself draws rather than restated as a number here.
+    const widest = outfieldZoneCoords(9).map((coord) => coord.x);
+    const left = Math.min(...widest);
+    const right = Math.max(...widest);
+    expect(left).toBeLessThan(POSITION_COORDS.LEFT_FIELD.x);
+
+    for (const position of OUTFIELD_POSITIONS) {
+      for (let count = 1; count <= 3; count += 1) {
+        for (const { x } of outfieldSpotCoords(position, count)) {
+          expect(x).toBeGreaterThanOrEqual(left);
+          expect(x).toBeLessThanOrEqual(right);
+        }
+      }
+    }
+  });
+
   it("keeps every fanned marker inside the box and clear of the infield", () => {
     for (const position of OUTFIELD_POSITIONS) {
       for (let count = 1; count <= 3; count += 1) {
@@ -272,21 +343,29 @@ describe("outfieldHaloRadius", () => {
     );
   });
 
-  it("returns null for a centre-field trio — the crowded-zone degradation", () => {
-    // CF's fan runs along the arc's flat middle, so its trio neighbours stand
-    // just 40px apart: no ring worth reading fits. The marker still bolds the
-    // name and steps up, and the sr-only mirror still says "(your player)".
-    expect(outfieldHaloRadius(outfieldSpotCoords("CENTER_FIELD", 3))).toBeNull();
+  it("returns null for a trio — the crowded-zone degradation", () => {
+    // Three at one spot stand ~40px apart, which is markers touching: no ring
+    // worth reading fits. The marker still bolds the name and steps up, and
+    // the sr-only mirror still says "(your player)".
+    for (const position of OUTFIELD_POSITIONS) {
+      expect(outfieldHaloRadius(outfieldSpotCoords(position, 3))).toBeNull();
+    }
   });
 
-  it("keeps a shrunken ring for a corner trio, where the arc's slope buys room", () => {
-    // LF/RF fans descend the bow, so the same 40px of x-spread is ~50px of
-    // real distance — enough for a smaller-than-standard ring.
-    for (const position of ["LEFT_FIELD", "RIGHT_FIELD"] as const) {
-      const radius = outfieldHaloRadius(outfieldSpotCoords(position, 3));
-      expect(radius).not.toBeNull();
-      expect(radius!).toBeLessThan(DIAMOND_GEOMETRY.haloRadius);
-    }
+  it("sizes the ring around the guarded markers, not the whole outfield", () => {
+    // The regression: one three-deep spot used to null the radius for every
+    // marker on the board, so a parent whose kid stood ALONE at LF lost the
+    // highlight to a cluster their child is nowhere near — on the page whose
+    // entire job is "where is my kid".
+    const loneLeft = outfieldSpotCoords("LEFT_FIELD", 1);
+    const centreTrio = outfieldSpotCoords("CENTER_FIELD", 3);
+    const board = [...loneLeft, ...centreTrio];
+
+    expect(outfieldHaloRadius(board, loneLeft)).toBe(
+      DIAMOND_GEOMETRY.haloRadius,
+    );
+    // A kid inside the crowd still gets no ring — there is genuinely no room.
+    expect(outfieldHaloRadius(board, [centreTrio[0]])).toBeNull();
   });
 
   it("is what zoneHaloRadius computes for the plain zone", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildChartView,
   hasChartSet,
+  seatedEntryIds,
   type ChartViewEntry,
 } from "@/lib/chart-view";
 import type { Position } from "@/generated/prisma/enums";
@@ -211,6 +212,33 @@ describe("buildChartView", () => {
     ]);
     expect(view.unassigned).toEqual([]);
     expect(view.hasChart).toBe(true);
+  });
+
+  it("seats the same player whatever order the rows arrive in", () => {
+    // The regression: the capacity cut ran over `getChart`'s unordered
+    // findMany, so an over-capacity spot — three kids left at CF the moment
+    // allPlay is switched off — seated whichever row Postgres happened to
+    // return first. Same team, same data, a different centre fielder on a
+    // refresh. Sorting BEFORE the cut is what makes the pick deterministic.
+    const named = (playerId: string, jerseyNumber: number): ChartViewEntry => ({
+      entryId: `re-${playerId}`,
+      playerId,
+      playerName: playerId,
+      jerseyNumber,
+      battingOrder: null,
+      position: "CENTER_FIELD",
+    });
+    const rows = [named("cal", 9), named("dee", 3), named("eli", 5)];
+
+    const seatedIn = (order: ChartViewEntry[]) =>
+      buildChartView(order, noRsvps, false)
+        .byPosition.get("CENTER_FIELD")!
+        .map((player) => player.playerId);
+
+    // Lowest jersey wins, from any starting order — including the reverse.
+    expect(seatedIn(rows)).toEqual(["dee"]);
+    expect(seatedIn([...rows].reverse())).toEqual(["dee"]);
+    expect(seatedIn([rows[2], rows[0], rows[1]])).toEqual(["dee"]);
   });
 
   it("pools anyone past an outfield spot's capacity instead of dropping them", () => {
@@ -503,5 +531,69 @@ describe("hasChartSet", () => {
   it("is true as soon as one player has a slot or a position", () => {
     expect(hasChartSet([entry(1, null), entry(null, null)])).toBe(true);
     expect(hasChartSet([entry(null, "PITCHER"), entry(null, null)])).toBe(true);
+  });
+});
+
+describe("seatedEntryIds", () => {
+  const at = (
+    playerId: string,
+    jerseyNumber: number,
+    position: Position | null,
+  ): ChartViewEntry => ({
+    entryId: `re-${playerId}`,
+    playerId,
+    playerName: playerId,
+    jerseyNumber,
+    battingOrder: null,
+    position,
+  });
+
+  it("is exactly who buildChartView seats, so the pages cannot disagree", () => {
+    const entries = [
+      at("ava", 1, "PITCHER"),
+      at("ben", 2, "CENTER_FIELD"),
+      at("cal", 3, "CENTER_FIELD"),
+      at("dee", 4, null),
+      // Not a spot an allPlay team fields — the coach pitches.
+      at("eli", 5, "CATCHER"),
+    ];
+
+    const view = buildChartView(entries, noRsvps, true);
+    const seatedByView = new Set(
+      [...view.byPosition.values()].flat().map((player) => player.entryId),
+    );
+
+    expect(seatedEntryIds(entries, true)).toEqual(seatedByView);
+    expect(seatedEntryIds(entries, true)).toEqual(
+      new Set(["re-ava", "re-ben", "re-cal"]),
+    );
+  });
+
+  it("omits the kids an over-capacity spot cannot seat", () => {
+    // The bug this exists for: with allPlay off, one kid stands at CF and the
+    // other two are substitutes — so team home must not print "CF" for all
+    // three while /view seats one.
+    const entries = [
+      at("ava", 1, "CENTER_FIELD"),
+      at("ben", 2, "CENTER_FIELD"),
+      at("cal", 3, "CENTER_FIELD"),
+    ];
+
+    expect(seatedEntryIds(entries, false)).toEqual(new Set(["re-ava"]));
+    expect(seatedEntryIds(entries, true)).toEqual(
+      new Set(["re-ava", "re-ben", "re-cal"]),
+    );
+  });
+
+  it("does not depend on the order the rows arrive in", () => {
+    const entries = [
+      at("cal", 9, "CENTER_FIELD"),
+      at("dee", 3, "CENTER_FIELD"),
+    ];
+
+    expect(seatedEntryIds(entries, false)).toEqual(
+      seatedEntryIds([...entries].reverse(), false),
+    );
+    expect(seatedEntryIds(entries, false)).toEqual(new Set(["re-dee"]));
   });
 });

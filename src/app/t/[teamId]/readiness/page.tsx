@@ -16,7 +16,11 @@ import { chartRole } from "@/lib/chart-role";
 import { POSITION_LABELS } from "@/lib/positions";
 import { computeReadiness, type Readiness } from "@/lib/readiness";
 import { getChart } from "@/lib/roster";
-import { hasChartSet, type ChartViewEntry } from "@/lib/chart-view";
+import {
+  hasChartSet,
+  seatedEntryIds,
+  type ChartViewEntry,
+} from "@/lib/chart-view";
 import { buildRsvpStateMap } from "@/lib/rsvp";
 import { listEventRsvps } from "@/lib/rsvps";
 import { nextGame } from "@/lib/schedule";
@@ -49,10 +53,17 @@ export const metadata = {
 function PlayerList({
   entries,
   allPlay,
+  seated,
   tagClassName,
 }: {
   entries: ChartViewEntry[];
   allPlay: boolean;
+  /// Roster spots the diamond actually seats (`seatedEntryIds`). A stored
+  /// position is no longer enough to print one: a spot has a capacity, and a
+  /// board can hold more rows than it, so a kid this set omits plays the
+  /// outfield whatever their `position` column still says — which is exactly
+  /// what /view draws for them.
+  seated: ReadonlySet<string>;
   tagClassName: string;
 }) {
   return (
@@ -67,7 +78,10 @@ function PlayerList({
             {entry.jerseyNumber !== null ? ` #${entry.jerseyNumber}` : ""}
           </span>
           <span className={`text-xs ${tagClassName}`}>
-            {chartRole(entry, allPlay)}
+            {chartRole(
+              seated.has(entry.entryId) ? entry : { ...entry, position: null },
+              allPlay,
+            )}
           </span>
         </li>
       ))}
@@ -177,6 +191,10 @@ export default async function ReadinessPage({
     allPlay,
   );
 
+  // The spots the diamond actually seats, from /view's own rule — see
+  // `PlayerList`'s `seated` prop for why the position column alone won't do.
+  const seated = seatedEntryIds(chartEntries, allPlay);
+
   const hasChart = hasChartSet(chartEntries);
 
   // Whether a decline actually moved the batting order, which is not the same
@@ -265,6 +283,7 @@ export default async function ReadinessPage({
                 <PlayerList
                   entries={readiness.declined}
                   allPlay={allPlay}
+                  seated={seated}
                   tagClassName={RSVP_STYLE.declined.tagClassName}
                 />
               </CardContent>
@@ -348,6 +367,7 @@ export default async function ReadinessPage({
                 <PlayerList
                   entries={readiness.awaiting}
                   allPlay={allPlay}
+                  seated={seated}
                   tagClassName={RSVP_STYLE["no-response"].tagClassName}
                 />
               </CardContent>

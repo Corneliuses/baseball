@@ -431,6 +431,44 @@ describe("ViewPage chart rendering", () => {
     expect(new Set(translates).size).toBe(translates.length);
   });
 
+  it("draws every outfielder once when the deep row cannot hold the rest", async () => {
+    // A coach who pins outfielders BEFORE placing the infield leaves nine
+    // unpinned on a twelve-player team, and the deep row — all the zone gets
+    // once a spot is taken — packs nine to 36px against a 40px marker. The
+    // board gives up the pinned coordinates for that case rather than drawing
+    // two names on one point, so every kid is still drawn exactly once and
+    // still labelled with the spot they play.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      ...["a", "b", "c"].map((id, index) => ({
+        playerId: `pin-${id}`,
+        playerName: `Pin${id.toUpperCase()}`,
+        jerseyNumber: index + 1,
+        battingOrder: index + 1,
+        position: "CENTER_FIELD" as const,
+      })),
+      ...Array.from({ length: 9 }, (_, index) => ({
+        playerId: `zone-${index}`,
+        playerName: `Zone${index}`,
+        jerseyNumber: 20 + index,
+        battingOrder: 4 + index,
+        position: null,
+      })),
+    ]);
+
+    const html = await render();
+
+    // Three CF markers and nine OF markers, each drawn once.
+    expect(html.split(">CF<")).toHaveLength(4);
+    expect(html.split(">OF<")).toHaveLength(10);
+
+    // And no two of them share a coordinate.
+    const translates = [
+      ...html.matchAll(/translate\((-?[\d.]+) (-?[\d.]+)\)/g),
+    ].map((match) => `${match[1]},${match[2]}`);
+    expect(new Set(translates).size).toBe(translates.length);
+  });
+
   it("exposes an allPlay outfield to screen readers", async () => {
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
