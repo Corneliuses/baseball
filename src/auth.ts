@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 
+import { withSingleLiveCode } from "@/lib/auth-adapter";
 import { db } from "@/lib/db";
 import { acceptInvitations, loadSignInContext } from "@/lib/invitations";
 import { resendProvider } from "@/lib/resend-provider";
@@ -10,7 +11,13 @@ import {
   SESSION_UPDATE_AGE_SECONDS,
 } from "@/lib/sessions";
 
-/// Auth.js v5 — magic link only, gated by the Invitation table.
+/// Auth.js v5 — emailed sign-in codes only, gated by the Invitation table.
+///
+/// The email provider's token is a typed code rather than a tappable link
+/// (#60): see resendProvider(), which supplies `generateVerificationToken`
+/// and replaces the send. Everything here — the gate, the events, sessions —
+/// is unchanged by that, because a typed code redeems through the same
+/// /api/auth/callback/resend?token=&email= the link carried.
 ///
 /// This file is deliberately thin. Every decision worth asserting lives in a pure
 /// module (owner.ts, signin-gate.ts) that tests without a database; what remains
@@ -24,10 +31,13 @@ import {
 /// not just a sign-in attempt — including a signed-out visitor on the marketing
 /// page, who triggers no email at all. resendProvider() (src/lib/resend-provider.ts)
 /// pushes that check one level further in, to the moment sendVerificationRequest
-/// actually fires, which is only the "request a magic link" step of sign-in.
+/// actually fires, which is only the "request a sign-in code" step of sign-in.
 
 export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
-  adapter: PrismaAdapter(db),
+  // Wrapped so requesting a code invalidates the address's previous one. The
+  // 40-bit code assumes exactly one live code per address; the table's unique
+  // indexes do not provide that on their own. See lib/auth-adapter.ts.
+  adapter: withSingleLiveCode(PrismaAdapter(db)),
 
   providers: [resendProvider()],
 
@@ -44,16 +54,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
   },
 
   // No `cookies` block on purpose. The Auth.js defaults are httpOnly and
-  // sameSite "lax", and lax is load-bearing twice over: a magic link clicked in
-  // an email client is a cross-site top-level navigation that "strict" would
-  // silently drop, and same-origin service worker fetches need the cookie too.
+  // sameSite "lax", and lax is load-bearing twice over: an invitation link
+  // clicked in an email client is a cross-site top-level navigation that
+  // "strict" would silently drop, and same-origin service worker fetches need
+  // the cookie too.
 
   callbacks: {
     /**
-     * The gate. This runs twice per sign-in: once when the link is requested
-     * (`email.verificationRequest`) and again when it is clicked. Rejecting on
-     * the first pass means an uninvited address never receives mail at all;
-     * rejecting on the second covers an invitation that expired in between.
+     * The gate. This runs twice per sign-in: once when the code is requested
+     * (`email.verificationRequest`) and again when it is redeemed. Rejecting
+     * on the first pass means an uninvited address never receives mail at
+     * all; rejecting on the second covers an invitation that expired in
+     * between.
      */
     async signIn({ user, email }) {
       const address = user.email;
@@ -61,7 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
         return false;
       }
 
-      const stage = email?.verificationRequest ? "link request" : "link click";
+      const stage = email?.verificationRequest ? "code request" : "code redeem";
 
       try {
         const context = await loadSignInContext(address);
@@ -94,10 +106,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
 
   events: {
     /**
-     * Turn accepted invitations into team access. This fires only after a link
-     * is actually clicked and the session exists — doing it in the signIn
-     * callback instead would grant memberships to anyone who typed an address
-     * into the form, since that callback also runs on the send path.
+     * Turn accepted invitations into team access. This fires only after a
+     * code is actually redeemed and the session exists — doing it in the
+     * signIn callback instead would grant memberships to anyone who typed an
+     * address into the form, since that callback also runs on the send path.
      */
     async signIn({ user }) {
       if (!user.id || !user.email) {

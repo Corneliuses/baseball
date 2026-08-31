@@ -1,7 +1,7 @@
 import { isOwnerEmail } from "@/lib/owner";
 import { isLiveInvitation } from "@/lib/invitation-token";
 
-/// Who is allowed to obtain a magic link, and therefore an account.
+/// Who is allowed to obtain a sign-in code, and therefore an account.
 ///
 /// There is no self-serve signup path in this app: an address gets in only if it
 /// holds a live Invitation, already holds a Membership somewhere, or is the
@@ -45,7 +45,7 @@ export type SignInDecision = {
 };
 
 /**
- * Decide whether an address may receive a magic link.
+ * Decide whether an address may receive a sign-in code.
  *
  * Note what is deliberately absent: any notion of archived teams or of role.
  * Signing in is not a write, and a role is meaningless until a team is in the

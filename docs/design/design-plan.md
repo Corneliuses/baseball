@@ -217,8 +217,18 @@ All inside the existing viewBox — `DIAMOND_GEOMETRY.width = 400`,
 ## 7. Screen-by-screen pass
 
 **Sign-in** — first impression, currently a form. Cream page, pinstripe band, slab
-wordmark, one banana button ("Email me a magic link"), and a tiny flat field illustration
+wordmark, one banana button ("Email me a sign-in code"), and a tiny flat field illustration
 (a cropped reuse of `FieldArt`). Empty-state copy: "The gate's open."
+
+**Enter your code (post-ship addition)** — the second half of sign-in since #60 replaced
+the tapped link with a typed code. Same cream card as the screen before it, and it spends
+its own banana on the one button ("Sign in"), which is the §2 budget rather than a second
+helping: it is a separate screen, reached by a full navigation. The code box is monospaced
+and letter-spaced because a code is *read off one screen and typed into another* — the
+shape of the characters is the whole job, so this is the one input in the app that does
+not use the shared field styling. A rejection keeps what was typed and puts the sentence
+in a `StatusBanner` under the box, never a redirect: eight characters retyped on a phone,
+mid-code, is where a parent gives up.
 
 **Team chrome (post-ship addition)** — every `/t/[teamId]` view now carries a persistent
 `TeamNav` in the team layout: pill tabs on the header band, the active section filled

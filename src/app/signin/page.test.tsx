@@ -1,13 +1,40 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 // The real action pulls in Auth.js and the Prisma client; the page only needs
 // something form-shaped to point at.
 vi.mock("./actions", () => ({
-  requestSignInLink: vi.fn(),
+  requestSignInCode: vi.fn(),
+}));
+
+const cookieGet = vi.fn();
+
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: (...args: unknown[]) => cookieGet(...args) }),
+}));
+
+// redirect() throws in Next; reproduce that so a "bounced" assertion cannot
+// pass by accident.
+vi.mock("next/navigation", () => ({
+  redirect: (url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  },
 }));
 
 import SignInPage from "./page";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  cookieGet.mockReturnValue(undefined);
+});
+
+function pendingCookie() {
+  cookieGet.mockImplementation((name: string) =>
+    name === "__Secure-pending-signin"
+      ? { value: JSON.stringify({ email: "a@b.com", callbackUrl: "/" }) }
+      : undefined,
+  );
+}
 
 async function renderPage(
   searchParams: { error?: string; callbackUrl?: string } = {},
@@ -21,7 +48,7 @@ describe("SignInPage", () => {
 
     expect(screen.getByLabelText("Email")).toHaveAttribute("type", "email");
     expect(
-      screen.getByRole("button", { name: /email me a sign-in link/i }),
+      screen.getByRole("button", { name: /email me a sign-in code/i }),
     ).toBeInTheDocument();
   });
 
@@ -66,15 +93,23 @@ describe("SignInPage", () => {
   // pages.error points here, so Auth.js's own error screen never renders and
   // its copy has to be reproduced. A silent form is the bug these cover.
   describe("Auth.js error codes", () => {
-    it("explains an expired or already-used link", async () => {
+    it("explains a wrong or expired code", async () => {
       await renderPage({ error: "Verification" });
 
       expect(screen.getByRole("alert")).toHaveTextContent(
-        /expired or was already used/i,
+        /didn't match or has expired/i,
       );
     });
 
-    it("explains a denied link without naming the reason", async () => {
+    it("explains a vanished pending cookie as an expired code", async () => {
+      // submitSignInCode's own key: the pending cookie and the code expire
+      // together, so no cookie means nothing left to redeem.
+      await renderPage({ error: "code-expired" });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/code has expired/i);
+    });
+
+    it("explains a denied code without naming the reason", async () => {
       await renderPage({ error: "AccessDenied" });
 
       const alert = screen.getByRole("alert");
@@ -111,7 +146,38 @@ describe("SignInPage", () => {
     });
   });
 
-  it("carries callbackUrl through the form so the link lands where the visitor was headed", async () => {
+  // A wrong-but-well-formed code fails inside Auth.js, which has only this
+  // page to fail to. While the pending cookie is alive the mailed code is
+  // too, so the parent is sent back to retype it rather than being told to
+  // ask for a second email.
+  describe("a failed redeem with a live pending sign-in", () => {
+    it("bounces back to the code form", async () => {
+      pendingCookie();
+
+      await expect(renderPage({ error: "Verification" })).rejects.toThrow(
+        "NEXT_REDIRECT:/signin/check-email?error=wrong-code",
+      );
+    });
+
+    it("stays here when there is no pending sign-in left", async () => {
+      await renderPage({ error: "Verification" });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /didn't match or has expired/i,
+      );
+    });
+
+    // The gate refused the address; retyping the code cannot change that.
+    it("does not bounce a denied address", async () => {
+      pendingCookie();
+
+      await renderPage({ error: "AccessDenied" });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/no longer valid/i);
+    });
+  });
+
+  it("carries callbackUrl through the form so sign-in lands where the visitor was headed", async () => {
     const { container } = render(
       await SignInPage({
         searchParams: Promise.resolve({ callbackUrl: "/t/team-a/roster" }),

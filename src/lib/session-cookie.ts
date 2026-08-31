@@ -75,10 +75,10 @@ export type SessionCookieOptions = {
 /**
  * The attributes Auth.js writes the session cookie with.
  *
- * `sameSite: "lax"` is load-bearing, for the reason `src/auth.ts` gives: a
- * magic link clicked in an email client is a cross-site top-level navigation
- * that "strict" would silently drop. `expires` matches the `Session` row's
- * own expiry, so the cookie and the row die together.
+ * `sameSite: "lax"` is load-bearing, for the reason `src/auth.ts` gives: an
+ * invitation link clicked in an email client is a cross-site top-level
+ * navigation that "strict" would silently drop. `expires` matches the
+ * `Session` row's own expiry, so the cookie and the row die together.
  */
 export function sessionCookieOptions(
   secure: boolean,

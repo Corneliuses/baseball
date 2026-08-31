@@ -10,7 +10,9 @@ parking lot fifteen minutes before first pitch.
 ## Status
 
 **Phase 10 complete — the batting order editor.** Phase 1 laid the data model, tooling, and
-domain guards. Phase 2 added sign-in. Phase 3 added team scoping (`/t/[teamId]`,
+domain guards. Phase 2 added sign-in — a typed, emailed code rather than a tapped magic link, since a
+link is redeemed by whichever browser the OS picks and that is not always the installed
+app the person is standing in (#60). Phase 3 added team scoping (`/t/[teamId]`,
 `requireTeamAccess`). Phase 4 added the roster itself: players, jersey numbers, guardian
 links, working invitations, and owner-only member/role management. Phase 5 added the
 returning-player picker — the owner-only global `Player` read that pulls a kid and their
@@ -40,9 +42,10 @@ What exists today:
   contract plus its team-scoped, guardian-guarded data wrapper, the view page's pure
   chart render model (`chart-view.ts`), and the batting order editor's pure draft/drop/
   validation logic (`chart.ts`) — all unit-tested
-- `src/auth.ts` — Auth.js v5 config: Prisma adapter, Resend provider, database sessions
+- `src/auth.ts` — Auth.js v5 config: Prisma adapter (wrapped so one sign-in code is
+  live per address), Resend provider issuing typed codes, database sessions
 - `src/proxy.ts` — redirects signed-out visitors away from `/t/:path*`
-- `src/app/signin/` — the sign-in form and its confirmation page
+- `src/app/signin/` — the email form and the code-entry page it hands off to
 - `src/app/invite/[token]/` — the (unauthenticated) invitation accept page
 - `src/app/t/[teamId]/` — team home, settings, roster (list + player detail with guardian
   linking and phone), owner-only member management, an owner-only returning-player picker
@@ -134,7 +137,7 @@ Run `pnpm check` before pushing — it chains lint, typecheck, and tests.
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Prisma 7 on Neon
-Postgres · Auth.js v5 magic links · `@dnd-kit` · Motion · Resend · `web-push` · Vitest ·
+Postgres · Auth.js v5 emailed sign-in codes · `@dnd-kit` · Motion · Resend · `web-push` · Vitest ·
 deployed on Vercel.
 
 Every one of those was chosen deliberately, with alternatives considered and rejected in
