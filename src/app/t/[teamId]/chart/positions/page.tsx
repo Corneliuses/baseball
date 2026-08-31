@@ -31,10 +31,14 @@ const ERROR_MESSAGES = messageTable({
   "unknown-entry":
     "The roster changed while you were editing. Reload and try again.",
   "duplicate-entry": "A player appeared twice. Reload and try again.",
-  // Only reachable when allPlay was switched on mid-edit: the outfield stops
-  // being three named spots and becomes one zone.
+  // Only reachable when allPlay was toggled mid-edit: the catcher spot
+  // appears or disappears with the setting.
   "invalid-position":
     "The team's settings changed while you were editing. Reload and try again.",
+  // Same trigger, other direction: allPlay switched off strips the outfield
+  // spots' room for more than one player, so a stacked board stops fitting.
+  "position-full":
+    "The team's settings changed while you were editing — a spot now holds more players than it can. Reload and try again.",
   "roster-changed":
     "The roster changed while you were editing — nothing was saved. Reload and try again.",
   "position-conflict":
@@ -167,7 +171,7 @@ export default async function PositionsPage({
         <>
           <p className="text-sm text-muted-foreground">
             {team.allPlay
-              ? "Hold and drag a player onto a spot. Everyone not on the infield plays the outfield."
+              ? "Hold and drag a player onto a spot — each outfield spot holds up to three. Anyone left over plays the general outfield."
               : "Hold and drag a player onto a spot. Dropping onto a player swaps the two; anyone left over sits on the bench."}
           </p>
           <PositionsEditor

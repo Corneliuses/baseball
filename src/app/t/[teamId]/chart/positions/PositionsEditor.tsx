@@ -239,10 +239,12 @@ export function PositionsEditor({
               teamId,
               "positions",
               Object.entries(draft.assigned).map(
-                ([position, entryId]) =>
-                  `${POSITION_LABELS[position as Position]} — ${
-                    byId.get(entryId as string)?.playerName ?? "—"
-                  }`,
+                ([position, entryIds]) =>
+                  `${POSITION_LABELS[position as Position]} — ${(
+                    (entryIds ?? []) as readonly string[]
+                  )
+                    .map((entryId) => byId.get(entryId)?.playerName ?? "—")
+                    .join(", ")}`,
               ),
             )
           }
@@ -333,11 +335,9 @@ function Field({
           <PositionTarget
             key={position}
             position={position}
-            entry={
-              draft.assigned[position] !== undefined
-                ? byId.get(draft.assigned[position])
-                : undefined
-            }
+            entries={(draft.assigned[position] ?? [])
+              .map((entryId) => byId.get(entryId))
+              .filter((entry) => entry !== undefined)}
             diamondNames={diamondNames}
             declined={declined}
           />
@@ -349,12 +349,17 @@ function Field({
 
 function PositionTarget({
   position,
-  entry,
+  entries,
   diamondNames,
   declined,
 }: {
   position: Position;
-  entry: PositionsEditorEntry | undefined;
+  /// Everyone standing at this spot, in arrival order — at most one entry
+  /// anywhere except an allPlay team's LF/CF/RF, which stack to three
+  /// (`positionCapacity`). The whole stack renders inside the one chalk box:
+  /// the box is the drop target, so a drop lands on the spot however many
+  /// chips it already holds.
+  entries: PositionsEditorEntry[];
   /// Marker labels for the whole roster, keyed by playerId. Passed in rather
   /// than shortened here because "is this first name ambiguous" is a question
   /// about every other player on the board, not about this one.
@@ -383,13 +388,16 @@ function PositionTarget({
       <span className="rounded bg-background/85 px-1 text-[11px] font-bold text-foreground">
         {POSITION_LABELS[position]}
       </span>
-      {entry !== undefined ? (
-        <Chip
-          entry={entry}
-          label={diamondNames.get(entry.entryId) ?? entry.playerName}
-          declined={declined.has(entry.entryId)}
-          stacked
-        />
+      {entries.length > 0 ? (
+        entries.map((entry) => (
+          <Chip
+            key={entry.entryId}
+            entry={entry}
+            label={diamondNames.get(entry.entryId) ?? entry.playerName}
+            declined={declined.has(entry.entryId)}
+            stacked
+          />
+        ))
       ) : (
         <span className="rounded bg-background/85 px-1 text-[11px] italic text-muted-foreground">
           Open

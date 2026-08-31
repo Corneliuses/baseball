@@ -285,31 +285,41 @@ export async function saveBattingOrder(
  * Persist the standing positions chart (#11) — the same trap as
  * `saveBattingOrder`, on a different column.
  *
- * `RosterEntry_teamId_position_key` is likewise a `CREATE UNIQUE INDEX`
- * (migration 20260728053521_001, line 196) and so cannot be DEFERRABLE. Moving
- * a player from SS to 2B while someone else moves off 2B transiently duplicates
- * a value and throws P2002 mid-transaction, so the write is the same two
- * phases inside one array-form transaction: null every position for the team,
- * then write the final values.
+ * `RosterEntry_teamId_position_positionSlot_key` is likewise a
+ * `CREATE UNIQUE INDEX` (migration 20260827120000) and so cannot be
+ * DEFERRABLE. Moving a player from SS to 2B while someone else moves off 2B
+ * transiently duplicates a value and throws P2002 mid-transaction, so the
+ * write is the same two phases inside one array-form transaction: null every
+ * position for the team (resetting every slot to 0 — the slot is meaningless
+ * without a position), then write the final values.
+ *
+ * `positionSlot` rides along solely to satisfy that index: always 0 for an
+ * infield spot, 0..2 for an allPlay outfield stack, numbered by
+ * `validatePositions`. Nothing reads it back — within-spot display order is
+ * derived (jersey-then-name) on read.
  *
  * Players left off the diamond need no phase-2 statement — phase 1 already
  * nulled them, which is exactly the state the editor showed: the bench, or the
- * outfield on an allPlay team (see `droppablePositions` in chart.ts). Values
- * come from `validatePositions`, never raw from the client.
+ * general outfield on an allPlay team (see `droppablePositions` in chart.ts).
+ * Values come from `validatePositions`, never raw from the client.
  */
 export async function savePositions(
   teamId: string,
-  assignments: readonly { entryId: string; position: Position }[],
+  assignments: readonly {
+    entryId: string;
+    position: Position;
+    positionSlot: number;
+  }[],
 ): Promise<void> {
   await db.$transaction([
     db.rosterEntry.updateMany({
       where: { teamId },
-      data: { position: null },
+      data: { position: null, positionSlot: 0 },
     }),
-    ...assignments.map(({ entryId, position }) =>
+    ...assignments.map(({ entryId, position, positionSlot }) =>
       db.rosterEntry.update({
         where: { id: entryId, teamId },
-        data: { position },
+        data: { position, positionSlot },
       }),
     ),
   ]);

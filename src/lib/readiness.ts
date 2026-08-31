@@ -44,8 +44,11 @@ export type Readiness<T extends ChartEntry> = {
   /// Chart-affecting players who haven't answered. Reported, never alarming:
   /// these are the players `uncoveredPositions` deliberately says nothing about.
   awaiting: T[];
-  /// Positions left empty because the assigned player **declined**. In
-  /// scorebook order, and limited to the spots this team actually fields.
+  /// Positions left empty because everyone assigned there **declined** — for
+  /// most spots that is the one assigned player, but an allPlay team's named
+  /// outfield spots seat up to three, and a spot with a teammate still
+  /// standing on it is not uncovered. In scorebook order, and limited to the
+  /// spots this team actually fields.
   uncoveredPositions: Position[];
   /// The batting order for this game with declined players removed and ranks
   /// closed up. No-response players stay in it — see `chartState` below.
@@ -118,24 +121,41 @@ export function computeReadiness<T extends ChartEntry>(
   // named in `declined`; nobody disappears, only the phantom hole does.
   const fielded = fieldedPositions(allPlay);
 
-  const assigned = new Map<Position, T>();
+  // EVERY row stored at a fielded position, with no cap applied — unlike
+  // `buildChartView`, which has to pick which of them the diamond seats.
+  //
+  // Deliberate, and the reason is determinism. `getChart` is a findMany with no
+  // orderBy, so an over-capacity spot (three kids left at CF after allPlay was
+  // switched off) hands this function its rows in whatever order Postgres
+  // chose. Truncating to the capacity would then make "is CF uncovered" depend
+  // on which row came back first — the same team, the same RSVPs, a different
+  // answer on a refresh. Asking about all of them instead is order-independent
+  // by construction, and it is also the more honest question: a spot with
+  // somebody coming to stand on it is not a hole, whichever of them the
+  // diamond happens to draw.
+  const assigned = new Map<Position, T[]>();
   for (const entry of chart) {
-    // First writer wins, matching buildChartView. The unique index makes a
-    // collision unreachable from a real read.
-    if (
-      entry.position !== null &&
-      fielded.has(entry.position) &&
-      !assigned.has(entry.position)
-    ) {
-      assigned.set(entry.position, entry);
+    if (entry.position === null || !fielded.has(entry.position)) {
+      continue;
+    }
+    const holders = assigned.get(entry.position);
+    if (holders) {
+      holders.push(entry);
+    } else {
+      assigned.set(entry.position, [entry]);
     }
   }
 
   // Filtered from ALL_POSITIONS rather than assembled, so the result is in
-  // scorebook order however the chart rows arrived.
+  // scorebook order however the chart rows arrived. A stacked spot is
+  // uncovered only when EVERY kid standing there declined: one of three
+  // centre fielders staying home doesn't empty centre field.
   const uncoveredPositions = ALL_POSITIONS.filter((position) => {
-    const holder = assigned.get(position);
-    return holder !== undefined && stateOf(holder) === "declined";
+    const holders = assigned.get(position);
+    return (
+      holders !== undefined &&
+      holders.every((holder) => stateOf(holder) === "declined")
+    );
   });
 
   const inOrder = chart

@@ -477,6 +477,74 @@ describe("TeamHomePage your players", () => {
     expect(html).not.toContain("Substitute");
   });
 
+  it("reads a named outfield spot as that spot on an allPlay team", async () => {
+    // LF/CF/RF are placeable there since the named-outfield revision, so a
+    // pinned kid's marquee names the spot rather than the general outfield.
+    getChart.mockResolvedValue([{ ...REESE, position: "CENTER_FIELD" }]);
+
+    const html = await render();
+
+    expect(html).toContain("Bats 3rd · CF");
+  });
+
+  it("does not claim a spot for a kid the diamond cannot seat", async () => {
+    // The regression: three kids left at CF the moment allPlay is switched off
+    // is a board /view seats ONE of — it lists the other two as substitutes.
+    // Team home read the position column straight and told all three families
+    // "CF", so two of them stood in the wrong place on Saturday while the page
+    // two taps away said otherwise. Reese has the highest jersey here, so the
+    // diamond seats a teammate and Reese is the one who must not read "CF".
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([
+      { ...REESE, position: "CENTER_FIELD" },
+      {
+        ...REESE,
+        entryId: "entry-8",
+        playerId: "player-8",
+        playerName: "Kit",
+        jerseyNumber: 2,
+        position: "CENTER_FIELD" as const,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Bats 3rd");
+    expect(html).not.toContain("CF");
+  });
+
+  it("still names the spot for the kid the diamond does seat", async () => {
+    // The other half: the fix must not silence a legitimately seated kid.
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: false,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([
+      { ...REESE, jerseyNumber: 2, position: "CENTER_FIELD" },
+      {
+        ...REESE,
+        entryId: "entry-8",
+        playerId: "player-8",
+        playerName: "Kit",
+        jerseyNumber: 12,
+        position: "CENTER_FIELD" as const,
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Bats 3rd · CF");
+  });
+
   // /view renders "No chart set yet" for the same data. Printing OF for every
   // kid on an allPlay team would assert a spot nobody has assigned.
   it("says no chart is set rather than inventing a position", async () => {

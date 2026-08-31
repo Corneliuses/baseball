@@ -180,10 +180,30 @@ describe("ReadinessPage with a decline", () => {
     expect(html).toContain("Bats 2nd");
   });
 
-  it("labels a stale allPlay row as the outfield, not the position it stores", async () => {
+  it("labels a stale allPlay catcher row as the outfield, not the position it stores", async () => {
     // The page must not print a spot it simultaneously refuses to check. The
-    // view page and the editor both show this kid in the outfield; saying "CF"
+    // view page and the editor both show this kid in the outfield; saying "C"
     // here would make three screens disagree about one player.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      {
+        entryId: "entry-cal",
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
+        position: "CATCHER" as const,
+      },
+    ]);
+    listEventRsvps.mockResolvedValue([{ playerId: "cal", attending: false }]);
+
+    const html = await render();
+
+    expect(html).toContain("Bats 1st · OF");
+    expect(html).not.toContain("Bats 1st · C<");
+  });
+
+  it("labels a named outfield row as its spot — the placeable CF, not OF", async () => {
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
@@ -199,8 +219,7 @@ describe("ReadinessPage with a decline", () => {
 
     const html = await render();
 
-    expect(html).toContain("Bats 1st · OF");
-    expect(html).not.toContain("CF");
+    expect(html).toContain("Bats 1st · CF");
   });
 
   it("labels an allPlay team's unplaced player as the outfield too", async () => {
@@ -239,6 +258,28 @@ describe("ReadinessPage with a decline", () => {
         playerName: "Cal",
         jerseyNumber: 3,
         battingOrder: 1,
+        position: "CATCHER" as const,
+      },
+    ]);
+    listEventRsvps.mockResolvedValue([{ playerId: "cal", attending: false }]);
+
+    const html = await render();
+
+    // Out, yes — but C is not a spot this team can fill, so it is not a hole.
+    expect(html).toContain("Cal");
+    expect(html).toContain("Needs attention");
+    expect(html).not.toContain("Positions uncovered");
+  });
+
+  it("reports a pinned outfield spot uncovered when its only kid declined", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue([
+      {
+        entryId: "entry-cal",
+        playerId: "cal",
+        playerName: "Cal",
+        jerseyNumber: 3,
+        battingOrder: 1,
         position: "CENTER_FIELD" as const,
       },
     ]);
@@ -246,10 +287,8 @@ describe("ReadinessPage with a decline", () => {
 
     const html = await render();
 
-    // Out, yes — but CF is not a spot this team can fill, so it is not a hole.
-    expect(html).toContain("Cal");
-    expect(html).toContain("Needs attention");
-    expect(html).not.toContain("Positions uncovered");
+    expect(html).toContain("Positions uncovered");
+    expect(html).toContain("CF");
   });
 });
 

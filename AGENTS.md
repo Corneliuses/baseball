@@ -274,9 +274,13 @@ production — the dev command can prompt, generate new migrations, and reset th
   `fill-none stroke-banana`, so a test telling them apart has to key on the radius.
   `guarded-style.ts`, `FieldArt.test.tsx` and the no-guard case in the view page's suite
   are where that budget is written down. One known hole, judged not worth a third branch:
-  an allPlay board with 13+ players in the zone draws no ring, so a reader whose only
-  guarded kid is there and has no batting slot sees a chalk fence and no banana at all.
-  That needs an 18+ roster, past what this app is built for.
+  a reader whose only guarded kid stands somewhere too crowded for a ring, and who has no
+  batting slot to carry the banana on a row instead, sees a chalk fence and no banana at
+  all. **The bound on that used to read "an 18+ roster" and no longer does** — three kids
+  at one outfield spot stand 40px apart, so a guarded kid *inside* a full spot draws no
+  ring on a twelve-player roster. What was fixed rather than documented is the collateral
+  case: `outfieldHaloRadius` measures around the guarded markers themselves, so a crowd on
+  the far side of the field no longer erases the ring around a kid standing alone at LF.
 
   The third caller is **`MiniDiamondHero`** (team home's player cards), and it passes
   `fence="chalk"` unconditionally — not a judgement call, a consequence of when it renders
@@ -479,14 +483,37 @@ production — the dev command can prompt, generate new migrations, and reset th
   therefore posts the chart *as it loaded it* in a `baseline` field, and the action compares
   that against its own fresh read before writing, refusing on a mismatch (`chart-changed`).
   The baseline comes from `storedBattingOrder` / `storedPositions` in `chart.ts`, never from
-  the draft: both draft builders normalize (pooling stale outfield rows, packing sparse
+  the draft: both draft builders normalize (pooling stale catcher rows, packing sparse
   orders), so a draft-derived baseline would look stale on every save. If you add a third
   chart column, it needs the same guard. The read-then-write gap is knowingly left open —
   see the comment in the positions action.
+- **An allPlay outfield spot seats up to three kids, and the slot column is plumbing, not
+  state.** LF/CF/RF are placeable spots on an allPlay board (`ALL_PLAY_POSITIONS`), each
+  stacking to `OUTFIELD_SPOT_CAPACITY` (3); the catcher stays unfieldable there — the coach
+  pitches. The unique index is `[teamId, position, positionSlot]`: infield writes always use
+  slot 0 (so one-kid-per-infield-spot stays database-enforced), `savePositions` numbers a
+  stack 0..n-1 on every save, and **nothing reads the slot back** — order within a spot is
+  jersey-then-name, derived on read, and `samePositions` deliberately ignores it, so don't
+  give it meaning. A spot can hold **more rows than it seats** — three kids at CF the
+  moment allPlay is switched off — so "where does this kid play" is `seatedEntryIds`
+  (chart-view.ts), never the `position` column read straight: team home and the readiness
+  list both go through it, or they tell a family a spot the diamond gives to someone else.
+  That seating cut runs over a *sorted* list, because `getChart` has no `orderBy` and
+  picking "the first arrivals" out of Postgres's order seats a different kid per request. Unpinned players remain the general outfield as `position = null`; the
+  up-to-three cap lives in `validatePositions` (`position-full`), because a CHECK constraint
+  isn't expressible in the schema. On `/view`, pinned kids fan around their spot
+  (`outfieldSpotCoords`) and the moment any spot is occupied the zone drops to its deep row
+  (`outfieldZoneCoords(..., {deep})`) — the shallow zone row IS the LF/CF/RF coordinates, so
+  drawing both shallow would stack two markers on one point, silently. The deep row is the
+  only row left (a third reaches the middle infielders), so it holds eight — past that
+  `deepZoneFits` is false and `Diamond` lays pinned and unpinned kids out **together** in
+  the ordinary two-row zone, each keeping its own label. Reachable without an odd roster:
+  pinning outfielders before placing the infield leaves nine unpinned on a twelve-player
+  team.
 - **Save and Cancel answer different questions in both chart editors**, and it is not
   redundancy. Cancel is "has the coach changed anything" (draft vs. the loaded draft); Save is
   "would writing change the database" (draft vs. `stored*`). They diverge on first render
-  whenever the draft builder normalized something — a stale `CENTER_FIELD` row under allPlay,
+  whenever the draft builder normalized something — a stale `CATCHER` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
 - **`List-Unsubscribe` is set on two sends, and which two is a claim, not an oversight.**

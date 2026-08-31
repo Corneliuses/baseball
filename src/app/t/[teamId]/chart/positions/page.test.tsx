@@ -188,7 +188,9 @@ describe("PositionsPage rendering", () => {
   });
 
   it("explains the outfield under allPlay and the bench without it", async () => {
-    expect(await render()).toContain("plays the outfield");
+    const allPlayHtml = await render();
+    expect(allPlayHtml).toContain("plays the general outfield");
+    expect(allPlayHtml).toContain("holds up to three");
 
     getTeamById.mockResolvedValue({ ...team, allPlay: false });
     expect(await render()).toContain("sits on the bench");

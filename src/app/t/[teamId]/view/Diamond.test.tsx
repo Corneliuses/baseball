@@ -4,6 +4,7 @@ import {
   DIAMOND_GEOMETRY,
   FIELD_ART,
   POSITION_COORDS,
+  outfieldSpotCoords,
   outfieldZoneCoords,
   zoneHaloRadius,
 } from "@/components/diamond-geometry";
@@ -119,18 +120,33 @@ describe("diamond geometry", () => {
     }
   });
 
-  it("puts the zone exactly on LF/CF/RF, so nothing may ever draw both", () => {
-    // The coincidence is deliberate — three outfielders should read as the
-    // standard diamond. It also means a board drawing a named outfield marker
-    // AND a zone would stack two markers on one spot, with both names
-    // unreadable and neither an error. `buildChartView` is what makes that
-    // unreachable: under allPlay it pools anyone stored at a named outfield
-    // spot, so `byPosition` cannot hold one while `outfield` is non-empty.
+  it("puts the zone exactly on LF/CF/RF, so nothing may ever draw both shallow", () => {
+    // The coincidence is deliberate — three unpinned outfielders should read
+    // as the standard diamond. It also means a board drawing a named outfield
+    // marker AND a shallow zone would stack two markers on one spot, with
+    // both names unreadable and neither an error. The Diamond's `deep` switch
+    // is what makes that unreachable: the moment any named spot has players,
+    // the zone moves to its deep row (`outfieldZoneCoords(..., {deep})`).
     expect(outfieldZoneCoords(3)).toEqual(
       OUTFIELD_POSITIONS.map((position) => POSITION_COORDS[position]).sort(
         (a, b) => a.x - b.x,
       ),
     );
+  });
+
+  it("keeps every fanned spot halo on the grass, clear of the warning track", () => {
+    // The named-spot counterpart of the zone checks below: a corner trio's
+    // outermost marker is the deepest thing the outfield can draw.
+    const trackInnerEdge = FIELD_ART.trackRadius - FIELD_ART.trackWidth / 2;
+    const home = { x: FIELD_ART.homeCircle.x, y: FIELD_ART.homeCircle.y };
+
+    for (const position of OUTFIELD_POSITIONS) {
+      for (const count of [1, 2, 3]) {
+        for (const coord of outfieldSpotCoords(position, count)) {
+          expect(apart(coord, home) + haloReach).toBeLessThan(trackInnerEdge);
+        }
+      }
+    }
   });
 });
 

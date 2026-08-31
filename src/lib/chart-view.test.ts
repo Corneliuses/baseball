@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildChartView,
   hasChartSet,
+  seatedEntryIds,
   type ChartViewEntry,
 } from "@/lib/chart-view";
 import type { Position } from "@/generated/prisma/enums";
@@ -93,9 +94,9 @@ describe("buildChartView", () => {
   it("maps assigned positions to their player", () => {
     const view = buildChartView(fullChart, noRsvps, false);
 
-    expect(view.byPosition.get("SHORTSTOP")?.playerId).toBe("ava");
-    expect(view.byPosition.get("PITCHER")?.playerId).toBe("ben");
-    expect(view.byPosition.get("FIRST_BASE")?.playerId).toBe("cy");
+    expect(view.byPosition.get("SHORTSTOP")?.[0].playerId).toBe("ava");
+    expect(view.byPosition.get("PITCHER")?.[0].playerId).toBe("ben");
+    expect(view.byPosition.get("FIRST_BASE")?.[0].playerId).toBe("cy");
     expect(view.byPosition.has("CATCHER")).toBe(false);
   });
 
@@ -123,7 +124,7 @@ describe("buildChartView", () => {
       "declined",
       "no-response",
     ]);
-    expect(view.byPosition.get("SHORTSTOP")?.rsvpState).toBe("declined");
+    expect(view.byPosition.get("SHORTSTOP")?.[0].rsvpState).toBe("declined");
   });
 
   it("never reorders, renumbers, or drops anyone based on rsvp state", () => {
@@ -189,28 +190,77 @@ describe("buildChartView", () => {
     expect(buildChartView([], noRsvps, false).hasChart).toBe(false);
   });
 
-  it("pools an allPlay team's stale named-outfield row instead of seating it", () => {
-    // The view page draws its outfield zone at the very coordinates a named
-    // outfield marker occupies, so seating this player would stack two markers
-    // on one spot and make both names unreadable. The editor already shows them
-    // in its zone; this is what keeps the two diamonds telling one story.
-    const stale: ChartViewEntry[] = [
-      {
-        entryId: "re-cal",
-        playerId: "cal",
-        playerName: "Cal",
-        jerseyNumber: 3,
-        battingOrder: 1,
-        position: "CENTER_FIELD",
-      },
-    ];
+  it("seats an allPlay team's named-outfield rows, stacked and sorted", () => {
+    // LF/CF/RF are placeable spots under allPlay since the named-outfield
+    // revision. The stack sorts jersey-then-name for the same reason the
+    // pool does: getChart has no orderBy, and an unsorted stack reshuffles
+    // between requests.
+    const named = (playerId: string, jerseyNumber: number | null): ChartViewEntry => ({
+      entryId: `re-${playerId}`,
+      playerId,
+      playerName: playerId,
+      jerseyNumber,
+      battingOrder: null,
+      position: "CENTER_FIELD",
+    });
 
-    const view = buildChartView(stale, noRsvps, true);
+    const view = buildChartView([named("zoe", 9), named("cal", 3)], noRsvps, true);
 
-    expect(view.byPosition.has("CENTER_FIELD")).toBe(false);
-    expect(view.unassigned.map((p) => p.playerId)).toEqual(["cal"]);
-    // Nobody vanishes, and the chart still counts as set.
+    expect(view.byPosition.get("CENTER_FIELD")?.map((p) => p.playerId)).toEqual([
+      "cal",
+      "zoe",
+    ]);
+    expect(view.unassigned).toEqual([]);
     expect(view.hasChart).toBe(true);
+  });
+
+  it("seats the same player whatever order the rows arrive in", () => {
+    // The regression: the capacity cut ran over `getChart`'s unordered
+    // findMany, so an over-capacity spot — three kids left at CF the moment
+    // allPlay is switched off — seated whichever row Postgres happened to
+    // return first. Same team, same data, a different centre fielder on a
+    // refresh. Sorting BEFORE the cut is what makes the pick deterministic.
+    const named = (playerId: string, jerseyNumber: number): ChartViewEntry => ({
+      entryId: `re-${playerId}`,
+      playerId,
+      playerName: playerId,
+      jerseyNumber,
+      battingOrder: null,
+      position: "CENTER_FIELD",
+    });
+    const rows = [named("cal", 9), named("dee", 3), named("eli", 5)];
+
+    const seatedIn = (order: ChartViewEntry[]) =>
+      buildChartView(order, noRsvps, false)
+        .byPosition.get("CENTER_FIELD")!
+        .map((player) => player.playerId);
+
+    // Lowest jersey wins, from any starting order — including the reverse.
+    expect(seatedIn(rows)).toEqual(["dee"]);
+    expect(seatedIn([...rows].reverse())).toEqual(["dee"]);
+    expect(seatedIn([rows[2], rows[0], rows[1]])).toEqual(["dee"]);
+  });
+
+  it("pools anyone past an outfield spot's capacity instead of dropping them", () => {
+    const named = (playerId: string, jerseyNumber: number): ChartViewEntry => ({
+      entryId: `re-${playerId}`,
+      playerId,
+      playerName: playerId,
+      jerseyNumber,
+      battingOrder: null,
+      position: "CENTER_FIELD",
+    });
+
+    const four = [named("a", 1), named("b", 2), named("c", 3), named("d", 4)];
+    const view = buildChartView(four, noRsvps, true);
+
+    expect(view.byPosition.get("CENTER_FIELD")).toHaveLength(3);
+    expect(view.unassigned.map((p) => p.playerId)).toEqual(["d"]);
+
+    // allPlay off: the same spot holds one, so three of the four pool.
+    const selective = buildChartView(four, noRsvps, false);
+    expect(selective.byPosition.get("CENTER_FIELD")).toHaveLength(1);
+    expect(selective.unassigned).toHaveLength(3);
   });
 
   it("pools an allPlay team's stale catcher row — the coach pitches", () => {
@@ -245,16 +295,16 @@ describe("buildChartView", () => {
 
     const view = buildChartView(named, noRsvps, false);
 
-    expect(view.byPosition.get("CENTER_FIELD")?.playerId).toBe("cal");
+    expect(view.byPosition.get("CENTER_FIELD")?.[0].playerId).toBe("cal");
     expect(view.unassigned).toEqual([]);
   });
 
   it("keeps the allPlay infield seated", () => {
     const view = buildChartView(fullChart, noRsvps, true);
 
-    expect(view.byPosition.get("SHORTSTOP")?.playerId).toBe("ava");
-    expect(view.byPosition.get("PITCHER")?.playerId).toBe("ben");
-    expect(view.byPosition.get("FIRST_BASE")?.playerId).toBe("cy");
+    expect(view.byPosition.get("SHORTSTOP")?.[0].playerId).toBe("ava");
+    expect(view.byPosition.get("PITCHER")?.[0].playerId).toBe("ben");
+    expect(view.byPosition.get("FIRST_BASE")?.[0].playerId).toBe("cy");
     expect(view.unassigned.map((p) => p.playerId)).toEqual(["eli"]);
   });
 
@@ -362,7 +412,7 @@ describe("buildChartView diamond names", () => {
 
     const view = buildChartView(entries, noRsvps, false);
 
-    expect(view.byPosition.get("SHORTSTOP")?.diamondName).toBe("Ava C.");
+    expect(view.byPosition.get("SHORTSTOP")?.[0].diamondName).toBe("Ava C.");
     expect(view.unassigned[0].diamondName).toBe("Ava R.");
   });
 
@@ -481,5 +531,69 @@ describe("hasChartSet", () => {
   it("is true as soon as one player has a slot or a position", () => {
     expect(hasChartSet([entry(1, null), entry(null, null)])).toBe(true);
     expect(hasChartSet([entry(null, "PITCHER"), entry(null, null)])).toBe(true);
+  });
+});
+
+describe("seatedEntryIds", () => {
+  const at = (
+    playerId: string,
+    jerseyNumber: number,
+    position: Position | null,
+  ): ChartViewEntry => ({
+    entryId: `re-${playerId}`,
+    playerId,
+    playerName: playerId,
+    jerseyNumber,
+    battingOrder: null,
+    position,
+  });
+
+  it("is exactly who buildChartView seats, so the pages cannot disagree", () => {
+    const entries = [
+      at("ava", 1, "PITCHER"),
+      at("ben", 2, "CENTER_FIELD"),
+      at("cal", 3, "CENTER_FIELD"),
+      at("dee", 4, null),
+      // Not a spot an allPlay team fields — the coach pitches.
+      at("eli", 5, "CATCHER"),
+    ];
+
+    const view = buildChartView(entries, noRsvps, true);
+    const seatedByView = new Set(
+      [...view.byPosition.values()].flat().map((player) => player.entryId),
+    );
+
+    expect(seatedEntryIds(entries, true)).toEqual(seatedByView);
+    expect(seatedEntryIds(entries, true)).toEqual(
+      new Set(["re-ava", "re-ben", "re-cal"]),
+    );
+  });
+
+  it("omits the kids an over-capacity spot cannot seat", () => {
+    // The bug this exists for: with allPlay off, one kid stands at CF and the
+    // other two are substitutes — so team home must not print "CF" for all
+    // three while /view seats one.
+    const entries = [
+      at("ava", 1, "CENTER_FIELD"),
+      at("ben", 2, "CENTER_FIELD"),
+      at("cal", 3, "CENTER_FIELD"),
+    ];
+
+    expect(seatedEntryIds(entries, false)).toEqual(new Set(["re-ava"]));
+    expect(seatedEntryIds(entries, true)).toEqual(
+      new Set(["re-ava", "re-ben", "re-cal"]),
+    );
+  });
+
+  it("does not depend on the order the rows arrive in", () => {
+    const entries = [
+      at("cal", 9, "CENTER_FIELD"),
+      at("dee", 3, "CENTER_FIELD"),
+    ];
+
+    expect(seatedEntryIds(entries, false)).toEqual(
+      seatedEntryIds([...entries].reverse(), false),
+    );
+    expect(seatedEntryIds(entries, false)).toEqual(new Set(["re-dee"]));
   });
 });

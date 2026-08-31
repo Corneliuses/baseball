@@ -158,35 +158,47 @@ const OUTFIELD_ZONE = {
 } as const;
 
 /**
- * Where an allPlay team's outfielders stand.
+ * Where an allPlay team's GENERAL outfielders stand — the kids the coach
+ * hasn't pinned to a named LF/CF/RF spot (those draw via `outfieldSpotCoords`
+ * instead). The count is whatever the chart leaves over, and it moves with
+ * the team. Markers are laid out in rows across the grass, each row bowed the
+ * way an outfield actually plays: centre deepest, the ends drawn down toward
+ * the foul lines.
  *
- * That outfield is one zone rather than three named spots (#11), so the count
- * is whatever the infield leaves over — five on a twelve-player roster, but it
- * moves with the team. Markers are laid out in rows across the grass, each row
- * bowed the way an outfield actually plays: centre deepest, the ends drawn down
- * toward the foul lines.
- *
- * A row of three lands exactly on the LF/CF/RF coordinates above, which is the
- * point — a team that happens to field three outfielders reads as the standard
+ * A row of three lands exactly on the LF/CF/RF coordinates above, which is
+ * the point — a wholly unpinned outfield of three reads as the standard
  * diamond rather than as some other chart.
  *
  * Returns one coordinate per player, in the order given.
  */
 export function outfieldZoneCoords(
   count: number,
+  options: {
+    /**
+     * Draw the zone one row deeper, leaving the shallow row to the named
+     * outfield spots. The zone's shallow row sits AT the LF/CF/RF coordinates
+     * — that is its calibration — so when any of those spots has players
+     * standing on it, a shallow zone marker would land on top of them. The
+     * cost is that everything squeezes into the one remaining row (a third
+     * row would reach the middle infielders — see `maxRows`), which packs
+     * markers tighter than two rows would; past ~7 unpinned players the
+     * degradation is the crowded-zone one, halo first (`zoneHaloRadius`).
+     */
+    deep?: boolean;
+  } = {},
 ): { x: number; y: number }[] {
   if (count <= 0) {
     return [];
   }
 
-  const rows = Math.min(
-    OUTFIELD_ZONE.maxRows,
-    Math.ceil(count / OUTFIELD_ZONE.perRowTarget),
-  );
+  const firstRow = options.deep ? 1 : 0;
+  const rows = options.deep
+    ? OUTFIELD_ZONE.maxRows
+    : Math.min(OUTFIELD_ZONE.maxRows, Math.ceil(count / OUTFIELD_ZONE.perRowTarget));
   const coords: { x: number; y: number }[] = [];
   let placed = 0;
 
-  for (let row = 0; row < rows; row += 1) {
+  for (let row = firstRow; row < rows; row += 1) {
     // Spread the remainder over the rows that are left, so the deeper row takes
     // the extra player when the count doesn't divide evenly.
     const inRow = Math.ceil((count - placed) / (rows - row));
@@ -210,6 +222,133 @@ export function outfieldZoneCoords(
 
   return coords;
 }
+
+/**
+ * The outfield arc the zone's row of three is calibrated to, as a function:
+ * offset -1 is exactly LF, 0 is CF, +1 is RF, and everything between falls on
+ * the same bow (`OUTFIELD_ZONE.arc` down per squared offset). Named spots and
+ * the zone both draw on this curve, which is what keeps a stack fanned around
+ * centre field looking like outfielders rather than like markers floating
+ * over grass.
+ */
+function arcPoint(offset: number): { x: number; y: number } {
+  // The unit is the row-of-three's half-spread: two gaps at spreadPerGap, so
+  // offset ±1 lands on x = 200 ± 125 — exactly LF and RF.
+  const unit = OUTFIELD_ZONE.spreadPerGap * 2;
+  return {
+    x: DIAMOND_GEOMETRY.width / 2 + offset * unit,
+    y: OUTFIELD_ZONE.depth + OUTFIELD_ZONE.arc * offset * offset,
+  };
+}
+
+/// Where each named outfield spot sits on that arc.
+const SPOT_ARC_OFFSET: Readonly<Partial<Record<Position, number>>> = {
+  LEFT_FIELD: -1,
+  CENTER_FIELD: 0,
+  RIGHT_FIELD: 1,
+};
+
+/// The furthest a marker may sit from the centre line, in arc units — the same
+/// bound `OUTFIELD_ZONE.maxSpread` puts on a zone row, restated in this
+/// module's other coordinate. Names are centred under their marker, so a fan
+/// that ignored it would push the outermost NAME off the 400-wide box while
+/// every circle still fitted: the silent clipping this file already guards
+/// against for the catcher.
+const MAX_ARC_OFFSET =
+  OUTFIELD_ZONE.maxSpread / (OUTFIELD_ZONE.spreadPerGap * 2);
+
+/**
+ * Spacing between neighbours in one spot's fan, in arc units.
+ *
+ * Two numbers because the arc is not equally steep everywhere. Neighbours must
+ * stay `2 * markerRadius` apart in real distance, and a corner fan descends the
+ * bow — so 0.27 of an offset already buys 40px there, while CF's flat middle
+ * needs the full 0.32 (= 40px of pure x) to clear the same gap. Using CF's
+ * number at the corners would push a trio past `MAX_ARC_OFFSET`, and clamping
+ * it back would then collide with the CF fan next door; using the corner
+ * number at CF would overlap two markers outright. Both are pinned by
+ * `outfieldSpotCoords`'s tests, which check every pair on a nine-marker board.
+ */
+const SPOT_FAN_SPACING = { pair: 0.44, cornerTrio: 0.27, centreTrio: 0.32 } as const;
+
+function fanSpacing(centre: number, count: number): number {
+  if (count <= 2) {
+    return SPOT_FAN_SPACING.pair;
+  }
+  return centre === 0
+    ? SPOT_FAN_SPACING.centreTrio
+    : SPOT_FAN_SPACING.cornerTrio;
+}
+
+/**
+ * Where the players pinned to one named outfield spot stand (#11 revision:
+ * an allPlay team's LF/CF/RF each hold up to three).
+ *
+ * One player stands exactly on the spot — `POSITION_COORDS[position]`, which
+ * `arcPoint(SPOT_ARC_OFFSET)` reproduces — so a board with single outfielders
+ * is pixel-identical to the fixed diamond. Two or three fan along the outfield
+ * arc, tightly enough that three full spots (nine markers) stay clear of each
+ * other.
+ *
+ * **The fan is centred on the spot and then slid back inside
+ * `MAX_ARC_OFFSET`**, which is why a corner pair or trio is not symmetric about
+ * its own spot: LF's outermost kid stands on the name-safe edge and the rest
+ * fan in toward centre field. Symmetry there would put a marker at x=35, whose
+ * centred name runs off the box — and the marker circle still fits, so nothing
+ * would fail visibly.
+ *
+ * Returns one coordinate per player, in the order given; empty for a position
+ * that is not a named outfield spot.
+ */
+export function outfieldSpotCoords(
+  position: Position,
+  count: number,
+): { x: number; y: number }[] {
+  const centre = SPOT_ARC_OFFSET[position];
+  if (centre === undefined || count <= 0) {
+    return [];
+  }
+  if (count === 1) {
+    return [arcPoint(centre)];
+  }
+
+  const spacing = fanSpacing(centre, count);
+  const offsets = Array.from(
+    { length: count },
+    (_, index) => centre + (index - (count - 1) / 2) * spacing,
+  );
+
+  // Slide the whole fan — never squeeze it — so the spacing above keeps its
+  // guarantee while the ends stay inside the name-safe band.
+  const overshootLeft = -MAX_ARC_OFFSET - offsets[0];
+  const overshootRight = offsets[offsets.length - 1] - MAX_ARC_OFFSET;
+  const shift =
+    overshootLeft > 0 ? overshootLeft : overshootRight > 0 ? -overshootRight : 0;
+
+  return offsets.map((offset) => arcPoint(offset + shift));
+}
+
+/**
+ * Can `count` general-outfield players share the single deep row without their
+ * markers overlapping?
+ *
+ * The deep row is all the zone gets once a named spot is occupied: its shallow
+ * row sits AT the LF/CF/RF coordinates, and a third row would reach the middle
+ * infielders at y=252 (`OUTFIELD_ZONE.maxRows`). One row holds eight at the
+ * board's usual 41.4px floor and nine at 36.25px — under the 40px two markers
+ * need, which is an overlap, not a degradation.
+ *
+ * Reachable without an outlandish roster: a coach who pins outfielders BEFORE
+ * placing the infield leaves nine unpinned on a twelve-player team. `Diamond`
+ * answers it by giving up the pinned coordinates for that board rather than
+ * drawing markers on top of each other — see its `crowded` branch.
+ */
+export function deepZoneFits(count: number): boolean {
+  return count <= DEEP_ZONE_ROW_CAPACITY;
+}
+
+/// Eight: the last count whose single deep row keeps two markers 40px apart.
+const DEEP_ZONE_ROW_CAPACITY = 8;
 
 /// How far a ring at `radius` reaches from its marker's centre — the stroke
 /// straddles the radius, so half of it sits outside.
@@ -238,20 +377,46 @@ function haloReach(radius: number): number {
 /// and the `sr-only` mirror still says "(your player)" — the ring is the fast
 /// path, never the only one.
 export function zoneHaloRadius(count: number): number | null {
-  const coords = outfieldZoneCoords(count);
-  if (coords.length === 0) {
+  return outfieldHaloRadius(outfieldZoneCoords(count));
+}
+
+/**
+ * The largest halo that fits around the guarded markers on an outfield laid
+ * out at `coords` — `zoneHaloRadius`'s engine, exported for the board that
+ * mixes named-spot fans with a zone row.
+ *
+ * **Measured around the guarded markers, not the whole outfield.** One radius
+ * still covers the board, because two different-sized rings would read as two
+ * different claims about the kids inside them — but the crowding that decides
+ * it is the crowding those kids actually stand in. Taking the minimum over
+ * every pair instead let one three-deep spot on the far side of the field
+ * erase the ring around a guarded kid standing alone at LF: the parent lost
+ * the highlight to a cluster their child is nowhere near.
+ *
+ * `guarded` defaults to every marker, which is what `zoneHaloRadius` wants —
+ * it answers "could this zone hold a ring at all" for a whole-zone layout.
+ */
+export function outfieldHaloRadius(
+  coords: readonly { x: number; y: number }[],
+  guarded: readonly { x: number; y: number }[] = coords,
+): number | null {
+  if (coords.length === 0 || guarded.length === 0) {
     return null;
   }
 
   let minGap = Infinity;
-  for (let i = 0; i < coords.length; i += 1) {
-    for (let j = i + 1; j < coords.length; j += 1) {
-      minGap = Math.min(minGap, distance(coords[i], coords[j]));
+  for (const marker of guarded) {
+    for (const other of coords) {
+      if (other === marker) {
+        continue;
+      }
+      minGap = Math.min(minGap, distance(marker, other));
     }
-    // The zone shares a board with the allPlay infield. LF/CF/RF are excluded
-    // by construction — the zone is drawn *at* those coordinates.
+    // The outfield shares a board with the allPlay infield. LF/CF/RF are
+    // excluded — the outfield is drawn *at* (and fanned around) those
+    // coordinates.
     for (const position of ALL_PLAY_INFIELD_POSITIONS) {
-      minGap = Math.min(minGap, distance(coords[i], POSITION_COORDS[position]));
+      minGap = Math.min(minGap, distance(marker, POSITION_COORDS[position]));
     }
   }
 
