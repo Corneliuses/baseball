@@ -30,7 +30,9 @@ docs/design/       # The design plan and its SVG mockups — kept in step with t
 .claude/           # Agent config: workflow skills, agent defs, permissions (do not edit)
 ```
 
-`src/app/` now has real routes: `/` (auth-gated landing), `/signin`, `/invite/[token]`
+`src/app/` now has real routes: `/` (auth-gated landing), `/signin` and
+`/signin/check-email` (ask for an emailed code, then type it — the second is a real form,
+not a confirmation screen), `/invite/[token]`
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher),
 `/profile` (the signed-in person's own name and phone — global, not team-scoped, since
 those are `User` columns — and the app's only sign-out, a server action wrapping Auth.js
