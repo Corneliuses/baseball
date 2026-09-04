@@ -1,16 +1,22 @@
 import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Html,
-  Preview,
-  Text,
-} from "@react-email/components";
+  BananaButton,
+  EmailHeading,
+  EmailText,
+  LinkFallback,
+  NoteBlock,
+} from "./EmailKit";
+import { EmailLayout } from "./EmailLayout";
 
-/// Plain and short on purpose — no images, a single button, and the URL
-/// repeated as visible text for mail clients that strip links. This is the
-/// coach's very first message to a parent who has never used the app.
+/// The coach's very first message to a parent who has never used the app, and
+/// therefore the one email that is doing brand work as well as errand work:
+/// whatever this looks like is what the parent expects the app to look like.
+///
+/// Still no images and still one action. The flare is in the stock and the
+/// type — see `brand.ts` — not in anything that has to load.
+///
+/// **This email spends its banana on Accept.** There is exactly one thing to do
+/// with an invitation, the whole message is scaffolding around it, and the URL
+/// stays repeated as plain text underneath for clients that strip links.
 
 export type InvitationEmailProps = {
   teamName: string;
@@ -37,34 +43,25 @@ export function InvitationEmail({
   message,
 }: InvitationEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>You&apos;re invited to join {teamName}</Preview>
-      <Body style={{ fontFamily: "sans-serif", padding: "24px" }}>
-        <Container>
-          <Text>You&apos;ve been invited to join {teamName}.</Text>
-          {message ? (
-            <Text style={{ whiteSpace: "pre-wrap" }}>{message}</Text>
-          ) : null}
-          <Button
-            href={acceptUrl}
-            style={{
-              background: "#111827",
-              color: "#ffffff",
-              padding: "12px 20px",
-              borderRadius: "6px",
-              textDecoration: "none",
-            }}
-          >
-            Accept invitation
-          </Button>
-          <Text>
-            Or paste this link into your browser: <br />
-            {acceptUrl}
-          </Text>
-          <Text>This invitation expires on {formatExpiry(expiresAt)}.</Text>
-        </Container>
-      </Body>
-    </Html>
+    <EmailLayout
+      preview={`You're invited to join ${teamName}`}
+      teamName={teamName}
+      footnote={`Someone coaching ${teamName} sent this invitation to your email address.`}
+    >
+      <EmailHeading
+        eyebrow="You're invited"
+        title={`Join ${teamName}`}
+        subtitle="Schedule, RSVPs, and the batting order — in one place, on your phone."
+      />
+
+      {message ? <NoteBlock>{message}</NoteBlock> : null}
+
+      <BananaButton href={acceptUrl}>Accept invitation</BananaButton>
+      <LinkFallback href={acceptUrl} />
+
+      <EmailText quiet>
+        {`This invitation expires on ${formatExpiry(expiresAt)}.`}
+      </EmailText>
+    </EmailLayout>
   );
 }

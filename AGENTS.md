@@ -22,7 +22,7 @@ prisma/            # schema.prisma — the domain model, heavily commented
 public/            # Static assets: the crest, the PWA icon set, and sw.js (see Gotchas)
 src/app/           # Next.js App Router pages and layouts
 src/lib/           # Domain logic. Pure, DB-free modules live here with co-located tests
-src/emails/        # React Email templates plus their pure props builders
+src/emails/        # React Email templates, their pure props builders, and the shared brand shell
 src/generated/     # Prisma client output — gitignored, regenerate with pnpm db:generate
 src/components/    # Shared UI: shadcn primitives in ui/, plus the diamond and its geometry
 docs/design/       # The design plan and its SVG mockups — kept in step with the code by a test
@@ -554,6 +554,37 @@ production — the dev command can prompt, generate new migrations, and reset th
   whenever the draft builder normalized something — a stale `CATCHER` row under allPlay,
   or nine slots holding what used to be ten batters — and gating Save on the Cancel question
   leaves the coach looking at a change they cannot commit.
+- **Every email wears one shell, and its palette is frozen hex that a test re-derives.**
+  `EmailLayout` (cream page, charcoal scoreboard cap carrying the team name, warm card,
+  seam-red rule) plus `EmailKit`'s motifs — `FactPanel` is the ticket stub, `StitchRule`
+  the seam, `ScoreboardPanel` the readiness scoreboard, `SlotDot` the jersey dot — are the
+  email translation of design-plan.md §5, and no template styles its own `<Body>` any
+  more. Colours come from `src/emails/brand.ts` and nowhere else: a mail client gives an
+  email no cascade to resolve `hsl(var(--x))` from, drops `prefers-color-scheme`, and
+  never sees a Tailwind class, so the palette is **light-theme hex, copied**, exactly as
+  `app/manifest.ts` copies two of them. `brand.test.ts` redoes the conversion out of
+  `globals.css` (via `@/lib/hsl-to-hex`, shared with `manifest.test.ts`) and fails when a
+  token moves, because nothing at runtime would ever notice.
+
+  Three things look like omissions and are decisions. **No images** — not the crest, not
+  the field art: images are off by default in most inboxes, so brand carried in a PNG is
+  brand that is blank for half the roster, and every remote fetch reports back when a
+  family opened their mail. **No web font**, for the same beacon reason; `EMAIL_FONT.display`
+  is a bold slab *stack* that lands on Georgia for most readers. **No dark variant**, and
+  `color-scheme: light` in the head asks clients not to invert cream-and-navy into mud.
+  The cream ground is painted by a full-width `Section` **as well as** `Body`, because
+  Gmail drops `<body>` styling and a cream card on a white page looks like a bug.
+
+  §2's one-banana budget applies per email and `templates.test.tsx` enforces it by
+  counting banana *backgrounds* in the rendered markup: the invitation, the added-to-team
+  notice, both announcements and the reminder each spend theirs on the single call to
+  action; the sign-in code spends its own as floodlight-on-charcoal in the scoreboard
+  panel rather than a button (there is nothing to tap, by design); and the team message
+  and the announcement receipt are §7 calm surfaces with **no** banana at all — a yellow
+  button over somebody's typed message is the app talking over the coach. That suite also
+  pins that every template with a button still repeats its URL as plain text, which is
+  what a stripped-link client and a forwarded message leave a parent with.
+
 - **`List-Unsubscribe` is set on two sends, and which two is a claim, not an oversight.**
   `sendEmail` takes an optional `listUnsubscribe` address; the all-parents broadcast and
   the day-of reminder cron pass one, and nothing else does. RFC 2369 says the header

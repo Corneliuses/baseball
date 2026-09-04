@@ -1,17 +1,13 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Html,
-  Preview,
-  Text,
-} from "@react-email/components";
+import { BananaButton, EmailHeading, EmailText, LinkFallback } from "./EmailKit";
+import { EmailLayout } from "./EmailLayout";
 
-/// Plain and short, like InvitationEmail — but no expiry line and no "accept"
-/// language, because there is nothing to accept. The recipient already has an
-/// account (Decision 15 step 4): they're being told where a kid they guard
-/// now plays, not invited to sign up.
+/// Short, like InvitationEmail — but no expiry line and no "accept" language,
+/// because there is nothing to accept. The recipient already has an account
+/// (Decision 15 step 4): they're being told where a kid they guard now plays,
+/// not invited to sign up.
+///
+/// Its banana goes on the one link, for the same reason the invitation's does:
+/// the message is one sentence long and the tap is the whole of it.
 
 export type AddedToTeamEmailProps = {
   teamName: string;
@@ -20,34 +16,24 @@ export type AddedToTeamEmailProps = {
 
 export function AddedToTeamEmail({ teamName, teamUrl }: AddedToTeamEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>You&apos;ve been added to {teamName}</Preview>
-      <Body style={{ fontFamily: "sans-serif", padding: "24px" }}>
-        <Container>
-          <Text>You&apos;ve been added to {teamName}.</Text>
-          <Button
-            href={teamUrl}
-            style={{
-              background: "#111827",
-              color: "#ffffff",
-              padding: "12px 20px",
-              borderRadius: "6px",
-              textDecoration: "none",
-            }}
-          >
-            View team
-          </Button>
-          <Text>
-            Or paste this link into your browser: <br />
-            {teamUrl}
-          </Text>
-          <Text>
-            You already have an account — sign in with the email address this
-            was sent to.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+    <EmailLayout
+      preview={`You've been added to ${teamName}`}
+      teamName={teamName}
+      footnote={`You're getting this because a player you're listed for is on ${teamName}'s roster.`}
+    >
+      <EmailHeading
+        eyebrow="New team"
+        title={`You're on ${teamName}`}
+        subtitle="Your player was added to the roster, so the schedule is yours now too."
+      />
+
+      <BananaButton href={teamUrl}>View team</BananaButton>
+      <LinkFallback href={teamUrl} />
+
+      <EmailText quiet>
+        You already have an account — sign in with the email address this was
+        sent to.
+      </EmailText>
+    </EmailLayout>
   );
 }
