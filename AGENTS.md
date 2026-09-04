@@ -557,33 +557,48 @@ production — the dev command can prompt, generate new migrations, and reset th
 - **Every email wears one shell, and its palette is frozen hex that a test re-derives.**
   `EmailLayout` (cream page, charcoal scoreboard cap carrying the team name, warm card,
   seam-red rule) plus `EmailKit`'s motifs — `FactPanel` is the ticket stub, `StitchRule`
-  the seam, `ScoreboardPanel` the readiness scoreboard, `SlotDot` the jersey dot — are the
-  email translation of design-plan.md §5, and no template styles its own `<Body>` any
-  more. Colours come from `src/emails/brand.ts` and nowhere else: a mail client gives an
-  email no cascade to resolve `hsl(var(--x))` from, drops `prefers-color-scheme`, and
-  never sees a Tailwind class, so the palette is **light-theme hex, copied**, exactly as
-  `app/manifest.ts` copies two of them. `brand.test.ts` redoes the conversion out of
-  `globals.css` (via `@/lib/hsl-to-hex`, shared with `manifest.test.ts`) and fails when a
-  token moves, because nothing at runtime would ever notice.
+  the seam, `ScoreboardPanel` the readiness scoreboard, `EdgePanel` the state-edged row,
+  `SlotDot` the jersey dot — are the email translation of design-plan.md §5, and no
+  template styles its own `<Body>` any more. Colours come from `src/emails/brand.ts` and
+  nowhere else: a mail client gives an email no cascade to resolve `hsl(var(--x))` from,
+  drops `prefers-color-scheme`, and never sees a Tailwind class, so the palette is
+  **light-theme hex, copied**, exactly as `app/manifest.ts` copies two of them.
+  `brand.test.ts` redoes the conversion out of `globals.css` (via `@/lib/light-theme`,
+  the one parser of that file, shared with `manifest.test.ts`) and fails when a token
+  moves, because nothing at runtime would ever notice. The three RSVP colours are
+  cross-checked against `rsvp-style.ts` the same way, so the inbox cannot become a third
+  opinion on what "not going" looks like.
 
   Three things look like omissions and are decisions. **No images** — not the crest, not
   the field art: images are off by default in most inboxes, so brand carried in a PNG is
   brand that is blank for half the roster, and every remote fetch reports back when a
   family opened their mail. **No web font**, for the same beacon reason; `EMAIL_FONT.display`
-  is a bold slab *stack* that lands on Georgia for most readers. **No dark variant**, and
-  `color-scheme: light` in the head asks clients not to invert cream-and-navy into mud.
+  is a bold slab *stack* that lands on Georgia for most readers. **No dark variant, and no
+  pretence one can be requested**: `color-scheme: light` in the head is honoured by Apple
+  Mail and ignored by the Gmail and Outlook apps, which recolour on their own — darkening
+  light grounds, lifting dark text, leaving saturated colours alone. The palette is
+  arranged to survive that pass rather than prevent it, which is why **the call to action
+  is navy ground with banana lettering and keyline, never a banana ground with navy text**:
+  the latter comes out of Gmail's pass as light text on yellow, the one pairing §3 forbids.
   The cream ground is painted by a full-width `Section` **as well as** `Body`, because
-  Gmail drops `<body>` styling and a cream card on a white page looks like a bug.
+  Gmail drops `<body>` styling and a cream card on a white page looks like a bug. Outlook
+  desktop's Word engine additionally ignores padding on tables and `white-space` on
+  paragraphs, so the card is tighter there and a coach's typed line breaks collapse; known,
+  and left alone rather than paid for with MSO conditional comments in every template.
 
   §2's one-banana budget applies per email and `templates.test.tsx` enforces it by
-  counting banana *backgrounds* in the rendered markup: the invitation, the added-to-team
-  notice, both announcements and the reminder each spend theirs on the single call to
-  action; the sign-in code spends its own as floodlight-on-charcoal in the scoreboard
-  panel rather than a button (there is nothing to tap, by design); and the team message
-  and the announcement receipt are §7 calm surfaces with **no** banana at all — a yellow
-  button over somebody's typed message is the app talking over the coach. That suite also
-  pins that every template with a button still repeats its URL as plain text, which is
-  what a stripped-link client and a forwarded message leave a parent with.
+  counting the `data-banana` marker that only `BananaButton` and `ScoreboardPanel` may
+  carry: the invitation, the added-to-team notice, both announcements and the reminder
+  each spend theirs on the call to action; the sign-in code spends its own as
+  floodlight-on-charcoal in the scoreboard panel (there is nothing to tap, by design);
+  and the team message and the announcement receipt are §7 calm surfaces with **no**
+  banana at all — a yellow button over somebody's typed message is the app talking over
+  the coach. Nothing else in `src/emails/` may reference `EMAIL_COLOR.banana` or
+  `EMAIL_COLOR.floodlight`. That suite also asserts every colour in the rendered markup is
+  in the palette (so no hand-typed white can reach the banana), that every template names
+  the team on the cap except the pre-team sign-in code (`teamName` is required as
+  `string | null` for that reason), and that every template with a URL repeats it as plain
+  text — which `BananaButton` and `QuietLink` do themselves, so no template has to remember.
 
 - **`List-Unsubscribe` is set on two sends, and which two is a claim, not an oversight.**
   `sendEmail` takes an optional `listUnsubscribe` address; the all-parents broadcast and

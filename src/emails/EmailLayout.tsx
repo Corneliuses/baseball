@@ -10,7 +10,7 @@ import {
 } from "@react-email/components";
 
 import { EMAIL_COLOR, EMAIL_FONT, EMAIL_WIDTH } from "./brand";
-import { StitchRule } from "./EmailKit";
+import { StitchRule, captionStyle } from "./EmailKit";
 
 /// The shell every email in this directory wears: cream page stock, a charcoal
 /// scoreboard cap with the team's name on it, one card of warm white, and a
@@ -28,24 +28,31 @@ import { StitchRule } from "./EmailKit";
 ///     `Body`. Gmail's webmail drops `<body>` styling, so an email that puts its
 ///     page colour only there is white in the client most of this roster reads
 ///     mail in — and a cream card floating on white looks like a bug.
-///   - `color-scheme: light` asks clients not to auto-invert. A forced dark
-///     inversion of cream-and-navy produces mud, and the message is legible in
-///     its own colours; this is the one lever that stops it.
+///   - `color-scheme: light` asks clients not to auto-invert. Apple Mail
+///     listens; the Gmail and Outlook apps do not, and recolour regardless.
+///     So the meta is a courtesy, not a defence — the defence is that the
+///     palette is arranged to survive their pass (see `brand.ts`), and the
+///     call to action in particular is built so that the recolour cannot put
+///     light text on the banana.
 ///
 /// The header band carries the **team name**, not a logo. It is the fastest
 /// answer to the question a parent with kids on two teams actually has, and it
-/// works with images blocked.
+/// works with images blocked. It is required, as `string | null`, so that a
+/// template cannot forget it: the receipt did exactly that in the first cut,
+/// and a coach running two teams got a receipt that named neither.
 
 export type EmailLayoutProps = {
   /// Inbox preview text — the line under the subject. Every template sets it
   /// to the fact a parent needs before opening.
   preview: string;
-  /// Shown on the scoreboard cap. Omitted only by the sign-in code email,
-  /// which is sent before we know which team the person is here for.
-  teamName?: string;
-  /// The grey line under the seam: why this message arrived. Templates say it
-  /// in their own words rather than sharing one sentence, because the reasons
-  /// genuinely differ — a roster, an invitation, something you asked for.
+  /// Shown on the scoreboard cap. `null` only for the sign-in code, which is
+  /// sent before we know which team the person is here for — every other
+  /// email has a team, and passing it is not optional.
+  teamName: string | null;
+  /// The grey line under the seam: why this message arrived. One sentence
+  /// per *reason*, shared where the reason is shared (`rosterFootnote` in
+  /// `copy.ts` covers the four roster-triggered emails) and written here
+  /// where it is not — an invitation, a code someone asked for.
   footnote?: ReactNode;
   children: ReactNode;
 };
@@ -113,13 +120,9 @@ const bandStyle: CSSProperties = {
 };
 
 const bandProductStyle: CSSProperties = {
-  fontFamily: EMAIL_FONT.mono,
-  fontSize: "11px",
-  fontWeight: 700,
+  ...captionStyle,
   letterSpacing: "2.5px",
-  textTransform: "uppercase",
   color: EMAIL_COLOR.onScoreboard,
-  margin: 0,
 };
 
 const bandTeamStyle: CSSProperties = {
@@ -149,11 +152,8 @@ const footnoteStyle: CSSProperties = {
 };
 
 const signatureStyle: CSSProperties = {
-  fontFamily: EMAIL_FONT.mono,
-  fontSize: "11px",
-  letterSpacing: "1.5px",
-  textTransform: "uppercase",
+  ...captionStyle,
+  fontWeight: 400,
   color: EMAIL_COLOR.quietInk,
-  margin: 0,
   padding: "0 4px",
 };

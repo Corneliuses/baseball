@@ -1,9 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { hslToHex } from "@/lib/hsl-to-hex";
+import { lightThemeHex } from "@/lib/light-theme";
 
 import manifest from "./manifest";
 
@@ -23,29 +23,14 @@ import manifest from "./manifest";
  *    copied from the *light* theme in `globals.css`. That is exactly the shape
  *    of duplication that rots — see `design-plan-drift.test.ts` for the same
  *    problem one directory up — so the conversion is redone here and compared
- *    rather than trusted. The conversion itself is `@/lib/hsl-to-hex`, shared
- *    with `src/emails/brand.test.ts`, which freezes the same light theme for
- *    the same reason: two hand-rolled converters that disagree would fail
- *    exactly one of these suites and give a reader no way to tell which one
- *    was lying.
+ *    rather than trusted. The parser and the conversion are `@/lib/light-theme`,
+ *    shared with `src/emails/brand.test.ts`, which freezes the same light
+ *    theme for the same reason: two hand-rolled readers that disagree would
+ *    fail exactly one of these suites and give a reader no way to tell which
+ *    one was lying.
  */
 
 const repoRoot = process.cwd();
-const globalsCss = readFileSync(join(repoRoot, "src/app/globals.css"), "utf8");
-
-/// The light-theme value of one token, as written in the `:root` block. Reads
-/// the first match deliberately: `:root` comes before the dark override in the
-/// file, so this is the light value even though the token name repeats.
-function lightToken(name: string): string {
-  const match = new RegExp(`--${name}:\\s*([^;]+);`).exec(globalsCss);
-  if (!match) {
-    throw new Error(
-      `--${name} is not in globals.css — this parser, not the stylesheet, ` +
-        "is probably what needs updating.",
-    );
-  }
-  return match[1].trim();
-}
 
 describe("web app manifest", () => {
   const result = manifest();
@@ -71,8 +56,8 @@ describe("web app manifest", () => {
   });
 
   it("uses the light-theme background and primary tokens as its colours", () => {
-    expect(result.background_color).toBe(hslToHex(lightToken("background")));
-    expect(result.theme_color).toBe(hslToHex(lightToken("primary")));
+    expect(result.background_color).toBe(lightThemeHex("background"));
+    expect(result.theme_color).toBe(lightThemeHex("primary"));
   });
 
   it("carries the icon sizes iOS and Android home screens ask for", () => {

@@ -29,12 +29,13 @@ export function SignInCodeEmail({
   return (
     <EmailLayout
       preview={`Your sign-in code is ${formattedCode}`}
+      teamName={null}
       footnote="Someone asked to sign in with this email address."
     >
       <EmailHeading
         eyebrow="Sign in"
         title="Here's your code"
-        subtitle="Type it into the sign-in screen you already have open."
+        subtitle="Type it into the sign-in screen."
       />
 
       <ScoreboardPanel label="Sign-in code">{formattedCode}</ScoreboardPanel>

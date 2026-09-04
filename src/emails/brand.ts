@@ -32,9 +32,18 @@ import type { RsvpState } from "@/lib/rsvp";
 ///     package. `EMAIL_FONT.display` is a slab *stack* instead — Rockwell and
 ///     friends where they exist, Georgia everywhere else — so the display
 ///     voice degrades to a serif rather than to Arial.
-///   - **No dark variant.** See above; the layout also asks clients not to
-///     auto-invert (`color-scheme: light`), because a forced inversion of a
-///     cream-and-navy card is muddier than the light original.
+///   - **No dark variant, and no pretence that one can be asked for.** The
+///     shell declares `color-scheme: light`, which Apple Mail honours and the
+///     Gmail and Outlook apps ignore: those two recolour on their own,
+///     darkening light grounds and lifting dark text, and no stylesheet
+///     reaches Gmail at all. So the palette is designed to *survive* that pass
+///     rather than to prevent it. Dark grounds stay dark and saturated
+///     colours are left alone, which is why the call to action is navy ground
+///     with banana lettering (see `EmailKit`'s `BananaButton`) and not the
+///     other way round — a banana ground with navy text is exactly the pairing
+///     Gmail's pass turns into light text on yellow, the one combination
+///     design-plan.md §3 forbids outright. What a dark-mode phone gets is a
+///     night-game version of the same card, not an inversion of the CTA.
 export const EMAIL_COLOR = {
   /// `--background` — the cream page stock the whole message sits on.
   page: "#FAF4E5",
@@ -47,16 +56,12 @@ export const EMAIL_COLOR = {
   quietInk: "#6D6155",
   /// `--border` — warm sand. Borders that stop disappearing.
   border: "#DBCFBD",
-  /// `--muted` — quiet fills, a step down from the card.
-  muted: "#E7DFD0",
   /// `--secondary` — the clay tint used for the ticket stub's stock.
   stub: "#EBDED1",
   /// `--primary` — Field Green. Links, rules, and the "attending" state.
   green: "#2F6A3A",
-  /// `--primary-foreground` — cream, for text on green.
-  onGreen: "#FCF8EE",
-  /// `--banana` — the one-per-email wow. Never carries white text; see
-  /// `EMAIL_COLOR.ink` (9.2:1 on banana) and the test that pins it.
+  /// `--banana` — the one-per-email wow, spent as lettering and keyline on a
+  /// navy ground (9.2:1). Never carries white text; see the test that pins it.
   banana: "#FFC72E",
   /// `--destructive` — Stitch Red. The seam divider and the "not going" state.
   stitch: "#C6102E",

@@ -1,15 +1,15 @@
-import type { CSSProperties } from "react";
-import { Section, Text } from "@react-email/components";
+import { Section } from "@react-email/components";
 
 import type { RsvpState } from "@/lib/rsvp";
-import { EMAIL_COLOR, EMAIL_FONT, EMAIL_RSVP_COLOR } from "./brand";
+import { EMAIL_RSVP_COLOR } from "./brand";
+import { rosterFootnote, whenWhere } from "./copy";
 import {
   BananaButton,
+  EdgePanel,
   EmailHeading,
   EmailText,
   FactPanel,
   FactRow,
-  LinkFallback,
   SectionLabel,
 } from "./EmailKit";
 import { EmailLayout } from "./EmailLayout";
@@ -57,9 +57,9 @@ export function EventReminderEmail({
 
   return (
     <EmailLayout
-      preview={`Today at ${timeLabel}${location ? ` — ${location}` : ""}`}
+      preview={whenWhere(`Today at ${timeLabel}`, location)}
       teamName={teamName}
-      footnote={`You're getting this because your player is on ${teamName}'s roster.`}
+      footnote={rosterFootnote(teamName)}
     >
       <EmailHeading
         eyebrow="Today"
@@ -79,15 +79,9 @@ export function EventReminderEmail({
       <SectionLabel>{kids.length === 1 ? "Your player" : "Your players"}</SectionLabel>
       <Section style={{ margin: "0 0 20px" }}>
         {kids.map((kid) => (
-          <Text
-            key={kid.playerId}
-            style={{
-              ...kidRowStyle,
-              borderLeft: `3px solid ${EMAIL_RSVP_COLOR[kid.rsvp]}`,
-            }}
-          >
+          <EdgePanel key={kid.playerId} edge={EMAIL_RSVP_COLOR[kid.rsvp]}>
             {rsvpReminderLabel(kid.name, kid.rsvp)}
-          </Text>
+          </EdgePanel>
         ))}
       </Section>
 
@@ -100,19 +94,7 @@ export function EventReminderEmail({
       <BananaButton href={eventUrl}>
         {needsAnswer ? "Answer now" : "Update your answer"}
       </BananaButton>
-      <LinkFallback href={eventUrl} />
     </EmailLayout>
   );
 }
 
-const kidRowStyle: CSSProperties = {
-  fontFamily: EMAIL_FONT.body,
-  fontSize: "16px",
-  lineHeight: "22px",
-  fontWeight: 600,
-  color: EMAIL_COLOR.ink,
-  backgroundColor: EMAIL_COLOR.page,
-  margin: "0 0 8px",
-  padding: "10px 14px",
-  borderRadius: "0 8px 8px 0",
-};

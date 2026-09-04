@@ -1,10 +1,4 @@
-import {
-  BananaButton,
-  EmailHeading,
-  EmailText,
-  LinkFallback,
-  NoteBlock,
-} from "./EmailKit";
+import { BananaButton, EmailHeading, EmailText, NoteBlock } from "./EmailKit";
 import { EmailLayout } from "./EmailLayout";
 
 /// The coach's very first message to a parent who has never used the app, and
@@ -57,11 +51,11 @@ export function InvitationEmail({
       {message ? <NoteBlock>{message}</NoteBlock> : null}
 
       <BananaButton href={acceptUrl}>Accept invitation</BananaButton>
-      <LinkFallback href={acceptUrl} />
 
-      <EmailText quiet>
-        {`This invitation expires on ${formatExpiry(expiresAt)}.`}
-      </EmailText>
+      {/* Body weight, not footer grey: the expiry is the one time-sensitive
+          fact in the message, and a parent who reads it as legal boilerplate
+          lets the invitation lapse. */}
+      <EmailText>{`This invitation expires on ${formatExpiry(expiresAt)}.`}</EmailText>
     </EmailLayout>
   );
 }

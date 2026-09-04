@@ -347,6 +347,14 @@ off one screen and typed into another and there is deliberately nothing to tap; 
 message and the announcement receipt are calm surfaces with none, because a yellow button
 over somebody's typed message is the app talking over the coach.
 
+The call to action is the one place the email inverts the app's pairing on purpose: **navy
+ground, banana lettering and keyline**, not a banana ground with navy text. The Gmail and
+Outlook apps recolour dark-mode mail on their own — they darken light grounds, lift dark
+text towards white and leave saturated colours alone — and a yellow button with navy text
+comes out of that pass as light text on Banana Yellow, the pairing §3 forbids. Built this
+way round, the button survives the pass unchanged, and what a dark-mode phone gets is a
+night-game version of the same card rather than an inverted CTA.
+
 Voice follows §9 exactly: eyebrows may play ("Today" in seam red is the one alarm in the
 directory), while dates, times and the three RSVP sentences stay frozen — `rsvpReminderLabel`
 still carries each kid's state in words, and the colour on the row is the second carrier,

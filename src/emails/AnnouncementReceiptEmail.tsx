@@ -1,8 +1,5 @@
-import type { CSSProperties } from "react";
-import { Section, Text } from "@react-email/components";
-
-import { EMAIL_COLOR, EMAIL_FONT } from "./brand";
-import { EmailHeading, EmailText, QuietLink } from "./EmailKit";
+import { EMAIL_COLOR } from "./brand";
+import { EdgePanel, EmailHeading, EmailText, QuietLink } from "./EmailKit";
 import { EmailLayout } from "./EmailLayout";
 
 /// The coach's copy of what happened when their event was announced (#45).
@@ -20,12 +17,16 @@ import { EmailLayout } from "./EmailLayout";
 /// details in a mailbox for no reason.
 
 export type AnnouncementReceiptEmailProps = {
+  /// On the cap, because the brief's coach runs more than one team and a
+  /// receipt that names none is a receipt for nothing in particular.
+  teamName: string;
   summary: string;
   needsAttention: boolean;
   scheduleUrl: string;
 };
 
 export function AnnouncementReceiptEmail({
+  teamName,
   summary,
   needsAttention,
   scheduleUrl,
@@ -33,6 +34,7 @@ export function AnnouncementReceiptEmail({
   return (
     <EmailLayout
       preview={summary}
+      teamName={teamName}
       footnote="You're getting this because you added the event."
     >
       <EmailHeading
@@ -41,16 +43,9 @@ export function AnnouncementReceiptEmail({
         title={needsAttention ? "Some parents weren't told" : "Announcement sent"}
       />
 
-      <Section
-        style={{
-          ...statusPanelStyle,
-          borderLeft: `4px solid ${
-            needsAttention ? EMAIL_COLOR.stitch : EMAIL_COLOR.green
-          }`,
-        }}
-      >
-        <Text style={statusTextStyle}>{summary}</Text>
-      </Section>
+      <EdgePanel edge={needsAttention ? EMAIL_COLOR.stitch : EMAIL_COLOR.green}>
+        {summary}
+      </EdgePanel>
 
       {needsAttention ? (
         <EmailText>
@@ -64,17 +59,3 @@ export function AnnouncementReceiptEmail({
   );
 }
 
-const statusPanelStyle: CSSProperties = {
-  backgroundColor: EMAIL_COLOR.page,
-  borderRadius: "0 10px 10px 0",
-  padding: "14px 16px",
-  margin: "0 0 20px",
-};
-
-const statusTextStyle: CSSProperties = {
-  fontFamily: EMAIL_FONT.body,
-  fontSize: "16px",
-  lineHeight: "24px",
-  color: EMAIL_COLOR.ink,
-  margin: 0,
-};

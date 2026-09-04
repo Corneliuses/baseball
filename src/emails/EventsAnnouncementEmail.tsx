@@ -2,13 +2,13 @@ import type { CSSProperties } from "react";
 import { Section, Text } from "@react-email/components";
 
 import { EMAIL_COLOR, EMAIL_FONT } from "./brand";
+import { rosterFootnote, whenWhere } from "./copy";
 import {
   BananaButton,
   EmailHeading,
   EmailText,
   FactPanel,
   FactRow,
-  LinkFallback,
   SectionLabel,
   SlotDot,
 } from "./EmailKit";
@@ -53,9 +53,9 @@ export function EventsAnnouncementEmail({
 }: EventsAnnouncementEmailProps) {
   return (
     <EmailLayout
-      preview={`${dateTimeLabels[0] ?? ""}${location ? ` — ${location}` : ""}`}
+      preview={whenWhere(dateTimeLabels[0] ?? "", location)}
       teamName={teamName}
-      footnote={`You're getting this because your player is on ${teamName}'s roster.`}
+      footnote={rosterFootnote(teamName)}
     >
       <EmailHeading
         eyebrow="New on the schedule"
@@ -73,9 +73,10 @@ export function EventsAnnouncementEmail({
             key={label}
             style={{
               ...dateRowStyle,
-              ...(index === dateTimeLabels.length - 1
-                ? { borderBottom: "none" }
-                : {}),
+              borderBottom:
+                index < dateTimeLabels.length - 1
+                  ? `1px dashed ${EMAIL_COLOR.border}`
+                  : "none",
             }}
           >
             <SlotDot>{index + 1}</SlotDot>
@@ -91,13 +92,15 @@ export function EventsAnnouncementEmail({
         </FactPanel>
       ) : null}
 
+      {/* The schedule page lists the dates; each one is answered on its own
+          event page. Say that, rather than promising buttons that are not
+          on the page the button opens. */}
       <EmailText>
-        Answer them one at a time — the schedule has every date with its own
-        buttons.
+        Open the schedule and let your coach know which ones your player can
+        make.
       </EmailText>
 
       <BananaButton href={scheduleUrl}>See the schedule</BananaButton>
-      <LinkFallback href={scheduleUrl} />
     </EmailLayout>
   );
 }
@@ -107,7 +110,6 @@ const dateRowStyle: CSSProperties = {
   fontSize: "15px",
   lineHeight: "22px",
   color: EMAIL_COLOR.ink,
-  borderBottom: `1px dashed ${EMAIL_COLOR.border}`,
   margin: 0,
   padding: "9px 2px",
 };

@@ -22,16 +22,28 @@ import { EMAIL_COLOR, EMAIL_FONT } from "./brand";
 ///   - **Ticket stub** → `FactPanel`. The perforated RSVP-able surface, flattened
 ///     to clay stock with a Field Green edge. This is where the when and where
 ///     live, which is the whole reason a parent opened the message.
-///   - **Chalk box** → `NoteBlock`, for text a human typed (a coach's note, an
-///     event's notes) so it reads as quoted rather than as app copy.
+///   - **Chalk box** → `NoteBlock`, for text a human typed (a coach's note) so
+///     it reads as quoted rather than as app copy; and `EdgePanel`, the same
+///     page-stock panel with a coloured edge carrying a state.
 ///   - **Scoreboard** → `ScoreboardPanel`. Charcoal in both themes, floodlight
 ///     mono figures. Used for the one number an email exists to deliver.
 ///   - **Jersey dot** → `SlotDot`, the batting-slot disc, spent here on the
 ///     index of each date in a repeat-weekly announcement.
 ///
-/// Everything is inline style objects rather than classes: a `<style>` block is
-/// stripped by Gmail's webmail, and Tailwind never had a chance — the class
-/// names would arrive with nothing to resolve them.
+/// Everything is inline style objects rather than classes. Gmail keeps a
+/// `<style>` block in the head but not every Gmail surface applies it, Outlook
+/// desktop applies its own subset, and Tailwind class names would arrive with
+/// nothing to resolve them — inline is the one form every client reads.
+///
+/// Two guarantees are built into components here rather than left to each
+/// template to remember. **Every link repeats its URL as text** (`BananaButton`
+/// and `QuietLink` both print it underneath), because mail clients strip
+/// links, gateways rewrite them, and a forwarded message is text. And **the
+/// banana budget is a marker**: the two pieces allowed to spend design-plan.md
+/// §2's one yellow per email — `BananaButton` and `ScoreboardPanel` — each
+/// carry a `data-banana` attribute, which is what `templates.test.tsx` counts.
+/// Nothing else in this directory may reference `EMAIL_COLOR.banana` or
+/// `EMAIL_COLOR.floodlight`.
 
 /// A page-level heading: a small monospaced eyebrow, then the slab headline,
 /// then one optional line of context.
@@ -58,7 +70,8 @@ export function EmailHeading({
     <>
       <Text
         style={{
-          ...eyebrowStyle,
+          ...captionStyle,
+          margin: "0 0 6px",
           color: tone === "stitch" ? EMAIL_COLOR.stitch : EMAIL_COLOR.green,
         }}
       >
@@ -71,15 +84,16 @@ export function EmailHeading({
 }
 
 /// Body copy. A named component rather than a bare `<Text>` so that no email
-/// has to remember the type size, and so "a paragraph" and "a paragraph that
-/// preserves the line breaks a human typed" are one decision apart.
+/// has to remember the type size. Line breaks a person typed are always kept
+/// (`bodyStyle` is `pre-wrap`): app copy is single-line by construction, so
+/// the setting only ever affects the coach's own paragraphs, and an opt-in
+/// flag was one more thing for a new template to forget.
 export function EmailText({
   children,
-  preserveBreaks = false,
   quiet = false,
 }: {
   children: ReactNode;
-  preserveBreaks?: boolean;
+  /// Footer-weight: the "if you didn't ask for this" line, never a fact.
   quiet?: boolean;
 }) {
   return (
@@ -87,7 +101,6 @@ export function EmailText({
       style={{
         ...bodyStyle,
         ...(quiet ? { color: EMAIL_COLOR.quietInk, fontSize: "14px" } : {}),
-        ...(preserveBreaks ? { whiteSpace: "pre-wrap" } : {}),
       }}
     >
       {children}
@@ -122,8 +135,11 @@ export function FactRow({
         <Text
           style={{
             ...factValueStyle,
-            // Monospace runs wide, and "Wed, Sep 16, 2026 at 5:45 PM" has to
-            // fit beside its label on a 360px phone without wrapping mid-date.
+            // Monospace runs wide. A full "Wed, Sep 16, 2026 at 5:45 PM" still
+            // wraps once beside its label on a 360px phone — the value cell is
+            // about 175px there — but at 15px it breaks at the space before
+            // the time rather than inside the date, which is the line that
+            // matters. Do not shrink it further to chase a single line.
             ...(mono
               ? {
                   fontFamily: EMAIL_FONT.mono,
@@ -146,7 +162,25 @@ export function FactRow({
 export function NoteBlock({ children }: { children: ReactNode }) {
   return (
     <Section style={noteBlockStyle}>
-      <Text style={{ ...bodyStyle, margin: 0, whiteSpace: "pre-wrap" }}>
+      <Text style={{ ...bodyStyle, margin: 0 }}>{children}</Text>
+    </Section>
+  );
+}
+
+/// A page-stock panel with a coloured left edge — the state carrier for the
+/// reminder's per-kid rows and the receipt's summary. The edge is never the
+/// only carrier: whatever text sits inside says the state in words.
+export function EdgePanel({
+  edge,
+  children,
+}: {
+  /// One of the palette's state colours.
+  edge: string;
+  children: ReactNode;
+}) {
+  return (
+    <Section style={{ ...edgePanelStyle, borderLeft: `4px solid ${edge}` }}>
+      <Text style={{ ...bodyStyle, margin: 0, fontWeight: 600 }}>
         {children}
       </Text>
     </Section>
@@ -158,7 +192,8 @@ export function NoteBlock({ children }: { children: ReactNode }) {
 /// Reserved for the single number a message exists to carry — today the sign-in
 /// code. Everything about it is the readout: the panel is dark in a cream email
 /// on purpose, so the eye lands there first and the code can be read at a
-/// glance and typed into another screen.
+/// glance and typed into another screen. Floodlight is the banana family after
+/// dark, so this **is** that email's banana, and it carries the marker.
 export function ScoreboardPanel({
   label,
   children,
@@ -167,17 +202,27 @@ export function ScoreboardPanel({
   children: ReactNode;
 }) {
   return (
-    <Section style={scoreboardStyle}>
+    <Section style={scoreboardStyle} data-banana="scoreboard">
       <Text style={scoreboardLabelStyle}>{label}</Text>
       <Text style={scoreboardValueStyle}>{children}</Text>
     </Section>
   );
 }
 
-/// The Banana Yellow call to action — **one per email, or none**
-/// (design-plan.md §2). Navy on banana, never white, and a navy keyline so the
-/// button still reads as a button against cream stock in a client that ignores
-/// the radius.
+/// The call to action — **one per email, or none** (design-plan.md §2).
+///
+/// Navy ground, banana lettering, banana keyline. It is built this way round,
+/// and not as a yellow button with navy text, because of what the Gmail and
+/// Outlook apps do to a message in dark mode: they leave dark grounds and
+/// saturated colours alone and lift dark text towards white. A banana ground
+/// under navy text comes out of that pass as light text on yellow — the one
+/// pairing §3 forbids — while this survives it unchanged. What is banana about
+/// the button is the lettering and the frame, and that is the budget spent.
+///
+/// The URL is repeated as plain text underneath, always. Mail clients strip
+/// links, gateways rewrite them, and a parent forwarding the message to the
+/// other parent sends the text — so the fallback is part of the button rather
+/// than a second component each template has to remember.
 export function BananaButton({
   href,
   children,
@@ -186,21 +231,38 @@ export function BananaButton({
   children: ReactNode;
 }) {
   return (
-    <Section style={{ padding: "6px 0 4px" }}>
+    <Section style={{ padding: "6px 0 4px" }} data-banana="cta">
       <Button href={href} style={bananaButtonStyle}>
         {children}
       </Button>
+      <LinkFallback href={href} />
     </Section>
   );
 }
 
-/// The same URL as plain text under a button.
-///
-/// Kept from the original plain templates and deliberately not dropped for
-/// looking untidy: mail clients strip links, corporate gateways rewrite them,
-/// and a parent forwarding the message to the other parent sends the text. It
-/// is small and grey because it is a fallback, not an instruction.
-export function LinkFallback({ href }: { href: string }) {
+/// A quiet link for the calm emails — the ones whose point is the message
+/// itself, where a yellow button would be shouting over the sender. Prints its
+/// URL underneath for the same reason the button does.
+export function QuietLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <Text style={{ ...bodyStyle, fontSize: "14px", margin: "0 0 6px" }}>
+        <Link href={href} style={linkStyle}>
+          {children}
+        </Link>
+      </Text>
+      <LinkFallback href={href} />
+    </>
+  );
+}
+
+function LinkFallback({ href }: { href: string }) {
   return (
     <Text style={fallbackStyle}>
       Or paste this into your browser:
@@ -210,47 +272,46 @@ export function LinkFallback({ href }: { href: string }) {
   );
 }
 
-/// A quiet link for the calm emails — the ones whose point is the message
-/// itself, where a yellow button would be shouting over the sender.
-export function QuietLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: ReactNode;
-}) {
-  return (
-    <Text style={{ ...bodyStyle, fontSize: "14px" }}>
-      <Link href={href} style={linkStyle}>
-        {children}
-      </Link>
-    </Text>
-  );
-}
-
 /// The seam. Replaces a plain rule between sections.
 export function StitchRule() {
   return <Hr style={stitchRuleStyle} />;
 }
 
-/// The jersey dot, as a squared-off chip a mail client can actually draw: navy
-/// ground, cream monospaced figure.
+/// The jersey dot, as a chip a mail client can actually draw: navy ground,
+/// cream monospaced figure. Followed by a real space, because Outlook ignores
+/// the margin on an inline element, a screen reader ignores every margin, and
+/// "1Sat, Apr 4" is what both would otherwise get.
 export function SlotDot({ children }: { children: ReactNode }) {
-  return <span style={slotDotStyle}>{children}</span>;
+  return (
+    <>
+      <span style={slotDotStyle}>{children}</span>{" "}
+    </>
+  );
 }
 
 /// A small caption above a list or a panel.
 export function SectionLabel({ children }: { children: ReactNode }) {
-  return <Text style={{ ...eyebrowStyle, color: EMAIL_COLOR.quietInk }}>{children}</Text>;
+  return (
+    <Text style={{ ...captionStyle, margin: "0 0 8px", color: EMAIL_COLOR.quietInk }}>
+      {children}
+    </Text>
+  );
 }
 
-const eyebrowStyle: CSSProperties = {
+/// The caption voice: 11px monospaced small caps. Every label, eyebrow and
+/// footer line in an email is this with a colour and a spacing, and the shell
+/// (`EmailLayout`) spends it too. `lineHeight` is set explicitly because
+/// React Email's `Text` defaults to 24px — which on an 11px caption is a
+/// 13px halo of phantom space that pushes every stub label visibly below the
+/// value it names.
+export const captionStyle: CSSProperties = {
   fontFamily: EMAIL_FONT.mono,
   fontSize: "11px",
+  lineHeight: "16px",
   fontWeight: 700,
   letterSpacing: "1.5px",
   textTransform: "uppercase",
-  margin: "0 0 6px",
+  margin: 0,
 };
 
 const headlineStyle: CSSProperties = {
@@ -279,6 +340,7 @@ const bodyStyle: CSSProperties = {
   lineHeight: "24px",
   color: EMAIL_COLOR.ink,
   margin: "0 0 16px",
+  whiteSpace: "pre-wrap",
 };
 
 const factPanelStyle: CSSProperties = {
@@ -295,12 +357,10 @@ const factLabelCellStyle: CSSProperties = {
 };
 
 const factLabelStyle: CSSProperties = {
-  fontFamily: EMAIL_FONT.mono,
-  fontSize: "11px",
-  fontWeight: 700,
+  ...captionStyle,
   letterSpacing: "1px",
-  textTransform: "uppercase",
   color: EMAIL_COLOR.quietInk,
+  // Sits the 16px caption box on the value's 22px baseline.
   margin: "3px 0 0",
 };
 
@@ -322,6 +382,13 @@ const noteBlockStyle: CSSProperties = {
   margin: "0 0 20px",
 };
 
+const edgePanelStyle: CSSProperties = {
+  backgroundColor: EMAIL_COLOR.page,
+  borderRadius: "0 10px 10px 0",
+  padding: "12px 16px",
+  margin: "0 0 8px",
+};
+
 const scoreboardStyle: CSSProperties = {
   backgroundColor: EMAIL_COLOR.scoreboard,
   borderRadius: "12px",
@@ -331,11 +398,8 @@ const scoreboardStyle: CSSProperties = {
 };
 
 const scoreboardLabelStyle: CSSProperties = {
-  fontFamily: EMAIL_FONT.mono,
-  fontSize: "11px",
-  fontWeight: 700,
+  ...captionStyle,
   letterSpacing: "2px",
-  textTransform: "uppercase",
   color: EMAIL_COLOR.onScoreboard,
   margin: "0 0 8px",
 };
@@ -351,9 +415,9 @@ const scoreboardValueStyle: CSSProperties = {
 };
 
 const bananaButtonStyle: CSSProperties = {
-  backgroundColor: EMAIL_COLOR.banana,
-  color: EMAIL_COLOR.ink,
-  border: `2px solid ${EMAIL_COLOR.ink}`,
+  backgroundColor: EMAIL_COLOR.ink,
+  color: EMAIL_COLOR.banana,
+  border: `2px solid ${EMAIL_COLOR.banana}`,
   borderRadius: "10px",
   fontFamily: EMAIL_FONT.body,
   fontSize: "16px",
@@ -369,7 +433,7 @@ const fallbackStyle: CSSProperties = {
   fontSize: "12px",
   lineHeight: "18px",
   color: EMAIL_COLOR.quietInk,
-  margin: "0 0 16px",
+  margin: "8px 0 16px",
 };
 
 const linkStyle: CSSProperties = {
@@ -394,5 +458,5 @@ const slotDotStyle: CSSProperties = {
   fontWeight: 700,
   borderRadius: "999px",
   padding: "3px 9px",
-  marginRight: "10px",
+  marginRight: "6px",
 };

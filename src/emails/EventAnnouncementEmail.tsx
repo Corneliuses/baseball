@@ -1,10 +1,10 @@
+import { rosterFootnote, whenWhere } from "./copy";
 import {
   BananaButton,
   EmailHeading,
   EmailText,
   FactPanel,
   FactRow,
-  LinkFallback,
 } from "./EmailKit";
 import { EmailLayout } from "./EmailLayout";
 
@@ -44,9 +44,9 @@ export function EventAnnouncementEmail({
 }: EventAnnouncementEmailProps) {
   return (
     <EmailLayout
-      preview={`${dateTimeLabel}${location ? ` — ${location}` : ""}`}
+      preview={whenWhere(dateTimeLabel, location)}
       teamName={teamName}
-      footnote={`You're getting this because your player is on ${teamName}'s roster.`}
+      footnote={rosterFootnote(teamName)}
     >
       <EmailHeading
         eyebrow="New on the schedule"
@@ -65,7 +65,6 @@ export function EventAnnouncementEmail({
       <EmailText>Can your player make it? One tap either way.</EmailText>
 
       <BananaButton href={eventUrl}>Let your coach know</BananaButton>
-      <LinkFallback href={eventUrl} />
     </EmailLayout>
   );
 }

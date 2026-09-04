@@ -38,7 +38,7 @@ export function TeamMessageEmail({
         subtitle={teamName}
       />
 
-      <EmailText preserveBreaks>{body}</EmailText>
+      <EmailText>{body}</EmailText>
 
       {/* No section rule above this link: the shell already draws the seam
           between the card and the footer, and on a two-line message the two

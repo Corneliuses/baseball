@@ -1,4 +1,5 @@
-import { BananaButton, EmailHeading, EmailText, LinkFallback } from "./EmailKit";
+import { rosterFootnote } from "./copy";
+import { BananaButton, EmailHeading, EmailText } from "./EmailKit";
 import { EmailLayout } from "./EmailLayout";
 
 /// Short, like InvitationEmail — but no expiry line and no "accept" language,
@@ -19,7 +20,7 @@ export function AddedToTeamEmail({ teamName, teamUrl }: AddedToTeamEmailProps) {
     <EmailLayout
       preview={`You've been added to ${teamName}`}
       teamName={teamName}
-      footnote={`You're getting this because a player you're listed for is on ${teamName}'s roster.`}
+      footnote={rosterFootnote(teamName)}
     >
       <EmailHeading
         eyebrow="New team"
@@ -28,7 +29,6 @@ export function AddedToTeamEmail({ teamName, teamUrl }: AddedToTeamEmailProps) {
       />
 
       <BananaButton href={teamUrl}>View team</BananaButton>
-      <LinkFallback href={teamUrl} />
 
       <EmailText quiet>
         You already have an account — sign in with the email address this was
