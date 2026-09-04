@@ -322,6 +322,44 @@ floodlight-yellow Geist Mono figures, uncovered positions in red. It's read-only
 **Roster/members/directory/settings** — calm pages: warm tokens, stitch dividers, jersey
 dots on roster rows, no bananas. Admin should feel tidy, not loud.
 
+**Email (post-ship addition)** — the inbox is the app's *first* surface: a parent meets a
+message from this app before they ever open a page, and the eight templates were plain
+white sans-serif with a near-black button — a different product arriving in the family's
+inbox. They now wear one shell (`src/emails/EmailLayout.tsx`): cream page stock, a
+charcoal scoreboard cap carrying the **team name** in slab caps, a warm card, a seam-red
+rule above the footer. §5's motifs are translated into things a mail client can actually
+draw (`src/emails/EmailKit.tsx`): the ticket stub becomes clay stock with a Field Green
+edge holding when/where, the stitch divider becomes a dashed seam-red rule, the scoreboard
+stays a scoreboard, the jersey dot numbers each date of a repeat-weekly run.
+
+Three constraints shape all of it, and each is a decision rather than a shortcoming. The
+palette is **frozen light-theme hex** in `src/emails/brand.ts` — an email has no cascade
+to resolve `hsl(var(--…))` from, `prefers-color-scheme` is dropped by most clients that
+matter, and Tailwind class names arrive with nothing to resolve them; `brand.test.ts`
+re-derives every value from `globals.css` so the copy cannot rot. There are **no images**
+and **no web font**: images are off by default in most inboxes and every remote fetch
+reports back when a family opened their mail, so the identity is carried by type, colour
+and rules, and `--font-display`'s Alfa Slab degrades to a bold system slab stack. And
+**§2's banana is budgeted per email** — the invitation, the added-to-team notice, both
+announcements and the day-of reminder spend theirs on the one call to action; the sign-in
+code spends its own as floodlight figures on the scoreboard panel, since a code is read
+off one screen and typed into another and there is deliberately nothing to tap; the team
+message and the announcement receipt are calm surfaces with none, because a yellow button
+over somebody's typed message is the app talking over the coach.
+
+The call to action is the one place the email inverts the app's pairing on purpose: **navy
+ground, banana lettering and keyline**, not a banana ground with navy text. The Gmail and
+Outlook apps recolour dark-mode mail on their own — they darken light grounds, lift dark
+text towards white and leave saturated colours alone — and a yellow button with navy text
+comes out of that pass as light text on Banana Yellow, the pairing §3 forbids. Built this
+way round, the button survives the pass unchanged, and what a dark-mode phone gets is a
+night-game version of the same card rather than an inverted CTA.
+
+Voice follows §9 exactly: eyebrows may play ("Today" in seam red is the one alarm in the
+directory), while dates, times and the three RSVP sentences stay frozen — `rsvpReminderLabel`
+still carries each kid's state in words, and the colour on the row is the second carrier,
+never the only one.
+
 **Empty states everywhere** — chalk box + one line of voice: "Nobody on the roster yet.
 Every dynasty starts somewhere." Copy stays informative first, funny second; parents skim.
 

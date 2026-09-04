@@ -1,34 +1,35 @@
-import {
-  Body,
-  Container,
-  Head,
-  Hr,
-  Html,
-  Link,
-  Preview,
-  Text,
-} from "@react-email/components";
+import type { CSSProperties } from "react";
+import { Section, Text } from "@react-email/components";
 
-/// Plain like every other email in this directory — no images, no layout
-/// cleverness. This is read on a phone, one-handed, and the dates have to
-/// survive being skimmed in two seconds.
-///
-/// **Nothing about any other family.** No roster, no attendance, no contact
-/// details. Contact details are staff-facing everywhere else in the app
-/// (`/directory` and the roster entry page are both COACH+), and an email
-/// mailed to every household is the last place to relax that.
-///
+import { EMAIL_COLOR, EMAIL_FONT } from "./brand";
+import { rosterFootnote, whenWhere } from "./copy";
+import {
+  BananaButton,
+  EmailHeading,
+  EmailText,
+  FactPanel,
+  FactRow,
+  SectionLabel,
+  SlotDot,
+} from "./EmailKit";
+import { EmailLayout } from "./EmailLayout";
+
 /// The sibling of `EventAnnouncementEmail`, for the repeat-weekly batch (#70).
 /// Two differences, both consequences of announcing N events rather than one:
-/// the dates are a list, and the link is the schedule rather than an event
+/// the dates are a list, and the button is the schedule rather than an event
 /// page — a batch has no single event to answer, and the schedule is where the
-/// whole run is. Like the single version there is deliberately no RSVP section:
-/// the events were created moments ago, so nobody has answered and there is no
-/// state to report.
+/// whole run is. Like the single version there is deliberately no RSVP state:
+/// the events were created moments ago, so nobody has answered.
 ///
-/// Location and notes appear once rather than per date. Every occurrence in a
-/// batch carries the same ones by construction — one form filled in once — so
-/// repeating them down the list would be noise that hides the dates.
+/// **Nothing about any other family**, for the same reason as its sibling.
+///
+/// The dates are a scorecard: a numbered dot per line, monospaced dates, a
+/// dashed rule between them. That is the one piece of layout this email has
+/// that the others do not, and it is the thing it exists to deliver — a season
+/// as a list a parent can run a thumb down. Location and notes appear once
+/// beneath, rather than per date: every occurrence in a batch carries the same
+/// ones by construction (one form, filled in once), so repeating them would be
+/// noise hiding the dates.
 
 export type EventsAnnouncementEmailProps = {
   teamName: string;
@@ -51,40 +52,64 @@ export function EventsAnnouncementEmail({
   scheduleUrl,
 }: EventsAnnouncementEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>
-        {`${dateTimeLabels[0] ?? ""}${location ? ` — ${location}` : ""}`}
-      </Preview>
-      <Body style={{ fontFamily: "sans-serif", padding: "24px" }}>
-        <Container>
-          <Text style={{ fontSize: "18px", fontWeight: "bold" }}>
-            New on the schedule: {headline}
+    <EmailLayout
+      preview={whenWhere(dateTimeLabels[0] ?? "", location)}
+      teamName={teamName}
+      footnote={rosterFootnote(teamName)}
+    >
+      <EmailHeading
+        eyebrow="New on the schedule"
+        title={headline}
+        subtitle={teamName}
+      />
+
+      <SectionLabel>The run</SectionLabel>
+      <Section style={{ margin: "0 0 20px" }}>
+        {/* Rows of Text rather than a <ul>: mail clients disagree about list
+            indentation far more than they do about paragraphs, and the dot
+            carries the counting anyway. */}
+        {dateTimeLabels.map((label, index) => (
+          <Text
+            key={label}
+            style={{
+              ...dateRowStyle,
+              borderBottom:
+                index < dateTimeLabels.length - 1
+                  ? `1px dashed ${EMAIL_COLOR.border}`
+                  : "none",
+            }}
+          >
+            <SlotDot>{index + 1}</SlotDot>
+            {label}
           </Text>
-          <Text>{teamName}</Text>
+        ))}
+      </Section>
 
-          {/* A list of Text rows rather than a <ul>: the other five emails in
-              this directory are Text-only, and mail clients disagree about
-              list indentation far more than they do about paragraphs. */}
-          {dateTimeLabels.map((label) => (
-            <Text key={label} style={{ margin: "4px 0" }}>
-              {label}
-            </Text>
-          ))}
+      {location || notes ? (
+        <FactPanel>
+          {location ? <FactRow label="Where">{location}</FactRow> : null}
+          {notes ? <FactRow label="Notes">{notes}</FactRow> : null}
+        </FactPanel>
+      ) : null}
 
-          {location ? <Text>Where: {location}</Text> : null}
-          {notes ? (
-            <Text style={{ whiteSpace: "pre-wrap" }}>Notes: {notes}</Text>
-          ) : null}
+      {/* The schedule page lists the dates; each one is answered on its own
+          event page. Say that, rather than promising buttons that are not
+          on the page the button opens. */}
+      <EmailText>
+        Open the schedule and let your coach know which ones your player can
+        make.
+      </EmailText>
 
-          <Hr />
-
-          <Text>
-            Let your coach know which ones your player can make:{" "}
-            <Link href={scheduleUrl}>{scheduleUrl}</Link>
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      <BananaButton href={scheduleUrl}>See the schedule</BananaButton>
+    </EmailLayout>
   );
 }
+
+const dateRowStyle: CSSProperties = {
+  fontFamily: EMAIL_FONT.mono,
+  fontSize: "15px",
+  lineHeight: "22px",
+  color: EMAIL_COLOR.ink,
+  margin: 0,
+  padding: "9px 2px",
+};

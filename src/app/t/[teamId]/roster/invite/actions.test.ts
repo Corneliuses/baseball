@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render } from "@react-email/components";
 
 const requireTeamAccess = vi.fn();
 const getRosterEntry = vi.fn();
@@ -179,15 +180,23 @@ describe("bulkInviteGuardiansAction sending", () => {
       }),
     );
 
-    const withMessage = sendEmail.mock.calls[0][0];
-    expect(JSON.stringify(withMessage.react)).toContain("See you at the field!");
+    // Rendered, not serialised: the action calls the template as a function,
+    // so `react` is already the layout element and the coach's note lives
+    // inside a kit component several levels down. (An earlier version looked
+    // for a `whiteSpace` style in `JSON.stringify(react)`, which stopped
+    // seeing anything once the template delegated that to `NoteBlock` — and
+    // passed, vacuously, in both cases.) The dashed chalk box is the note's
+    // frame, so its absence is what "omitted when blank" looks like.
+    const withMessage = await render(sendEmail.mock.calls[0][0].react);
+    expect(withMessage).toContain("See you at the field!");
+    expect(withMessage).toContain("1px dashed");
 
     sendEmail.mockClear();
     await submit(
       form({ teamId: "team-1", message: "   ", "email-entry-1": "a@example.com" }),
     );
-    const without = sendEmail.mock.calls[0][0];
-    expect(JSON.stringify(without.react)).not.toContain("whiteSpace");
+    const without = await render(sendEmail.mock.calls[0][0].react);
+    expect(without).not.toContain("1px dashed");
   });
 
   it("keeps only the first row per entry, so a forged POST can't fan out", async () => {

@@ -626,7 +626,12 @@ async function sendReceipt(input: {
     const outcome = await sendEmail({
       to: input.coachEmail,
       subject,
-      react: AnnouncementReceiptEmail({ summary, needsAttention, scheduleUrl: link }),
+      react: AnnouncementReceiptEmail({
+        teamName: input.teamName,
+        summary,
+        needsAttention,
+        scheduleUrl: link,
+      }),
     });
     if (!outcome.ok) {
       console.error(`Announcement receipt failed to send: ${outcome.reason}`);

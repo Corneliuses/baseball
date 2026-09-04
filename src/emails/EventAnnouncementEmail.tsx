@@ -1,27 +1,27 @@
+import { rosterFootnote, whenWhere } from "./copy";
 import {
-  Body,
-  Container,
-  Head,
-  Hr,
-  Html,
-  Link,
-  Preview,
-  Text,
-} from "@react-email/components";
+  BananaButton,
+  EmailHeading,
+  EmailText,
+  FactPanel,
+  FactRow,
+} from "./EmailKit";
+import { EmailLayout } from "./EmailLayout";
 
-/// Plain like InvitationEmail, TeamMessageEmail and EventReminderEmail — no
-/// images, no layout cleverness. This is read on a phone, one-handed, and the
-/// date and place have to survive being skimmed in two seconds.
+/// "A new game is on the schedule." Read on a phone, one-handed, so the date
+/// and place sit in a ticket stub (`FactPanel`) where they survive being
+/// skimmed in two seconds — the layout equivalent of what these lines were
+/// already trying to do as bare paragraphs.
 ///
 /// **Nothing about any other family.** No roster, no attendance, no contact
 /// details. Contact details are staff-facing everywhere else in the app
 /// (`/directory` and the roster entry page are both COACH+), and an email
 /// mailed to every household is the last place to relax that.
 ///
-/// There is deliberately no RSVP section, which is the whole reason this is not
-/// a variant of EventReminderEmail: the event was created moments ago, so
-/// nobody has answered and there is no state to report. The single call to
-/// action is the link.
+/// There is deliberately no RSVP *state* section, which is the whole reason
+/// this is not a variant of EventReminderEmail: the event was created moments
+/// ago, so nobody has answered and there is no state to report. The single call
+/// to action is the button, and it is this email's banana.
 
 export type EventAnnouncementEmailProps = {
   teamName: string;
@@ -43,31 +43,28 @@ export function EventAnnouncementEmail({
   eventUrl,
 }: EventAnnouncementEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>{`${dateTimeLabel}${location ? ` — ${location}` : ""}`}</Preview>
-      <Body style={{ fontFamily: "sans-serif", padding: "24px" }}>
-        <Container>
-          <Text style={{ fontSize: "18px", fontWeight: "bold" }}>
-            New on the schedule: {headline}
-          </Text>
-          <Text>
-            {teamName} — {dateTimeLabel}
-          </Text>
+    <EmailLayout
+      preview={whenWhere(dateTimeLabel, location)}
+      teamName={teamName}
+      footnote={rosterFootnote(teamName)}
+    >
+      <EmailHeading
+        eyebrow="New on the schedule"
+        title={headline}
+        subtitle={teamName}
+      />
 
-          {location ? <Text>Where: {location}</Text> : null}
-          {notes ? (
-            <Text style={{ whiteSpace: "pre-wrap" }}>Notes: {notes}</Text>
-          ) : null}
+      <FactPanel>
+        <FactRow label="When" mono>
+          {dateTimeLabel}
+        </FactRow>
+        {location ? <FactRow label="Where">{location}</FactRow> : null}
+        {notes ? <FactRow label="Notes">{notes}</FactRow> : null}
+      </FactPanel>
 
-          <Hr />
+      <EmailText>Can your player make it? One tap either way.</EmailText>
 
-          <Text>
-            Let your coach know if your player can make it:{" "}
-            <Link href={eventUrl}>{eventUrl}</Link>
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      <BananaButton href={eventUrl}>Let your coach know</BananaButton>
+    </EmailLayout>
   );
 }
