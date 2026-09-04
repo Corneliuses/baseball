@@ -150,6 +150,10 @@ export default async function SchedulePage({
         // an event *is*, and a repeat count is not that — it says how many to
         // make, and duplicating one fixture asks for one.
         repeat: "",
+        // Not copied either, and for the opposite reason: this is not a
+        // property of the event but of the submit, and every fresh form
+        // starts with the email on.
+        announce: true,
       }
     : EMPTY_EVENT_VALUES;
 

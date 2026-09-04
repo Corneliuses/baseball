@@ -619,6 +619,19 @@ production — the dev command can prompt, generate new migrations, and reset th
   `src/lib/announcements.ts` holds the two rules worth testing without any of this: one email
   per household, and whether to announce at all.
 
+  **The coach can turn the announcement off per submit, and "off" has to be distinguishable
+  from "no box".** The add form carries an "Email parents about this" checkbox, ticked by
+  default; unticked, `createEventAction` skips the roster reads and the fan-out entirely and
+  returns `announcement: {status: "skipped"}`, which the banner echoes as "Parents were not
+  emailed" — said out loud, unlike the silent `none`, because an accidental untick should be
+  caught on the page and not by a missing receipt. An unticked checkbox submits *nothing*,
+  which is also what any POST from before the box sends, so the form puts a hidden
+  `announce=0` sentinel ahead of the checkbox's `announce=1` and `parseAnnounce` reads an
+  absent field as "announce, as always" — the same absent-means-old-behaviour rule as
+  `parseRepeat`. The choice never sticks across adds (`stickyValues` resets it to on): a
+  quiet placeholder must not make the next real game quiet too, and that failure is silent
+  until a family asks why they never heard.
+
   **A repeat-weekly run announces once, not once per event** (#70), and the same
   one-per-household argument is why. A twelve-game season entered in one submit would
   otherwise put twelve messages in every family's inbox, which is exactly how

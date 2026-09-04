@@ -67,6 +67,11 @@ function announcementNote(announcement: AddEventAnnouncement): string {
       return announcement.recipients === 1
         ? " Emailing 1 parent now — we'll send you a summary."
         : ` Emailing ${announcement.recipients} parents now — we'll send you a summary.`;
+    // Said out loud, unlike `none`: the coach chose this, and echoing the
+    // choice is what catches the box left unticked by accident. Past tense is
+    // honest here — there is nothing pending.
+    case "skipped":
+      return " Parents were not emailed.";
     case "none":
     case "failed":
       return "";
@@ -129,8 +134,10 @@ export function AddEventForm({
     }
   }
 
-  const set = <K extends keyof EventFormValues>(key: K, value: string) =>
-    setValues((current) => ({ ...current, [key]: value }));
+  const set = <K extends keyof EventFormValues>(
+    key: K,
+    value: EventFormValues[K],
+  ) => setValues((current) => ({ ...current, [key]: value }));
 
   const errorMessage =
     state.status === "invalid"
@@ -147,6 +154,7 @@ export function AddEventForm({
   // of which carries an id, is a description a screen reader loses half the
   // time — and losing it silently, since the sighted layout is identical.
   const repeatHelpId = "add-event-repeat-help";
+  const announceHelpId = "add-event-announce-help";
 
   /**
    * Marks only the field the error actually names — same pattern as
@@ -354,6 +362,40 @@ export function AddEventForm({
               repeat-preview.ts on why it needs no timezone. */}
           <p id={repeatHelpId} className="text-sm text-muted-foreground">
             {preview ?? "Leave blank for a single event."}
+          </p>
+        </div>
+
+        {/* Whether adding this tells anyone. Ticked on every fresh form and
+            after every add — the announcement is the default and the box is
+            the exception, never the other way round (see `stickyValues`).
+
+            The hidden `0` ahead of the checkbox is not decoration. An unticked
+            checkbox submits nothing at all, which is also what a form from
+            before this field existed submits, and the action treats *absent*
+            as "announce, as always". The sentinel is what lets it tell "the
+            coach unticked it" from "there was no box" — see `parseAnnounce`.
+            Document order puts the checkbox's `1` after it when ticked, but
+            the action does not rely on that. */}
+        <div className="space-y-2">
+          <input type="hidden" name="announce" value="0" />
+          <div className="flex items-center gap-2">
+            <input
+              id="announce"
+              name="announce"
+              type="checkbox"
+              value="1"
+              checked={values.announce}
+              onChange={(event) => set("announce", event.target.checked)}
+              className="h-4 w-4 rounded border-border"
+              aria-describedby={announceHelpId}
+            />
+            <label htmlFor="announce" className="text-sm text-foreground">
+              Email parents about this
+            </label>
+          </div>
+          <p id={announceHelpId} className="text-sm text-muted-foreground">
+            Every family on the roster gets one email. Untick to add quietly —
+            say, for a game already on their calendar.
           </p>
         </div>
       </fieldset>

@@ -205,6 +205,30 @@ function parseRepeat(formData: FormData): number | null {
 }
 
 /**
+ * Whether the coach wants the roster emailed about what was just added.
+ *
+ * The form submits the field twice on purpose — a hidden `announce=0` ahead of
+ * the checkbox's `announce=1` — because an unticked checkbox submits *nothing*,
+ * and nothing is also what every POST made before the field existed sends.
+ * Those two have to mean different things: the sentinel is how "the coach
+ * unticked it" is told apart from "this form predates the box", and only the
+ * first of them may silence the announcement. Same rule as `parseRepeat`: an
+ * absent field is the behaviour that was already there.
+ *
+ * So: no entries at all means announce; otherwise announce only if the
+ * checkbox's own value is among them. Order-independent, because FormData
+ * keeps document order and the checkbox happens to come second — a fact this
+ * should not depend on.
+ */
+function parseAnnounce(formData: FormData): boolean {
+  const entries = formData.getAll("announce");
+  if (entries.length === 0) {
+    return true;
+  }
+  return entries.includes("1");
+}
+
+/**
  * Validate the shared event form and convert the coach's wall clock into a
  * true UTC instant.
  *
@@ -665,6 +689,15 @@ async function sendReceipt(input: {
  * A validation failure returns too, with what was typed, so a mistyped time
  * costs a correction rather than the whole form.
  *
+ * **The announcement is the coach's to skip, per submit.** "Email parents" is
+ * a checkbox on the form, on by default, and unticking it makes this a plain
+ * write: no roster read, no fan-out, no receipt, and the banner says so. The
+ * cases it exists for are the ones where the email would be noise — a game
+ * the league already put on everyone's calendar, a placeholder date that is
+ * going to move, a schedule being rebuilt after a mistake. It never carries
+ * over to the next add (`stickyValues`), because the default has to be the
+ * one whose failure mode is loud.
+ *
  * Losing access still redirects, and now lands on the schedule the coach was
  * actually looking at.
  */
@@ -682,6 +715,7 @@ export async function createEventAction(
     opponent: String(formData.get("opponent") ?? ""),
     notes: String(formData.get("notes") ?? ""),
     repeat: String(formData.get("repeat") ?? ""),
+    announce: parseAnnounce(formData),
   };
 
   const parsed = parseEventForm(formData);
@@ -758,7 +792,13 @@ export async function createEventAction(
     status: "added",
     keep: stickyValues(values),
     summary: addedSummary(parsed.input.type, occurrences),
-    announcement: await scheduleAnnouncement(teamId, events, coachEmail),
+    // The coach's choice is read before anything is resolved, so an unticked
+    // box costs neither the two roster reads nor a fan-out — nothing about
+    // the announcement happens, rather than something happening and being
+    // discarded.
+    announcement: values.announce
+      ? await scheduleAnnouncement(teamId, events, coachEmail)
+      : { status: "skipped" },
   };
 }
 

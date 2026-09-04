@@ -4,9 +4,11 @@
 /// marks every export as a server function — a runtime constant there fails at
 /// `next build` rather than at `pnpm check`.
 
-/// Exactly the six fields of the add-event form, as typed. `repeat` is the
+/// Exactly the seven fields of the add-event form, as typed. `repeat` is the
 /// weekly count (#70) and is a string like the rest — it is what the number
-/// input holds, blank included, and the action parses it.
+/// input holds, blank included, and the action parses it. `announce` is the
+/// one non-string: a checkbox holds a boolean, and pretending otherwise would
+/// mean encoding "checked" as a string in three places that all have to agree.
 export interface EventFormValues {
   type: string;
   startsAt: string;
@@ -14,6 +16,11 @@ export interface EventFormValues {
   opponent: string;
   notes: string;
   repeat: string;
+  /// Whether to email every family on the roster about what was added. On by
+  /// default — step 2 of the brief's core loop — and turned off by the coach
+  /// per submit, for the game already on everyone's calendar or the placeholder
+  /// that is about to change.
+  announce: boolean;
 }
 
 export const EMPTY_EVENT_VALUES: EventFormValues = {
@@ -25,12 +32,14 @@ export const EMPTY_EVENT_VALUES: EventFormValues = {
   /// Blank, not "1". The field is optional and a coach adding one game should
   /// see an empty box, not a number to reason about.
   repeat: "",
+  announce: true,
 };
 
 /// Which input the error belongs to. Unlike the roster's `AddPlayerField`,
 /// this is never null: every `EventErrorCode` maps to exactly one of the
-/// form's six fields — there is no error here that blames the submission as
-/// a whole rather than one box.
+/// form's typed fields — there is no error here that blames the submission as
+/// a whole rather than one box. The announce checkbox is absent on purpose:
+/// a checkbox cannot be invalid.
 export type AddEventField =
   | "type"
   | "startsAt"
@@ -81,6 +90,11 @@ export type AddEventAnnouncement =
   | { status: "none" }
   /// `recipients` households are being emailed now.
   | { status: "sending"; recipients: number }
+  /// The coach unticked "Email parents", so nobody was told and nothing will
+  /// be. Distinct from `none` because it is a choice the banner should echo
+  /// back — a coach who unticked it by accident finds out here, not from the
+  /// silence.
+  | { status: "skipped" }
   /// The roster could not be read, so nothing was scheduled and nothing will
   /// retry. The event itself is fine — this is the one announcement failure
   /// still knowable while the coach is looking at the page.
@@ -101,6 +115,12 @@ export const ADD_EVENT_INITIAL_STATE: AddEventState = { status: "idle" };
 /// next add silently becomes eight more events, and a coach who just created a
 /// season and then adds one make-up game would create eight of those. It is the
 /// one field where keeping it turns a correct next submit into a wrong one.
+///
+/// **The announce checkbox resets to on for the same reason.** A coach who
+/// added one quiet placeholder and then adds Saturday's game would otherwise
+/// tell nobody about it, and the failure is silent until a family asks why
+/// they never heard. Re-ticking costs one tap; an unannounced game costs the
+/// thing the app exists for.
 export function stickyValues(values: EventFormValues): EventFormValues {
   return {
     type: values.type,
@@ -109,5 +129,6 @@ export function stickyValues(values: EventFormValues): EventFormValues {
     opponent: values.opponent,
     notes: "",
     repeat: "",
+    announce: true,
   };
 }
