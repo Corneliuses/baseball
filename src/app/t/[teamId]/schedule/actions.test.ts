@@ -305,6 +305,7 @@ describe("createEventAction", () => {
       // reason (#70): a sticky "8" does not sit there looking stale, it makes
       // the coach's next single add into eight more events.
       repeat: "",
+      announce: true,
     });
   });
 
@@ -623,6 +624,106 @@ describe("createEventAction — repeating weekly", () => {
       expect(state.code).toBe("invalid-datetime");
       expect(state.field).toBe("startsAt");
     });
+  });
+});
+
+/// The coach's "Email parents" checkbox. What matters is the wire shape: an
+/// unticked checkbox submits nothing, so the form sends a hidden `announce=0`
+/// sentinel ahead of it, and the action must read *absent* as the announcing
+/// behaviour every POST before the box had — never as a skip.
+describe("createEventAction — the announce checkbox", () => {
+  const roster = () =>
+    listTeamGuardians.mockResolvedValue(
+      rosterOf(guardian("u-1", "one@example.com")),
+    );
+
+  /// `form()` uses `set`, which cannot carry a repeated field; the real form
+  /// sends the sentinel and the checkbox under one name.
+  function withAnnounce(...entries: string[]): FormData {
+    const data = form(validEvent);
+    for (const entry of entries) {
+      data.append("announce", entry);
+    }
+    return data;
+  }
+
+  it("announces as before when the field is absent altogether", async () => {
+    roster();
+
+    const state = added(await addEvent(form(validEvent)));
+
+    expect(state.announcement).toEqual({ status: "sending", recipients: 1 });
+    expect(state.keep.announce).toBe(true);
+  });
+
+  it("announces when the box is ticked (sentinel and checkbox both sent)", async () => {
+    roster();
+
+    const state = added(await addEvent(withAnnounce("0", "1")));
+
+    expect(state.announcement).toEqual({ status: "sending", recipients: 1 });
+    expect(afterCallbacks).toHaveLength(1);
+  });
+
+  it("skips the announcement when the box is unticked (sentinel alone)", async () => {
+    roster();
+
+    const state = added(await addEvent(withAnnounce("0")));
+
+    expect(createEvent).toHaveBeenCalledTimes(1);
+    expect(state.announcement).toEqual({ status: "skipped" });
+    expect(afterCallbacks).toHaveLength(0);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(sendPushToUser).not.toHaveBeenCalled();
+  });
+
+  it("does not even read the roster for a quiet add", async () => {
+    roster();
+
+    await addEvent(withAnnounce("0"));
+
+    expect(listTeamGuardians).not.toHaveBeenCalled();
+    expect(getTeamById).not.toHaveBeenCalled();
+  });
+
+  it("does not depend on the order the two entries arrive in", async () => {
+    roster();
+
+    const state = added(await addEvent(withAnnounce("1", "0")));
+
+    expect(state.announcement).toEqual({ status: "sending", recipients: 1 });
+  });
+
+  it("skips a whole repeat-weekly run just the same", async () => {
+    roster();
+    const data = withAnnounce("0");
+    data.set("repeat", "4");
+
+    const state = added(await addEvent(data));
+
+    expect(createEvents).toHaveBeenCalledTimes(1);
+    expect(state.announcement).toEqual({ status: "skipped" });
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("resets the box to on for the next add", async () => {
+    // A quiet placeholder must not make the next real game quiet too — that
+    // failure is silent until a family asks why they never heard.
+    const state = added(await addEvent(withAnnounce("0")));
+
+    expect(state.keep.announce).toBe(true);
+  });
+
+  it("hands the unticked box back with a rejection, so it is not silently re-ticked", async () => {
+    const state = rejected(
+      await addEvent((() => {
+        const data = withAnnounce("0");
+        data.set("startsAt", "");
+        return data;
+      })()),
+    );
+
+    expect(state.values.announce).toBe(false);
   });
 });
 

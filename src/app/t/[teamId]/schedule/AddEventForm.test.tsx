@@ -88,6 +88,16 @@ describe("AddEventForm announcement feedback", () => {
     );
   });
 
+  // The one outcome the coach chose, so it is echoed rather than left silent:
+  // a box unticked by accident is caught here, not by the missing receipt.
+  it("says so when the coach chose not to email", () => {
+    const html = render(added({ status: "skipped" }));
+
+    expect(html).toContain("Added Game on");
+    expect(html).toContain("Parents were not emailed.");
+    expect(html).not.toContain("Emailing");
+  });
+
   it("says nothing about email when there was nobody to tell", () => {
     const html = render(added({ status: "none" }));
 
@@ -144,6 +154,7 @@ describe("AddEventForm after an add", () => {
       opponent: "Hawks",
       notes: "",
       repeat: "",
+      announce: true,
     },
     summary: "Game on Sat, Aug 15, 2026 at 6:00 PM",
     announcement: { status: "none" },
@@ -188,6 +199,7 @@ describe("AddEventForm after a rejection", () => {
       opponent: "",
       notes: "Bring water",
       repeat: "",
+      announce: true,
     },
   };
 
@@ -223,6 +235,7 @@ describe("AddEventForm after a rejection", () => {
         opponent: "",
         notes: "",
         repeat: "",
+        announce: true,
       },
     });
 
@@ -244,6 +257,7 @@ describe("AddEventForm opened from Duplicate", () => {
       opponent: "Hawks",
       notes: "Bring water",
       repeat: "",
+      announce: true,
     },
     duplicatedFrom: "Game vs Hawks",
   };
@@ -296,6 +310,7 @@ describe("AddEventForm across successive results", () => {
         opponent: "Hawks",
         notes: "",
         repeat: "",
+        announce: true,
       },
       summary: "Practice on Sat, Aug 15, 2026 at 6:00 PM",
     announcement: { status: "none" },
@@ -325,6 +340,7 @@ describe("AddEventForm across successive results", () => {
         opponent: "Hawks",
         notes: "",
         repeat: "",
+        announce: true,
       },
       summary: "Game one",
     announcement: { status: "none" },
@@ -348,6 +364,7 @@ describe("AddEventForm across successive results", () => {
         opponent: "Hawks",
         notes: "",
         repeat: "",
+        announce: true,
       },
       summary: "Game two",
     announcement: { status: "none" },
@@ -373,6 +390,80 @@ describe("AddEventForm across successive results", () => {
     expect(
       container.querySelector<HTMLFieldSetElement>("fieldset")?.disabled,
     ).toBe(true);
+  });
+});
+
+/// The "Email parents" checkbox: on by default, sent with a sentinel so an
+/// untick can be told from a form that never had the box, and never sticky.
+describe("AddEventForm email-parents checkbox", () => {
+  it("is ticked on a fresh form", () => {
+    const html = render({ status: "idle" });
+    const box = /<input[^>]*type="checkbox"[^>]*>/.exec(html);
+
+    expect(box).not.toBeNull();
+    expect(box![0]).toContain('name="announce"');
+    expect(box![0]).toContain('value="1"');
+    expect(box![0]).toContain("checked");
+  });
+
+  it("sends a hidden 0 ahead of the checkbox, so unticking is not the same as absent", () => {
+    const html = render({ status: "idle" });
+
+    const hidden = html.indexOf('type="hidden" name="announce" value="0"');
+    const checkbox = html.indexOf('type="checkbox"');
+    expect(hidden).toBeGreaterThan(-1);
+    expect(checkbox).toBeGreaterThan(hidden);
+  });
+
+  it("explains itself, and the checkbox is described by that line", () => {
+    const html = render({ status: "idle" });
+
+    expect(html).toContain('aria-describedby="add-event-announce-help"');
+    expect(html).toContain('<p id="add-event-announce-help"');
+    expect(html).toContain("Untick to add quietly");
+  });
+
+  it("is inside the fieldset that locks during a submit", () => {
+    actionPending = true;
+    const { container } = renderDom(
+      <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
+    );
+
+    expect(container.querySelector("fieldset[disabled] #announce")).not.toBeNull();
+  });
+
+  it("re-ticks after an add, even one the coach made quietly", () => {
+    actionState = { status: "idle" };
+    const { rerender, container } = renderDom(
+      <AddEventForm teamId="team-1" context={MONTH_CONTEXT} />,
+    );
+
+    const box = container.querySelector<HTMLInputElement>("#announce")!;
+    fireEvent.click(box);
+    expect(box.checked).toBe(false);
+
+    actionState = {
+      status: "added",
+      keep: { ...EMPTY_EVENT_VALUES, location: "Field 3", announce: true },
+      summary: "Game on Sat, Aug 15, 2026 at 6:00 PM",
+      announcement: { status: "skipped" },
+    };
+    rerender(<AddEventForm teamId="team-1" context={MONTH_CONTEXT} />);
+
+    expect(container.querySelector<HTMLInputElement>("#announce")?.checked).toBe(true);
+  });
+
+  it("stays unticked when a rejection hands the values back", () => {
+    // A mistyped date should cost a correction, not silently re-arm the email.
+    const html = render({
+      status: "invalid",
+      code: "invalid-datetime",
+      field: "startsAt",
+      values: { ...EMPTY_EVENT_VALUES, startsAt: "not-a-time", announce: false },
+    });
+    const box = /<input[^>]*type="checkbox"[^>]*>/.exec(html);
+
+    expect(box![0]).not.toContain("checked");
   });
 });
 
@@ -468,6 +559,7 @@ describe("AddEventForm repeat-weekly", () => {
         opponent: "Hawks",
         notes: "",
         repeat: "",
+        announce: true,
       },
       summary: "8 games, weekly from Sat, Apr 4 to Sat, May 23",
       announcement: { status: "none" },
