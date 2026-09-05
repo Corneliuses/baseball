@@ -690,13 +690,17 @@ async function sendReceipt(input: {
  * costs a correction rather than the whole form.
  *
  * **The announcement is the coach's to skip, per submit.** "Email parents" is
- * a checkbox on the form, on by default, and unticking it makes this a plain
- * write: no roster read, no fan-out, no receipt, and the banner says so. The
- * cases it exists for are the ones where the email would be noise — a game
- * the league already put on everyone's calendar, a placeholder date that is
- * going to move, a schedule being rebuilt after a mistake. It never carries
- * over to the next add (`stickyValues`), because the default has to be the
- * one whose failure mode is loud.
+ * a checkbox on the form, on by default, and unticking it skips
+ * `scheduleAnnouncement` outright: no guardian read, no fan-out, no receipt,
+ * and the banner says so. Everything the write itself needs still runs —
+ * including the membership lookup for `coachEmail`, which happens before the
+ * choice is consulted — so this is a narrower claim than "no extra reads", and
+ * a later change moving work either side of that line should not be measured
+ * against the wider one. The cases it exists for are the ones where the email
+ * would be noise — a game the league already put on everyone's calendar, a
+ * placeholder date that is going to move, a schedule being rebuilt after a
+ * mistake. It never carries over to the next add (`stickyValues`), because the
+ * default has to be the one whose failure mode is loud.
  *
  * Losing access still redirects, and now lands on the schedule the coach was
  * actually looking at.
@@ -792,10 +796,11 @@ export async function createEventAction(
     status: "added",
     keep: stickyValues(values),
     summary: addedSummary(parsed.input.type, occurrences),
-    // The coach's choice is read before anything is resolved, so an unticked
-    // box costs neither the two roster reads nor a fan-out — nothing about
-    // the announcement happens, rather than something happening and being
-    // discarded.
+    // Consulted before `scheduleAnnouncement` rather than inside it, so an
+    // unticked box costs neither the two reads that resolve the audience nor
+    // the deferred fan-out: the announcement is never prepared, rather than
+    // prepared and discarded. `coachEmail` above is resolved either way — it
+    // sits on the write path, ahead of this branch.
     announcement: values.announce
       ? await scheduleAnnouncement(teamId, events, coachEmail)
       : { status: "skipped" },
