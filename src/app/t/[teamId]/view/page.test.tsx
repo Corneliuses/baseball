@@ -288,36 +288,21 @@ describe("ViewPage chart rendering", () => {
     expect(html.split(">OF<")).toHaveLength(4);
   });
 
-  it("draws no catcher for an allPlay team — the coach pitches", async () => {
+  it("draws the catcher for an allPlay team — the league fields one", async () => {
+    // Revised 2026-09-17. Before that an allPlay board drew a solid disc
+    // behind the plate with "the coach pitches" for screen readers; neither
+    // may come back, since a disc says the spot cannot be filled.
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
 
     const html = await render();
 
-    expect(html).not.toContain(">C<");
+    expect(html).toContain(">C<");
     expect(html).toContain(">P<");
-  });
-
-  it("marks the empty catcher spot with a filled circle rather than a gap", async () => {
-    // A blank spot behind the plate reads as something missing from the chart;
-    // the disc says the level simply doesn't have the position.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
-
-    const html = await render();
-
-    expect(html).toContain("fill-muted-foreground/30");
-    expect(html).toContain("the coach pitches");
-  });
-
-  it("draws no such circle when a catcher is a real spot", async () => {
-    // allPlay off by default in this file — nine named positions, C among them.
-    const html = await render();
-
     expect(html).not.toContain("fill-muted-foreground/30");
+    expect(html).not.toContain("the coach pitches");
   });
 
-  it("shows an allPlay team's stale catcher row in the outfield", async () => {
-    // Same as the stale named-outfield row: the spot isn't one this team
-    // fields, so the kid stands in the outfield until the next save says so.
+  it("seats an allPlay team's catcher behind the plate, not in the outfield", async () => {
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
@@ -332,8 +317,8 @@ describe("ViewPage chart rendering", () => {
     const html = await render();
 
     expect(html).toContain("Cal");
-    expect(html).toContain(">OF<");
-    expect(html).not.toContain(">C<");
+    expect(html).toContain(">C<");
+    expect(html).not.toContain(">OF<");
   });
 
   it("seats an allPlay team's named-outfield row at its spot", async () => {
@@ -356,27 +341,6 @@ describe("ViewPage chart rendering", () => {
     expect(html).toContain("Cal");
     expect(html).toContain(">CF<");
     expect(html).not.toContain(">OF<");
-  });
-
-  it("shows an allPlay team's stale catcher row in the outfield", async () => {
-    // Left over from before allPlay was switched on. The coach's next save
-    // collapses it; until then the kid is in the outfield, which is both
-    // where the editor shows them and where that save will put them.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
-    getChart.mockResolvedValue([
-      {
-        playerId: "cal",
-        playerName: "Cal",
-        jerseyNumber: 3,
-        battingOrder: 1,
-        position: "CATCHER" as const,
-      },
-    ]);
-
-    const html = await render();
-
-    expect(html).toContain("Cal");
-    expect(html).toContain(">OF<");
   });
 
   it("draws one marker per player when a pinned kid sits beside a zone outfielder", async () => {

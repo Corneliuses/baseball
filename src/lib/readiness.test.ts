@@ -37,7 +37,7 @@ function allAttendingBut(...declinedIds: string[]): Map<string, RsvpState> {
 
 describe("computeReadiness", () => {
   it("is ready when the whole chart is attending", () => {
-    const result = computeReadiness(chart, allAttending, false);
+    const result = computeReadiness(chart, allAttending);
 
     expect(result.ready).toBe(true);
     expect(result.declined).toEqual([]);
@@ -46,7 +46,7 @@ describe("computeReadiness", () => {
   });
 
   it("reports the declined player and the position they leave empty", () => {
-    const result = computeReadiness(chart, allAttendingBut("ben"), false);
+    const result = computeReadiness(chart, allAttendingBut("ben"));
 
     expect(result.ready).toBe(false);
     expect(result.declined.map((e) => e.playerId)).toEqual(["ben"]);
@@ -54,7 +54,7 @@ describe("computeReadiness", () => {
   });
 
   it("closes ranks in the effective order without renumbering the chart", () => {
-    const result = computeReadiness(chart, allAttendingBut("ben"), false);
+    const result = computeReadiness(chart, allAttendingBut("ben"));
 
     expect(result.effectiveOrder.map((e) => e.playerId)).toEqual([
       "ava",
@@ -66,7 +66,7 @@ describe("computeReadiness", () => {
   });
 
   it("ignores benched players entirely", () => {
-    const result = computeReadiness(chart, allAttendingBut("eli"), false);
+    const result = computeReadiness(chart, allAttendingBut("eli"));
 
     expect(result.ready).toBe(true);
     expect(result.declined).toEqual([]);
@@ -78,7 +78,6 @@ describe("computeReadiness", () => {
     const result = computeReadiness(
       chart,
       allAttendingBut("ben", "cy", "dee"),
-      false,
     );
 
     expect(result.uncoveredPositions).toEqual([
@@ -89,7 +88,7 @@ describe("computeReadiness", () => {
   });
 
   it("reports an empty chart as ready rather than throwing", () => {
-    expect(computeReadiness([], new Map(), false).ready).toBe(true);
+    expect(computeReadiness([], new Map()).ready).toBe(true);
   });
 });
 
@@ -97,7 +96,7 @@ describe("computeReadiness before anyone has answered", () => {
   it("is ready, with everyone awaiting and nothing uncovered", () => {
     // The defect this whole issue exists to fix: the old set-based check called
     // every batter absent and every position uncovered at this exact moment.
-    const result = computeReadiness(chart, states([]), false);
+    const result = computeReadiness(chart, states([]));
 
     expect(result.ready).toBe(true);
     expect(result.declined).toEqual([]);
@@ -111,7 +110,7 @@ describe("computeReadiness before anyone has answered", () => {
   });
 
   it("keeps the whole batting order in the effective order", () => {
-    const result = computeReadiness(chart, states([]), false);
+    const result = computeReadiness(chart, states([]));
 
     expect(result.effectiveOrder.map((e) => e.playerId)).toEqual([
       "ava",
@@ -126,7 +125,7 @@ describe("computeReadiness before anyone has answered", () => {
     // shape a caller building the map by hand can produce.
     const partial = new Map<string, RsvpState>([["ava", "attending"]]);
 
-    const result = computeReadiness(chart, partial, false);
+    const result = computeReadiness(chart, partial);
 
     expect(result.ready).toBe(true);
     expect(result.declined).toEqual([]);
@@ -144,7 +143,6 @@ describe("computeReadiness across all three states", () => {
         { playerId: "ben", attending: false },
         // cy and dee have not answered.
       ]),
-      false,
     );
 
     expect(result.ready).toBe(false);
@@ -163,9 +161,8 @@ describe("computeReadiness across all three states", () => {
     const declinedRun = computeReadiness(
       chart,
       states([{ playerId: "ben", attending: false }]),
-      false,
     );
-    const silentRun = computeReadiness(chart, states([]), false);
+    const silentRun = computeReadiness(chart, states([]));
 
     expect(declinedRun.declined.map((e) => e.playerId)).toEqual(["ben"]);
     expect(declinedRun.uncoveredPositions).toEqual(["PITCHER"]);
@@ -181,7 +178,6 @@ describe("computeReadiness across all three states", () => {
     const result = computeReadiness(
       chart,
       states([{ playerId: "ava", attending: false }]),
-      false,
     );
 
     expect(result.effectiveOrder.map((e) => e.playerId)).not.toContain("ava");
@@ -194,13 +190,13 @@ describe("computeReadiness across all three states", () => {
   });
 
   it("is un-ready exactly when a decline affects the chart", () => {
-    expect(computeReadiness(chart, states([]), false).ready).toBe(true);
-    expect(computeReadiness(chart, allAttending, false).ready).toBe(true);
-    expect(computeReadiness(chart, allAttendingBut("dee"), false).ready).toBe(
+    expect(computeReadiness(chart, states([])).ready).toBe(true);
+    expect(computeReadiness(chart, allAttending).ready).toBe(true);
+    expect(computeReadiness(chart, allAttendingBut("dee")).ready).toBe(
       false,
     );
     // A benched player's decline changes nothing on the field.
-    expect(computeReadiness(chart, allAttendingBut("eli"), false).ready).toBe(
+    expect(computeReadiness(chart, allAttendingBut("eli")).ready).toBe(
       true,
     );
   });
@@ -217,7 +213,7 @@ describe("computeReadiness across all three states", () => {
       ["zed", "declined"],
     ]);
 
-    const result = computeReadiness(mixed, rsvps, false);
+    const result = computeReadiness(mixed, rsvps);
 
     expect(result.declined.map((e) => e.playerId)).toEqual(["ava", "cy", "zed"]);
   });
@@ -237,19 +233,17 @@ describe("computeReadiness and the positions a team actually fields", () => {
       ["sam", "declined"],
     ]);
 
-    const result = computeReadiness(fielderOnly, rsvps, false);
+    const result = computeReadiness(fielderOnly, rsvps);
 
     expect(result.declined.map((e) => e.playerId)).toEqual(["sam"]);
     expect(result.uncoveredPositions).toEqual(["SHORTSTOP"]);
     expect(result.ready).toBe(false);
   });
 
-  it("does not uncover a spot an allPlay team never fields", () => {
-    // A stale CATCHER row — hand-seeded during #9, or left behind when allPlay
-    // was switched on. That kid is in the outfield zone everywhere else in the
-    // app; reporting C uncovered would hand the coach a hole they have no way
-    // to fill.
-    const stale: ChartEntry[] = [
+  it("uncovers the catcher when they declined, on an allPlay team too", () => {
+    // The league fields a kid behind the plate (revised 2026-09-17), so C is
+    // a hole the coach can actually fill — and one both diamonds draw.
+    const chart: ChartEntry[] = [
       { playerId: "ava", playerName: "Ava", battingOrder: 1, position: "PITCHER" },
       { playerId: "cal", playerName: "Cal", battingOrder: 2, position: "CATCHER" },
     ];
@@ -258,24 +252,23 @@ describe("computeReadiness and the positions a team actually fields", () => {
       ["cal", "declined"],
     ]);
 
-    const result = computeReadiness(stale, rsvps, true);
+    const result = computeReadiness(chart, rsvps);
 
-    expect(result.uncoveredPositions).toEqual([]);
-    // Still named as out — nobody disappears, only the phantom hole does.
+    expect(result.uncoveredPositions).toEqual(["CATCHER"]);
     expect(result.declined.map((e) => e.playerId)).toEqual(["cal"]);
     expect(result.ready).toBe(false);
   });
 
-  it("uncovers an allPlay team's named outfield spot when its only kid declined", () => {
-    // LF/CF/RF are fielded allPlay spots since the named-outfield revision, so
-    // a pinned centre fielder staying home is a real hole worth naming.
+  it("uncovers a named outfield spot when its only kid declined", () => {
+    // LF/CF/RF are placeable spots since the named-outfield revision, so a
+    // pinned centre fielder staying home is a real hole worth naming.
     const chart: ChartEntry[] = [
       { playerId: "ava", playerName: "Ava", battingOrder: 1, position: "PITCHER" },
       { playerId: "cal", playerName: "Cal", battingOrder: 2, position: "CENTER_FIELD" },
     ];
     const rsvps = new Map<string, RsvpState>([["cal", "declined"]]);
 
-    const result = computeReadiness(chart, rsvps, true);
+    const result = computeReadiness(chart, rsvps);
 
     expect(result.uncoveredPositions).toEqual(["CENTER_FIELD"]);
     expect(result.ready).toBe(false);
@@ -302,7 +295,7 @@ describe("computeReadiness and the positions a team actually fields", () => {
     ]);
 
     for (const order of [rows, [...rows].reverse(), [rows[1], rows[2], rows[0]]]) {
-      expect(computeReadiness(order, rsvps, false).uncoveredPositions).toEqual(
+      expect(computeReadiness(order, rsvps).uncoveredPositions).toEqual(
         [],
       );
     }
@@ -311,7 +304,7 @@ describe("computeReadiness and the positions a team actually fields", () => {
       rows.map((row) => [row.playerId, "declined" as RsvpState]),
     );
     for (const order of [rows, [...rows].reverse()]) {
-      expect(computeReadiness(order, allOut, false).uncoveredPositions).toEqual([
+      expect(computeReadiness(order, allOut).uncoveredPositions).toEqual([
         "CENTER_FIELD",
       ]);
     }
@@ -328,7 +321,6 @@ describe("computeReadiness and the positions a team actually fields", () => {
     const oneOut = computeReadiness(
       chart,
       new Map<string, RsvpState>([["cal", "declined"]]),
-      true,
     );
     expect(oneOut.uncoveredPositions).toEqual([]);
     // The decline itself still surfaces; only the hole is not claimed.
@@ -341,35 +333,8 @@ describe("computeReadiness and the positions a team actually fields", () => {
         ["cal", "declined"],
         ["dee", "declined"],
       ]),
-      true,
     );
     expect(bothOut.uncoveredPositions).toEqual(["CENTER_FIELD"]);
   });
 
-  it("does uncover that same spot for a team that fields it", () => {
-    const stale: ChartEntry[] = [
-      { playerId: "ava", playerName: "Ava", battingOrder: 1, position: "PITCHER" },
-      { playerId: "cal", playerName: "Cal", battingOrder: 2, position: "CENTER_FIELD" },
-    ];
-    const rsvps = new Map<string, RsvpState>([
-      ["ava", "attending"],
-      ["cal", "declined"],
-    ]);
-
-    const result = computeReadiness(stale, rsvps, false);
-
-    expect(result.uncoveredPositions).toEqual(["CENTER_FIELD"]);
-  });
-
-  it("ignores an allPlay team's stale catcher row too", () => {
-    const stale: ChartEntry[] = [
-      { playerId: "cal", playerName: "Cal", battingOrder: 1, position: "CATCHER" },
-    ];
-    const rsvps = new Map<string, RsvpState>([["cal", "declined"]]);
-
-    expect(computeReadiness(stale, rsvps, true).uncoveredPositions).toEqual([]);
-    expect(computeReadiness(stale, rsvps, false).uncoveredPositions).toEqual([
-      "CATCHER",
-    ]);
-  });
 });

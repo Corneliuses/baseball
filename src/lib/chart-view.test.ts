@@ -263,8 +263,10 @@ describe("buildChartView", () => {
     expect(selective.unassigned).toHaveLength(3);
   });
 
-  it("pools an allPlay team's stale catcher row — the coach pitches", () => {
-    const stale: ChartViewEntry[] = [
+  it("seats an allPlay team's catcher — the league fields one", () => {
+    // Revised 2026-09-17: this row used to be pooled as a spot the team
+    // couldn't fill.
+    const catcher: ChartViewEntry[] = [
       {
         entryId: "re-cal",
         playerId: "cal",
@@ -275,10 +277,10 @@ describe("buildChartView", () => {
       },
     ];
 
-    const view = buildChartView(stale, noRsvps, true);
+    const view = buildChartView(catcher, noRsvps, true);
 
-    expect(view.byPosition.has("CATCHER")).toBe(false);
-    expect(view.unassigned.map((p) => p.playerId)).toEqual(["cal"]);
+    expect(view.byPosition.get("CATCHER")?.[0].playerId).toBe("cal");
+    expect(view.unassigned).toEqual([]);
   });
 
   it("seats those same rows when allPlay is off", () => {
@@ -554,7 +556,6 @@ describe("seatedEntryIds", () => {
       at("ben", 2, "CENTER_FIELD"),
       at("cal", 3, "CENTER_FIELD"),
       at("dee", 4, null),
-      // Not a spot an allPlay team fields — the coach pitches.
       at("eli", 5, "CATCHER"),
     ];
 
@@ -565,7 +566,7 @@ describe("seatedEntryIds", () => {
 
     expect(seatedEntryIds(entries, true)).toEqual(seatedByView);
     expect(seatedEntryIds(entries, true)).toEqual(
-      new Set(["re-ava", "re-ben", "re-cal"]),
+      new Set(["re-ava", "re-ben", "re-cal", "re-eli"]),
     );
   });
 

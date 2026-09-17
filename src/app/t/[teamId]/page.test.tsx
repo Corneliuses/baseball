@@ -425,8 +425,9 @@ describe("TeamHomePage your players", () => {
     expect(html).toContain("animation-delay:40ms");
   });
 
-  // The rule fieldedPositions exists for — and the reason chartRole is shared
-  // with the readiness page rather than copied.
+  // The reason chartRole is shared with the readiness page rather than copied:
+  // a null position means the outfield on an allPlay team, and both pages
+  // have to say so the same way.
   it("reads a null position as OF on an allPlay team", async () => {
     getChart.mockResolvedValue([{ ...REESE, position: null }]);
 

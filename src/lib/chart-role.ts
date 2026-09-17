@@ -1,4 +1,4 @@
-import { fieldedPositions, OUTFIELD_ZONE_LABEL, POSITION_LABELS } from "@/lib/positions";
+import { OUTFIELD_ZONE_LABEL, POSITION_LABELS } from "@/lib/positions";
 import type { ChartViewEntry } from "@/lib/chart-view";
 
 /// Where a player sits in the chart, as one line of text.
@@ -39,25 +39,28 @@ export type ChartRoleOptions = {
    * fielding spot is in the order, and "Bats 3rd · Substitute" would contradict
    * the page a parent reads next — and misdescribe a kid who is playing.
    *
-   * Never reached on an allPlay team: everyone outside that infield is in the
+   * Never reached on an allPlay team: everyone off the diamond is in the
    * outfield, which is what the next save writes.
    */
   benchLabel?: string;
 };
 
 /**
- * @param allPlay Which spots this team actually fields.
+ * @param allPlay Whether a player with no position is in the general outfield
+ * (allPlay) or on the bench.
  *
- * The position label goes through the team's fielded set rather than straight
- * to `POSITION_LABELS`, for the same reason `computeReadiness` filters
- * uncovered spots through it: an allPlay team's stale `CATCHER` row is not a
- * spot that team fields. Printing "C" beside the name would assert a position
- * the readiness page simultaneously refuses to check — and contradict the
- * view page and the editor, which both show that player in the outfield. A
- * named outfield row IS fielded there since the spots became placeable, so a
- * kid pinned to centre field reads "CF"; everyone else off the chart is in
- * the general outfield, `position = null` included, which is exactly what the
- * next save will write.
+ * A stored position always prints as its label: every team fields all nine
+ * spots, so "C" beside a name is a spot the readiness page checks and both
+ * diamonds draw. What the flag decides is the *absence* of one — on an allPlay
+ * team a kid with `position = null` plays the general outfield, which is
+ * exactly what the next save will write, and on a selective team they are a
+ * substitute (if they don't bat either).
+ *
+ * One caveat the label cannot express: a spot can hold more rows than it
+ * seats (three at CF the moment allPlay is switched off), and this function
+ * reads the column, not the seating cut. Callers that print a role for a kid
+ * who might be past capacity go through `seatedEntryIds` first — team home
+ * and the readiness list both do.
  */
 export function chartRole(
   entry: Pick<ChartViewEntry, "battingOrder" | "position">,
@@ -67,8 +70,7 @@ export function chartRole(
   const parts: string[] = [];
   if (entry.battingOrder !== null) parts.push(`Bats ${ordinal(entry.battingOrder)}`);
 
-  const fielded = fieldedPositions(allPlay);
-  if (entry.position !== null && fielded.has(entry.position)) {
+  if (entry.position !== null) {
     parts.push(POSITION_LABELS[entry.position]);
   } else if (allPlay) {
     parts.push(OUTFIELD_ZONE_LABEL);
@@ -81,9 +83,9 @@ export function chartRole(
 
 /**
  * The condition under which `chartRole` prints its `benchLabel`: the chart
- * seats this player nowhere — neither in the batting order nor at a spot the
- * team fields. Never true on an allPlay team, where everyone outside the
- * infield is in the outfield.
+ * seats this player nowhere — neither in the batting order nor at a position.
+ * Never true on an allPlay team, where everyone off the diamond is in the
+ * outfield.
  *
  * Exported so team home can *style* the bench state (quiet card stock) apart
  * from the celebration (the banana marquee) without string-matching the label
@@ -97,6 +99,5 @@ export function isBenched(
 ): boolean {
   if (entry.battingOrder !== null) return false;
   if (allPlay) return false;
-  const fielded = fieldedPositions(allPlay);
-  return entry.position === null || !fielded.has(entry.position);
+  return entry.position === null;
 }

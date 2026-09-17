@@ -31,12 +31,12 @@ const ERROR_MESSAGES = messageTable({
   "unknown-entry":
     "The roster changed while you were editing. Reload and try again.",
   "duplicate-entry": "A player appeared twice. Reload and try again.",
-  // Only reachable when allPlay was toggled mid-edit: the catcher spot
-  // appears or disappears with the setting.
-  "invalid-position":
-    "The team's settings changed while you were editing. Reload and try again.",
-  // Same trigger, other direction: allPlay switched off strips the outfield
-  // spots' room for more than one player, so a stacked board stops fitting.
+  // A key that isn't one of the nine positions. The editor can't send one, so
+  // this is a forged or garbled POST — same footing as `invalid-positions`.
+  "invalid-position": "That diamond couldn't be read. Reload and try again.",
+  // Only reachable when allPlay was toggled mid-edit: switching it off strips
+  // the outfield spots' room for more than one player, so a stacked board
+  // stops fitting.
   "position-full":
     "The team's settings changed while you were editing — a spot now holds more players than it can. Reload and try again.",
   "roster-changed":

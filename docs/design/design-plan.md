@@ -181,8 +181,8 @@ All inside the existing viewBox — `DIAMOND_GEOMETRY.width = 400`,
    than straddling the track, which `diamond-geometry.test.ts` pins.
 4. **Infield dirt** — `M200,444 L316,318 Q200,90 84,318 Z` (a diamond with an arced back
    edge behind second), plus the home-plate circle — big enough that the catcher marker
-   at y=452, and the `NoCatcherMarker` disc that replaces it on an allPlay board, sit
-   fully *on* dirt rather than hanging off its edge — and the mound at `(200,330)`.
+   at y=452 sits fully *on* dirt rather than hanging off its edge, on every board — and
+   the mound at `(200,330)`.
    `FIELD_ART.mound.r = 18`.
 5. **Infield grass** — the inset diamond `(200,398) (272,322) (200,246) (128,322)`.
    SS/2B markers at y=252 land on the dirt behind it, exactly where they stand in life.
@@ -209,8 +209,7 @@ All inside the existing viewBox — `DIAMOND_GEOMETRY.width = 400`,
   tag, because navy text needs backing to stay readable on grass. A halo rather than a
   `<rect>` pill: the pill has to be measured against the text it sits behind, and SVG
   gives no layout pass to measure with, so a fixed-width rect either clips a long name
-  or floats around a short one. The `NoCatcherMarker` disc survives unchanged on the
-  home-circle dirt.
+  or floats around a short one.
 - **allPlay outfield** markers already arc across exactly this grass
   (`outfieldZoneCoords`); they inherit the halo and need nothing else.
 

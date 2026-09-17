@@ -188,7 +188,6 @@ export default async function ReadinessPage({
   const readiness: Readiness<ChartViewEntry> = computeReadiness(
     chartEntries,
     rsvpStates,
-    allPlay,
   );
 
   // The spots the diamond actually seats, from /view's own rule — see

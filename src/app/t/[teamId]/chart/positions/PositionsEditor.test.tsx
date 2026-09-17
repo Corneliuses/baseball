@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe("PositionsEditor", () => {
-  it("renders eight targets — no catcher — and an Outfield zone when allPlay is true", () => {
+  it("renders all nine targets and an Outfield zone when allPlay is true", () => {
     render(
       <PositionsEditor
         teamId="team-1"
@@ -49,15 +49,13 @@ describe("PositionsEditor", () => {
     );
 
     const field = screen.getByRole("region", { name: "Diamond" });
-    // P, 1B, 2B, 3B, SS and the three named outfield spots. An allPlay team
-    // has no catcher because the coach pitches; unplaced players wait in the
-    // general Outfield zone.
-    for (const label of ["P", "1B", "2B", "3B", "SS", "LF", "CF", "RF"]) {
+    // The full infield — catcher included, since the league fields one
+    // (revised 2026-09-17) — plus the three named outfield spots. Unplaced
+    // players wait in the general Outfield zone.
+    for (const label of ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"]) {
       expect(field).toHaveTextContent(label);
     }
-    expect(
-      field.querySelector('[data-position="CATCHER"]'),
-    ).not.toBeInTheDocument();
+    expect(field.querySelector('[data-position="CATCHER"]')).toBeInTheDocument();
     expect(
       field.querySelector('[data-position="CENTER_FIELD"]'),
     ).toBeInTheDocument();
@@ -94,31 +92,20 @@ describe("PositionsEditor", () => {
     expect(payloadOf()).toEqual({ CENTER_FIELD: ["a", "b", "c"] });
   });
 
-  it("marks the catcher's empty spot with a filled circle under allPlay", () => {
-    // Not a drop target and not an "Open" marker — a solid disc, so the coach
-    // reads "no catcher at this level" rather than "a target failed to render".
+  it("draws the empty catcher spot as an ordinary Open target under allPlay", () => {
+    // Before 2026-09-17 an allPlay board drew a solid disc here with "the
+    // coach pitches" for screen readers. Neither may come back: the spot is
+    // real now, and a disc would tell the coach it cannot be filled.
     render(
       <PositionsEditor teamId="team-1" allPlay={true} entries={[entry("a")]} />,
     );
 
     const field = screen.getByRole("region", { name: "Diamond" });
-    // Selected by its class rather than as "the circle": FieldArt paints the
-    // field with circles of its own (mow stripes, mound, fence), so the disc
-    // is no longer the only one in the SVG.
-    expect(
-      field.querySelector("circle.fill-muted-foreground\\/30"),
-    ).toBeInTheDocument();
-    expect(field).toHaveTextContent("the coach pitches");
-  });
-
-  it("draws no such circle when the catcher is a real spot", () => {
-    render(
-      <PositionsEditor teamId="team-1" allPlay={false} entries={[entry("a")]} />,
-    );
-
-    const field = screen.getByRole("region", { name: "Diamond" });
+    const catcher = field.querySelector('[data-position="CATCHER"]');
+    expect(catcher).toBeInTheDocument();
+    expect(catcher).toHaveTextContent("Open");
     expect(field.querySelector("circle.fill-muted-foreground\\/30")).toBeNull();
-    expect(field).toHaveTextContent("C");
+    expect(field).not.toHaveTextContent("the coach pitches");
   });
 
   it("puts the zone above the diamond", () => {
@@ -160,7 +147,7 @@ describe("PositionsEditor", () => {
     expect(zone).toHaveTextContent("Player-b");
   });
 
-  it("pools an allPlay team's stale catcher instead of seating them", () => {
+  it("seats an allPlay team's catcher behind the plate", () => {
     render(
       <PositionsEditor
         teamId="team-1"
@@ -169,24 +156,39 @@ describe("PositionsEditor", () => {
       />,
     );
 
-    // Visible in the outfield zone before any save, so the collapse to null
-    // isn't a surprise.
-    expect(screen.getByRole("region", { name: "Outfield" })).toHaveTextContent(
-      "Player-a",
-    );
-    expect(payloadOf()).toEqual({});
+    expect(
+      document.querySelector('[data-position="CATCHER"]'),
+    ).toHaveTextContent("Player-a");
+    expect(payloadOf()).toEqual({ CATCHER: ["a"] });
   });
 
-  it("offers Save for a stale catcher row the coach hasn't touched", () => {
-    // The row still says CATCHER and the payload above says {}, so saving
-    // WOULD change the database. Gating Save on "has the coach moved anyone"
+  it("pools the kids an over-capacity spot cannot seat instead of dropping them", () => {
+    // Two left at CF after allPlay was switched off. Visible in the zone
+    // before any save, so the collapse to null isn't a surprise.
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[entry("a", "CENTER_FIELD"), entry("b", "CENTER_FIELD")]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("region", { name: "Substitutes" }),
+    ).toHaveTextContent("Player-b");
+    expect(payloadOf()).toEqual({ CENTER_FIELD: ["a"] });
+  });
+
+  it("offers Save for an over-capacity row the coach hasn't touched", () => {
+    // The row still says CF and the payload above drops it, so saving WOULD
+    // change the database. Gating Save on "has the coach moved anyone"
     // strands the row: the board already looks right, so there is nothing the
     // coach can do to make the editor dirty short of an unrelated change.
     render(
       <PositionsEditor
         teamId="team-1"
-        allPlay={true}
-        entries={[entry("a", "CATCHER")]}
+        allPlay={false}
+        entries={[entry("a", "CENTER_FIELD"), entry("b", "CENTER_FIELD")]}
       />,
     );
 
@@ -209,20 +211,20 @@ describe("PositionsEditor", () => {
     expect(fieldOf("baseline")).toEqual({ PITCHER: ["a"] });
   });
 
-  it("puts a stale catcher row in the baseline even though the board can't show it", () => {
+  it("puts an over-capacity row in the baseline even though the board can't show it", () => {
     // The whole reason the baseline is storedPositions and not the draft: the
     // action compares it against a fresh read, so a baseline that had already
     // dropped this row would look stale on every single save.
     render(
       <PositionsEditor
         teamId="team-1"
-        allPlay={true}
-        entries={[entry("a", "CATCHER")]}
+        allPlay={false}
+        entries={[entry("a", "CENTER_FIELD"), entry("b", "CENTER_FIELD")]}
       />,
     );
 
-    expect(payloadOf()).toEqual({});
-    expect(fieldOf("baseline")).toEqual({ CATCHER: ["a"] });
+    expect(payloadOf()).toEqual({ CENTER_FIELD: ["a"] });
+    expect(fieldOf("baseline")).toEqual({ CENTER_FIELD: ["a", "b"] });
   });
 
   it("leaves Save disabled when the board already matches what is stored", () => {
@@ -247,8 +249,8 @@ describe("PositionsEditor", () => {
       />,
     );
 
-    // Eight spots on an allPlay board, one filled.
-    expect(screen.getAllByText("Open")).toHaveLength(7);
+    // Nine spots on an allPlay board, one filled.
+    expect(screen.getAllByText("Open")).toHaveLength(8);
   });
 
   it("shows only first names on the diamond and full names in the zone", () => {

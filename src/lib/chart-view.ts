@@ -1,6 +1,6 @@
 import { Position } from "@/generated/prisma/enums";
 import { buildDiamondNames } from "@/lib/diamond-names";
-import { fieldedPositions, positionCapacity } from "@/lib/positions";
+import { positionCapacity } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
 /// The view page's read-only render model (#8).
@@ -58,7 +58,7 @@ export type ChartView = {
   /// Everyone the diamond doesn't seat, in the roster's jersey-then-name order.
   /// What this means depends on the team's `allPlay` setting, which is why it
   /// isn't named here: on an allPlay team it's the general outfield (whoever
-  /// the coach hasn't pinned to a named spot — see `droppablePositions` in
+  /// the coach hasn't pinned to a named spot — see `buildPositionsDraft` in
   /// chart.ts), and otherwise it's the bench. The page decides how to say it.
   unassigned: ChartViewPlayer[];
   /// True when at least one roster entry has a batting order or a position
@@ -104,18 +104,17 @@ function seat<T extends Pick<ChartViewEntry, "position">>(
   players: readonly T[],
   allPlay: boolean,
 ): { byPosition: Map<Position, T[]>; unseated: T[] } {
-  const fielded = fieldedPositions(allPlay);
   const byPosition = new Map<Position, T[]>();
   const unseated: T[] = [];
 
   for (const player of players) {
     // First arrivals up to the spot's capacity, matching buildPositionsDraft;
-    // anyone past it is pooled rather than dropped.
+    // anyone past it is pooled rather than dropped. Capacity is the only cut:
+    // every stored position is a spot this team fields.
     const seated =
       player.position !== null ? byPosition.get(player.position) : undefined;
     if (
       player.position !== null &&
-      fielded.has(player.position) &&
       (seated?.length ?? 0) < positionCapacity(player.position, allPlay)
     ) {
       if (seated) {
@@ -160,12 +159,10 @@ export function seatedEntryIds(
 }
 
 /**
- * @param allPlay Which spots this team actually fields. The read-side twin of
- * `buildPositionsDraft`'s parameter of the same name, and it does the same job:
- * a player stored at a position the team doesn't field — an allPlay team's
- * stale CATCHER row, hand-set during #9 or left behind when allPlay was
- * switched on — is pooled rather than seated, as is anyone past a spot's
- * capacity (a named outfield stack after allPlay was switched off).
+ * @param allPlay How many kids each spot holds on this team's board. The
+ * read-side twin of `buildPositionsDraft`'s parameter of the same name, and it
+ * does the same job: anyone past a spot's capacity (a named outfield stack of
+ * three after allPlay was switched off) is pooled rather than seated.
  *
  * That is what keeps the two diamonds telling one story: the editor already
  * shows those same players in its zone. Nobody vanishes either way — they are

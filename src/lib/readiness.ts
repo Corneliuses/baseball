@@ -1,5 +1,5 @@
 import { Position } from "@/generated/prisma/enums";
-import { ALL_POSITIONS, fieldedPositions } from "@/lib/positions";
+import { ALL_POSITIONS } from "@/lib/positions";
 import type { RsvpState } from "@/lib/rsvp";
 
 /// The next-game readiness check.
@@ -47,8 +47,7 @@ export type Readiness<T extends ChartEntry> = {
   /// Positions left empty because everyone assigned there **declined** — for
   /// most spots that is the one assigned player, but an allPlay team's named
   /// outfield spots seat up to three, and a spot with a teammate still
-  /// standing on it is not uncovered. In scorebook order, and limited to the
-  /// spots this team actually fields.
+  /// standing on it is not uncovered. In scorebook order.
   uncoveredPositions: Position[];
   /// The batting order for this game with declined players removed and ranks
   /// closed up. No-response players stay in it — see `chartState` below.
@@ -88,12 +87,17 @@ function byBattingSlotThenName(a: ChartEntry, b: ChartEntry): number {
  *                 as no-response — the same fallback `buildChartView` applies,
  *                 and the safe direction: the failure mode worth avoiding is
  *                 inventing an absence, never inventing an attendance.
- * @param allPlay  Which spots this team actually fields, as on `buildChartView`.
+ *
+ * No `allPlay` parameter, and that is a claim: the team's setting changes how
+ * many kids a spot *seats*, and this function deliberately asks about every
+ * row at a spot rather than the seated ones (see the comment on `assigned`
+ * below), so nothing here depends on it. It used to gate which positions
+ * counted, back when an allPlay board had no catcher; that went with the
+ * 2026-09-17 revision — see `positionCapacity`.
  */
 export function computeReadiness<T extends ChartEntry>(
   chart: readonly T[],
   rsvps: ReadonlyMap<string, RsvpState>,
-  allPlay: boolean,
 ): Readiness<T> {
   const stateOf = (entry: ChartEntry): RsvpState =>
     rsvps.get(entry.playerId) ?? "no-response";
@@ -116,12 +120,7 @@ export function computeReadiness<T extends ChartEntry>(
     .filter((entry) => stateOf(entry) === "no-response")
     .sort(byBattingSlotThenName);
 
-  // Reporting a spot this team doesn't field would hand the coach a hole they
-  // cannot fill — this issue's own bug, one level down. The player is still
-  // named in `declined`; nobody disappears, only the phantom hole does.
-  const fielded = fieldedPositions(allPlay);
-
-  // EVERY row stored at a fielded position, with no cap applied — unlike
+  // EVERY row stored at a position, with no cap applied — unlike
   // `buildChartView`, which has to pick which of them the diamond seats.
   //
   // Deliberate, and the reason is determinism. `getChart` is a findMany with no
@@ -135,7 +134,7 @@ export function computeReadiness<T extends ChartEntry>(
   // diamond happens to draw.
   const assigned = new Map<Position, T[]>();
   for (const entry of chart) {
-    if (entry.position === null || !fielded.has(entry.position)) {
+    if (entry.position === null) {
       continue;
     }
     const holders = assigned.get(entry.position);
