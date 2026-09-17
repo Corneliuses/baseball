@@ -300,7 +300,7 @@ export async function saveBattingOrder(
  *
  * Players left off the diamond need no phase-2 statement — phase 1 already
  * nulled them, which is exactly the state the editor showed: the bench, or the
- * general outfield on an allPlay team (see `droppablePositions` in chart.ts).
+ * general outfield on an allPlay team (see `buildPositionsDraft` in chart.ts).
  * Values come from `validatePositions`, never raw from the client.
  */
 export async function savePositions(

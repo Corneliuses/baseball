@@ -1,5 +1,5 @@
 import type { Position } from "@/generated/prisma/enums";
-import { ALL_PLAY_INFIELD_POSITIONS } from "@/lib/positions";
+import { INFIELD_POSITIONS } from "@/lib/positions";
 
 /// Where the nine positions sit on the diamond, shared by the read-only view
 /// page (#8) and the drag editor (#11) so the two can never drift apart — a
@@ -14,9 +14,9 @@ import { ALL_PLAY_INFIELD_POSITIONS } from "@/lib/positions";
 /// moving anything. The clipping this guards against is silent — an off-canvas
 /// name renders without error and simply cannot be seen.
 ///
-/// One height for every board, including an allPlay team's — which has no
-/// catcher (`ALL_PLAY_INFIELD_POSITIONS`) but still draws that spot, as the
-/// solid disc in `NoCatcherMarker`.
+/// One height for every board: an allPlay team fields the catcher too (since
+/// the 2026-09-17 revision — before that the spot was drawn as a solid disc
+/// standing in for nobody, at the same coordinate).
 export const DIAMOND_GEOMETRY = {
   width: 400,
   height: 520,
@@ -412,10 +412,10 @@ export function outfieldHaloRadius(
       }
       minGap = Math.min(minGap, distance(marker, other));
     }
-    // The outfield shares a board with the allPlay infield. LF/CF/RF are
-    // excluded — the outfield is drawn *at* (and fanned around) those
+    // The outfield shares a board with the infield's fixed markers. LF/CF/RF
+    // are excluded — the outfield is drawn *at* (and fanned around) those
     // coordinates.
-    for (const position of ALL_PLAY_INFIELD_POSITIONS) {
+    for (const position of INFIELD_POSITIONS) {
       minGap = Math.min(minGap, distance(marker, POSITION_COORDS[position]));
     }
   }

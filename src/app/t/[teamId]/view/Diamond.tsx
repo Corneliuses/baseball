@@ -8,10 +8,6 @@ import {
 } from "@/components/diamond-geometry";
 import { FieldArt } from "@/components/FieldArt";
 import {
-  NO_CATCHER_TEXT,
-  NoCatcherMarker,
-} from "@/components/NoCatcherMarker";
-import {
   GUARDED_STYLE,
   YOUR_PLAYER_SR_SUFFIX,
 } from "@/components/guarded-style";
@@ -19,8 +15,8 @@ import { RSVP_STYLE } from "@/components/rsvp-style";
 import type { Position } from "@/generated/prisma/enums";
 import type { ChartViewPlayer } from "@/lib/chart-view";
 import {
-  ALL_PLAY_INFIELD_POSITIONS,
   ALL_POSITIONS,
+  INFIELD_POSITIONS,
   OUTFIELD_POSITIONS,
   OUTFIELD_ZONE_LABEL,
   POSITION_LABELS,
@@ -177,9 +173,9 @@ export function Diamond({
   guardedPlayerIds = EMPTY_GUARDED,
 }: {
   /// Seated players, keyed by position — a list per spot, because an allPlay
-  /// team's LF/CF/RF each stack to three. Only ever holds spots this team
-  /// fields: `buildChartView` pools the rest, including an allPlay team's
-  /// stale CATCHER row, so the markers below cannot collide with the zone.
+  /// team's LF/CF/RF each stack to three. Never holds more than a spot seats:
+  /// `buildChartView` pools anyone past capacity, so the markers below cannot
+  /// collide with the zone.
   byPosition: Map<Position, ChartViewPlayer[]>;
   allPlay: boolean;
   /// Everyone the diamond doesn't seat. Drawn as the outfield zone on an
@@ -195,15 +191,16 @@ export function Diamond({
   /// the one they saw before #49.
   guardedPlayerIds?: ReadonlySet<string>;
 }) {
-  // An allPlay team fields no catcher — the coach pitches — so C is drawn as
-  // the disc, never as "Open" (#11, Decision 1). Its LF/CF/RF are real spots
-  // since the named-outfield revision, but they draw differently from the
-  // fixed positions: a spot seats up to three (fanned around the coordinate
-  // via `outfieldSpotCoords`), and an EMPTY one draws nothing at all — the
-  // spots are optional, the general zone still covers the grass, and an
-  // "Open" marker would both claim a hole nobody is required to fill and
-  // collide with the zone drawn at those same coordinates.
-  const drawn = allPlay ? ALL_PLAY_INFIELD_POSITIONS : ALL_POSITIONS;
+  // Every team fields all nine spots (the catcher included, since the
+  // 2026-09-17 revision — see `positionCapacity`), but an allPlay team's
+  // LF/CF/RF draw differently from the fixed positions: a spot seats up to
+  // three (fanned around the coordinate via `outfieldSpotCoords`), and an
+  // EMPTY one draws nothing at all — the spots are optional, the general zone
+  // still covers the grass, and an "Open" marker would both claim a hole
+  // nobody is required to fill and collide with the zone drawn at those same
+  // coordinates. So the fixed markers are the infield there, and all nine
+  // otherwise.
+  const drawn = allPlay ? INFIELD_POSITIONS : ALL_POSITIONS;
   const spots: readonly [Position, ChartViewPlayer[]][] = allPlay
     ? OUTFIELD_POSITIONS.map(
         (position) => [position, byPosition.get(position) ?? []] as const,
@@ -299,8 +296,6 @@ export function Diamond({
             which is also what keeps that reader's page unchanged (#49 AC5). */}
         <FieldArt fence={guardedPlayerIds.size > 0 ? "chalk" : "banana"} />
 
-        {allPlay ? <NoCatcherMarker /> : null}
-
         {drawn.map((position) => {
           const { x, y } = POSITION_COORDS[position];
           // A fixed position seats one player; the array is the outfield
@@ -337,7 +332,6 @@ export function Diamond({
           A screen reader gets no benefit from a yellow ring, and design-plan.md
           §10's rule is that state is always colour *plus* a label. */}
       <ul className="sr-only">
-        {allPlay ? <li>{NO_CATCHER_TEXT}</li> : null}
         {drawn.map((position) => {
           const player = byPosition.get(position)?.[0];
           return (

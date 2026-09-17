@@ -374,10 +374,26 @@ describe("savePositionsAction", () => {
     expect(savePositions).not.toHaveBeenCalled();
   });
 
-  it("rejects a catcher for an allPlay team", async () => {
+  it("saves a catcher for an allPlay team", async () => {
+    // The league fields one (revised 2026-09-17); this used to redirect with
+    // ?error=invalid-position.
     const url = await redirectUrlOf(
       savePositionsAction(
         form({ teamId: "team-1", positions: '{"CATCHER":["a"]}' }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith("team-1", [
+      { entryId: "a", position: "CATCHER", positionSlot: 0 },
+    ]);
+    expect(url).toBe("/t/team-1/chart/positions?saved=1");
+  });
+
+  it("rejects a key that isn't one of the nine positions", async () => {
+    // The editor can't send one, so this is a forged or garbled POST.
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: '{"DH":["a"]}' }),
       ),
     );
 

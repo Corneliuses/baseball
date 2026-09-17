@@ -180,10 +180,10 @@ describe("ReadinessPage with a decline", () => {
     expect(html).toContain("Bats 2nd");
   });
 
-  it("labels a stale allPlay catcher row as the outfield, not the position it stores", async () => {
-    // The page must not print a spot it simultaneously refuses to check. The
-    // view page and the editor both show this kid in the outfield; saying "C"
-    // here would make three screens disagree about one player.
+  it("labels an allPlay catcher row as C — the spot this page also checks", async () => {
+    // The league fields a catcher (revised 2026-09-17), so the view page and
+    // the editor both seat this kid behind the plate; the line here has to
+    // agree with them.
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
@@ -199,8 +199,8 @@ describe("ReadinessPage with a decline", () => {
 
     const html = await render();
 
-    expect(html).toContain("Bats 1st · OF");
-    expect(html).not.toContain("Bats 1st · C<");
+    expect(html).toContain("Bats 1st · C<");
+    expect(html).not.toContain("Bats 1st · OF");
   });
 
   it("labels a named outfield row as its spot — the placeable CF, not OF", async () => {
@@ -249,7 +249,7 @@ describe("ReadinessPage with a decline", () => {
     expect(html).toContain("Bats 1st · SS");
   });
 
-  it("does not report a spot an allPlay team never fields", async () => {
+  it("reports an allPlay team's catcher uncovered when they declined", async () => {
     getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
@@ -265,10 +265,10 @@ describe("ReadinessPage with a decline", () => {
 
     const html = await render();
 
-    // Out, yes — but C is not a spot this team can fill, so it is not a hole.
+    // A real hole: C is a spot this team fills, so the coach is told.
     expect(html).toContain("Cal");
     expect(html).toContain("Needs attention");
-    expect(html).not.toContain("Positions uncovered");
+    expect(html).toContain("Positions uncovered");
   });
 
   it("reports a pinned outfield spot uncovered when its only kid declined", async () => {

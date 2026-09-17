@@ -32,10 +32,9 @@ describe("DIAMOND_GEOMETRY", () => {
 describe("FIELD_ART", () => {
   it("seats the catcher's spot on the home dirt circle", () => {
     // The catcher stands below home plate, so the dirt has to reach past that
-    // marker's bottom edge. Undersize it and the catcher — or, on an allPlay
-    // board, the disc that stands in for one — hangs off the dirt onto bare
-    // page, where a deliberate marker reads as a rendering artefact. Nothing
-    // errors; it just looks broken.
+    // marker's bottom edge. Undersize it and the catcher hangs off the dirt
+    // onto bare page, where a deliberate marker reads as a rendering
+    // artefact. Nothing errors; it just looks broken.
     const catcherBottom =
       POSITION_COORDS.CATCHER.y +
       DIAMOND_GEOMETRY.markerRadius -

@@ -25,10 +25,6 @@ import {
 } from "@/components/diamond-geometry";
 import { FieldArt } from "@/components/FieldArt";
 import { buildDiamondNames } from "@/lib/diamond-names";
-import {
-  NO_CATCHER_TEXT,
-  NoCatcherMarker,
-} from "@/components/NoCatcherMarker";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -43,7 +39,7 @@ import {
   storedPositions,
   type PositionsDraft,
 } from "@/lib/chart";
-import { POSITION_LABELS } from "@/lib/positions";
+import { ALL_POSITIONS, POSITION_LABELS } from "@/lib/positions";
 
 import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "../drag-activation";
 import { savePositionsAction } from "./actions";
@@ -131,7 +127,7 @@ export function PositionsEditor({
     }
     event.preventDefault();
 
-    const next = nextDroppableId(draft.positions, keyboardTarget.current, step);
+    const next = nextDroppableId(keyboardTarget.current, step);
     const targetRect = context.droppableRects.get(next);
     const activeRect = context.active?.rect.current.translated;
     if (!targetRect || !activeRect) {
@@ -303,11 +299,6 @@ function Field({
   diamondNames: ReadonlyMap<string, string>;
   declined: ReadonlySet<string>;
 }) {
-  // An allPlay board has no catcher. The spot is still drawn — as the disc
-  // that says nobody plays it — so the coach isn't left wondering whether the
-  // target failed to render.
-  const noCatcher = !draft.positions.includes("CATCHER");
-
   return (
     <section aria-label="Diamond">
       <div
@@ -326,12 +317,11 @@ function Field({
               basepaths the bare polygon used to be. Background only: the drop
               targets stay HTML, dnd-kit measurement is untouched. */}
           <FieldArt />
-          {noCatcher ? <NoCatcherMarker /> : null}
         </svg>
 
-        {noCatcher ? <p className="sr-only">{NO_CATCHER_TEXT}</p> : null}
-
-        {draft.positions.map((position) => (
+        {/* All nine, on every board: allPlay changes how many chips a spot
+            holds (`positionCapacity`), never which spots exist. */}
+        {ALL_POSITIONS.map((position) => (
           <PositionTarget
             key={position}
             position={position}

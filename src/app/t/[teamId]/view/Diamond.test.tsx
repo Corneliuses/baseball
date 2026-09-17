@@ -9,8 +9,8 @@ import {
   zoneHaloRadius,
 } from "@/components/diamond-geometry";
 import {
-  ALL_PLAY_INFIELD_POSITIONS,
   ALL_POSITIONS,
+  INFIELD_POSITIONS,
   OUTFIELD_POSITIONS,
 } from "@/lib/positions";
 
@@ -111,7 +111,7 @@ describe("diamond geometry", () => {
   it("never overlaps an outfield zone marker with an infield one", () => {
     for (const count of ZONE_SIZES) {
       for (const coord of outfieldZoneCoords(count)) {
-        for (const position of ALL_PLAY_INFIELD_POSITIONS) {
+        for (const position of INFIELD_POSITIONS) {
           expect(apart(coord, POSITION_COORDS[position])).toBeGreaterThan(
             markerRadius * 2,
           );
@@ -204,7 +204,7 @@ describe("guarded-player halo geometry", () => {
       const reach = radius + DIAMOND_GEOMETRY.haloStrokeWidth / 2;
 
       for (const zoneCoord of outfieldZoneCoords(size)) {
-        for (const position of ALL_PLAY_INFIELD_POSITIONS) {
+        for (const position of INFIELD_POSITIONS) {
           expect(apart(zoneCoord, POSITION_COORDS[position])).toBeGreaterThan(
             reach + markerRadius,
           );

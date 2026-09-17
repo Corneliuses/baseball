@@ -72,8 +72,7 @@ describe("chartRole on an allPlay team", () => {
     expect(chartRole(entry(1, "PITCHER"), allPlay)).toBe("Bats 1st · P");
   });
 
-  // The rule fieldedPositions exists for: an allPlay team fields no catcher and
-  // no named outfield, so a row left at one is in the outfield zone — which is
+  // A kid the coach hasn't pinned anywhere is in the outfield zone — which is
   // where both diamonds already draw that player.
   it("reads a null position as OF, never as bench", () => {
     expect(chartRole(entry(2), allPlay)).toBe("Bats 2nd · OF");
@@ -89,8 +88,8 @@ describe("chartRole on an allPlay team", () => {
     expect(chartRole(entry(null, "LEFT_FIELD"), allPlay)).toBe("LF");
   });
 
-  it("reads a stale CATCHER row as OF — the coach pitches", () => {
-    expect(chartRole(entry(5, "CATCHER"), allPlay)).toBe("Bats 5th · OF");
+  it("reads a CATCHER row as C — the league fields one (revised 2026-09-17)", () => {
+    expect(chartRole(entry(5, "CATCHER"), allPlay)).toBe("Bats 5th · C");
   });
 
   it("prints OF alone for a player with no batting slot", () => {
