@@ -32,13 +32,17 @@ import type { Position } from "@/generated/prisma/enums";
 import {
   buildPositionsDraft,
   nextDroppableId,
+  NOT_PLAYING_ID,
   POSITION_POOL_ID,
   positionOf,
   resolvePositionDrop,
+  sameIdSet,
   samePositions,
+  storedNotPlaying,
   storedPositions,
   type PositionsDraft,
 } from "@/lib/chart";
+import { NOT_PLAYING_LABEL } from "@/lib/chart-role";
 import { ALL_POSITIONS, POSITION_LABELS } from "@/lib/positions";
 
 import { MOUSE_ACTIVATION, TOUCH_ACTIVATION } from "../drag-activation";
@@ -55,6 +59,8 @@ export type PositionsEditorEntry = {
   playerName: string;
   jerseyNumber: number | null;
   position: Position | null;
+  /// Taken out of the chart by the coach. Absent reads as false.
+  notPlaying?: boolean;
 };
 
 type PositionsEditorProps = {
@@ -176,12 +182,21 @@ export function PositionsEditor({
       ),
     [entries],
   );
-  const edited = !samePositions(draft.assigned, original.assigned);
-  const saveable = !samePositions(draft.assigned, stored);
+  const storedOut = useMemo(() => storedNotPlaying(entries), [entries]);
+  // "Not playing" rides both questions, as in the batting editor: who is out is
+  // chart state the save writes.
+  const edited =
+    !samePositions(draft.assigned, original.assigned) ||
+    !sameIdSet(draft.notPlaying, original.notPlaying);
+  const saveable =
+    !samePositions(draft.assigned, stored) ||
+    !sameIdSet(draft.notPlaying, storedOut);
 
   function handleDragStart({ active }: DragStartEvent) {
+    const id = String(active.id);
     keyboardTarget.current =
-      positionOf(draft, String(active.id)) ?? POSITION_POOL_ID;
+      positionOf(draft, id) ??
+      (draft.notPlaying.includes(id) ? NOT_PLAYING_ID : POSITION_POOL_ID);
   }
 
   function handleDragEnd({ active, over }: DragEndEvent) {
@@ -222,6 +237,7 @@ export function PositionsEditor({
           diamondNames={diamondNames}
           declined={declined}
         />
+        <NotPlayingZone draft={draft} byId={byId} declined={declined} />
 
         <form
           action={savePositionsAction}
@@ -234,18 +250,34 @@ export function PositionsEditor({
             stashDraft(
               teamId,
               "positions",
-              Object.entries(draft.assigned).map(
-                ([position, entryIds]) =>
-                  `${POSITION_LABELS[position as Position]} — ${(
-                    (entryIds ?? []) as readonly string[]
-                  )
-                    .map((entryId) => byId.get(entryId)?.playerName ?? "—")
-                    .join(", ")}`,
-              ),
+              [
+                ...Object.entries(draft.assigned).map(
+                  ([position, entryIds]) =>
+                    `${POSITION_LABELS[position as Position]} — ${(
+                      (entryIds ?? []) as readonly string[]
+                    )
+                      .map((entryId) => byId.get(entryId)?.playerName ?? "—")
+                      .join(", ")}`,
+                ),
+                ...draft.notPlaying.map(
+                  (entryId) =>
+                    `${NOT_PLAYING_LABEL} — ${byId.get(entryId)?.playerName ?? "—"}`,
+                ),
+              ],
             )
           }
         >
           <input type="hidden" name="teamId" value={teamId} />
+          <input
+            type="hidden"
+            name="notPlaying"
+            value={JSON.stringify(draft.notPlaying)}
+          />
+          <input
+            type="hidden"
+            name="baselineNotPlaying"
+            value={JSON.stringify(storedOut)}
+          />
           <input
             type="hidden"
             name="positions"
@@ -433,6 +465,56 @@ function Zone({
           <p className="text-sm text-muted-foreground">{empty}</p>
         ) : (
           draft.pool.map((entryId) => {
+            const entry = byId.get(entryId);
+            return entry !== undefined ? (
+              <Chip
+                key={entryId}
+                entry={entry}
+                label={entry.playerName}
+                showJersey
+                declined={declined.has(entryId)}
+              />
+            ) : null;
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+/// Out of the chart entirely: not on a spot, not a substitute, and not in the
+/// general outfield. Below the diamond so it stays out of the way of the zone
+/// above it, which is where the coach's thumb returns between drags. Always
+/// rendered, allPlay included — there the zone is the outfield, so this is the
+/// only way a kid leaves the board.
+function NotPlayingZone({
+  draft,
+  byId,
+  declined,
+}: {
+  draft: PositionsDraft;
+  byId: Map<string, PositionsEditorEntry>;
+  declined: ReadonlySet<string>;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: NOT_PLAYING_ID });
+
+  return (
+    <section aria-label={NOT_PLAYING_LABEL}>
+      <h4 className="mb-2 text-sm font-medium text-muted-foreground">
+        {NOT_PLAYING_LABEL}
+      </h4>
+      <div
+        ref={setNodeRef}
+        className={`flex min-h-16 flex-wrap gap-2 rounded-md border-2 border-dashed p-3 ${
+          isOver ? "border-banana bg-banana/20" : "border-border"
+        }`}
+      >
+        {draft.notPlaying.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Drag a player here to take them out of the lineup and the field.
+          </p>
+        ) : (
+          draft.notPlaying.map((entryId) => {
             const entry = byId.get(entryId);
             return entry !== undefined ? (
               <Chip

@@ -552,6 +552,20 @@ production — the dev command can prompt, generate new migrations, and reset th
   the ordinary two-row zone, each keeping its own label. Reachable without an odd roster:
   pinning outfielders before placing the infield leaves nine unpinned on a twelve-player
   team.
+- **"Not playing" is a stored flag, because null/null cannot say it.** A kid with no batting
+  slot and no position is a substitute — or, on an allPlay team, in the general outfield —
+  so neither editor could take anyone out of the chart altogether. `RosterEntry.notPlaying`
+  is that state, and it **implies `battingOrder` and `position` are both null**: each editor's
+  save enforces it (the batting save nulls their position; the positions save nulls their
+  batting slot and, through `compactBattingOrder`, closes the gap they leave so `/view` and
+  the batting editor still agree on who bats where). The flag is written by *both* editors
+  and each save replaces the whole set, exactly like the two columns, so both guard it with
+  a `baselineNotPlaying` field beside `baseline` (`storedNotPlaying`). Read-side, a flagged
+  row is set aside at the top of `buildChartView` and `seatedEntryIds`, before anything is
+  counted — it cannot fill an outfield spot's capacity — and `chartRole` prints "Not playing"
+  unconditionally, unlike the opt-in `benchLabel`. Under allPlay the batting board keeps one
+  slot per *rostered* kid (not per playing kid) so a kid dragged back out of Not playing has
+  an empty slot to land in. Readiness needed no change: it already ignores a null/null row.
 - **Save and Cancel answer different questions in both chart editors**, and it is not
   redundancy. Cancel is "has the coach changed anything" (draft vs. the loaded draft); Save is
   "would writing change the database" (draft vs. `stored*`). They diverge on first render

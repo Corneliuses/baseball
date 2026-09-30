@@ -35,7 +35,7 @@ const ERROR_MESSAGES = messageTable({
   "too-many-slots":
     "The roster or team settings changed while you were editing. Reload and try again.",
   "missing-players":
-    "Every player needs a batting slot on this team. Reload and try again.",
+    "Every player needs a batting slot on this team, unless they are marked Not playing. Reload and try again.",
   "roster-changed":
     "The roster changed while you were editing — nothing was saved. Reload and try again.",
   "order-conflict": "The order couldn't be saved. Reload and try again.",
@@ -92,13 +92,15 @@ export default async function ChartPage({
       playerName: entry.playerName,
       jerseyNumber: entry.jerseyNumber,
       battingOrder: entry.battingOrder,
+      notPlaying: entry.notPlaying,
       player: { name: entry.playerName },
     })),
-  ).map(({ entryId, playerName, jerseyNumber, battingOrder }) => ({
+  ).map(({ entryId, playerName, jerseyNumber, battingOrder, notPlaying }) => ({
     entryId,
     playerName,
     jerseyNumber,
     battingOrder,
+    notPlaying,
   }));
 
   // Who has said they can't make the next game (#55). Read-only decoration:
@@ -170,8 +172,8 @@ export default async function ChartPage({
         <>
           <p className="text-sm text-muted-foreground">
             {team.allPlay
-              ? "Everyone bats — hold and drag to reorder. Dropping onto a player swaps the two."
-              : "Nine slots — hold and drag to reorder. Dropping onto a player swaps the two; drag someone below the line to take them out."}
+              ? "Everyone bats — hold and drag to reorder. Dropping onto a player swaps the two. Drag someone to Not playing to take them out of the chart."
+              : "Nine slots — hold and drag to reorder. Dropping onto a player swaps the two; drag someone below the line to take them out, or to Not playing to take them out of the chart altogether."}
           </p>
           <BattingOrderEditor
             // Remount whenever the server data changes (a save landed, an

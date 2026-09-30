@@ -6,15 +6,17 @@ import { z } from "zod";
 
 import {
   chartWriteFailure,
+  sameIdSet,
   sameOrder,
   storedBattingOrder,
+  storedNotPlaying,
   validateBattingOrder,
 } from "@/lib/chart";
 import { getChart, saveBattingOrder } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
-import { parseJson } from "./form-json";
+import { parseJson, parseJsonList } from "./form-json";
 
 function extractTeamId(formData: FormData): string {
   const teamId = String(formData.get("teamId")).trim();
@@ -33,6 +35,10 @@ const orderSchema = z.array(z.string().min(1).nullable()).max(50);
 /// only — `storedBattingOrder` omits benched entries rather than holding a
 /// slot for them.
 const baselineSchema = z.array(z.string().min(1)).max(50);
+
+/// Entry ids the coach took out of the chart, and the set the page loaded —
+/// the same shape as the baseline, since neither has empty slots.
+const idListSchema = z.array(z.string().min(1)).max(50);
 
 /**
  * Persist the standing batting order (#10).
@@ -58,7 +64,18 @@ export async function saveBattingOrderAction(formData: FormData) {
     const parsedBaseline = baselineSchema.safeParse(
       parseJson(formData.get("baseline")),
     );
-    if (!parsed.success || !parsedBaseline.success) {
+    const parsedNotPlaying = idListSchema.safeParse(
+      parseJsonList(formData.get("notPlaying")),
+    );
+    const parsedBaselineNotPlaying = idListSchema.safeParse(
+      parseJsonList(formData.get("baselineNotPlaying")),
+    );
+    if (
+      !parsed.success ||
+      !parsedBaseline.success ||
+      !parsedNotPlaying.success ||
+      !parsedBaselineNotPlaying.success
+    ) {
       redirect(`/t/${teamId}/chart?error=invalid-order`);
     }
 
@@ -74,6 +91,7 @@ export async function saveBattingOrderAction(formData: FormData) {
       parsed.data,
       entries.map((entry) => entry.entryId),
       team.allPlay,
+      parsedNotPlaying.data,
     );
     if (!result.ok) {
       redirect(`/t/${teamId}/chart?error=${result.reason}`);
@@ -91,11 +109,18 @@ export async function saveBattingOrderAction(formData: FormData) {
     //
     // Narrows the window rather than closing it — see the positions action for
     // why the read-then-write gap is left as it is.
-    if (!sameOrder(storedBattingOrder(entries), parsedBaseline.data)) {
+    //
+    // The not-playing set is guarded too, though it is not a batting column:
+    // this save replaces it wholesale, so a stale board would quietly put back
+    // a kid the other coach just took out (or take out one they put back).
+    if (
+      !sameOrder(storedBattingOrder(entries), parsedBaseline.data) ||
+      !sameIdSet(storedNotPlaying(entries), parsedBaselineNotPlaying.data)
+    ) {
       redirect(`/t/${teamId}/chart?error=chart-changed`);
     }
 
-    await saveBattingOrder(teamId, result.assignments);
+    await saveBattingOrder(teamId, result.assignments, result.notPlaying);
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {

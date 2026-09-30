@@ -191,6 +191,13 @@ model RosterEntry {
   /// read — and `savePositions` numbers it 0..n-1 per position on every save.
   positionSlot Int @default(0)
 
+  /// Taken out of the standing chart entirely — not batting, not fielding, not
+  /// a substitute, and (on an allPlay team) not in the general outfield either.
+  /// It is the one state a null `battingOrder` and a null `position` cannot
+  /// express. Implies both are null: the two chart saves clear them, so a
+  /// reader never has to ask "not playing, but batting third?".
+  notPlaying Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)

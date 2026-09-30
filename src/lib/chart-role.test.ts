@@ -132,3 +132,23 @@ describe("isBenched", () => {
     }
   });
 });
+
+describe("not playing", () => {
+  const out = { battingOrder: null, position: null, notPlaying: true };
+
+  it("says so on every team, with no opt-in — a coach's explicit word about a kid", () => {
+    expect(chartRole(out, true)).toBe("Not playing");
+    expect(chartRole(out, false)).toBe("Not playing");
+  });
+
+  it("wins over a stale order or position left on the row", () => {
+    expect(
+      chartRole({ battingOrder: 2, position: "SHORTSTOP", notPlaying: true }, false),
+    ).toBe("Not playing");
+  });
+
+  it("takes the quiet styling — isBenched agrees with the sentence, on allPlay too", () => {
+    expect(isBenched(out, true)).toBe(true);
+    expect(isBenched(out, false)).toBe(true);
+  });
+});

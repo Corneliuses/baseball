@@ -6,7 +6,10 @@ import { z } from "zod";
 
 import {
   chartWriteFailure,
+  compactBattingOrder,
+  sameIdSet,
   samePositions,
+  storedNotPlaying,
   storedPositions,
   validatePositions,
 } from "@/lib/chart";
@@ -15,7 +18,7 @@ import { getChart, savePositions } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
-import { parseJson } from "../form-json";
+import { parseJson, parseJsonList } from "../form-json";
 
 function extractTeamId(formData: FormData): string {
   const teamId = String(formData.get("teamId")).trim();
@@ -50,6 +53,10 @@ const positionsSchema = z
   )
   .refine((board) => Object.keys(board).length <= ALL_POSITIONS.length);
 
+/// Entry ids taken out of the chart, and the set the page loaded. Bounded like
+/// `orderSchema` next door.
+const idListSchema = z.array(z.string().min(1).max(64)).max(50);
+
 /**
  * Persist the standing positions chart (#11).
  *
@@ -72,7 +79,18 @@ export async function savePositionsAction(formData: FormData) {
     const parsedBaseline = positionsSchema.safeParse(
       parseJson(formData.get("baseline")),
     );
-    if (!parsed.success || !parsedBaseline.success) {
+    const parsedNotPlaying = idListSchema.safeParse(
+      parseJsonList(formData.get("notPlaying")),
+    );
+    const parsedBaselineNotPlaying = idListSchema.safeParse(
+      parseJsonList(formData.get("baselineNotPlaying")),
+    );
+    if (
+      !parsed.success ||
+      !parsedBaseline.success ||
+      !parsedNotPlaying.success ||
+      !parsedBaselineNotPlaying.success
+    ) {
       redirect(`/t/${teamId}/chart/positions?error=invalid-positions`);
     }
 
@@ -88,6 +106,7 @@ export async function savePositionsAction(formData: FormData) {
       parsed.data,
       entries.map((entry) => entry.entryId),
       team.allPlay,
+      parsedNotPlaying.data,
     );
     if (!result.ok) {
       redirect(`/t/${teamId}/chart/positions?error=${result.reason}`);
@@ -115,11 +134,25 @@ export async function savePositionsAction(formData: FormData) {
     // needs row locks or serializable isolation — not worth it for a handful
     // of coaches. Deliberate, and the reason to reach for a version column if
     // this ever needs to be exact.
-    if (!samePositions(storedPositions(entries), parsedBaseline.data)) {
+    //
+    // The not-playing set is guarded alongside the board, for the same reason
+    // as in the batting action: this save replaces it wholesale.
+    if (
+      !samePositions(storedPositions(entries), parsedBaseline.data) ||
+      !sameIdSet(storedNotPlaying(entries), parsedBaselineNotPlaying.data)
+    ) {
       redirect(`/t/${teamId}/chart/positions?error=chart-changed`);
     }
 
-    await savePositions(teamId, result.assignments);
+    // Taking a batter out of the chart leaves a hole in the batting order this
+    // editor doesn't otherwise touch; `compactBattingOrder` is null when
+    // nobody who left was batting, which leaves that column alone.
+    await savePositions(
+      teamId,
+      result.assignments,
+      result.notPlaying,
+      compactBattingOrder(entries, result.notPlaying),
+    );
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {

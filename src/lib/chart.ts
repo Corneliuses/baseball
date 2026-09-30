@@ -28,15 +28,25 @@ export type BattingDraft = {
   slots: (string | null)[];
   /// Rostered entries with no batting slot. Always empty when allPlay is true.
   unassigned: string[];
+  /// Entries the coach has taken out of the chart entirely. Neither in a slot
+  /// nor in `unassigned`: a substitute is waiting to play, these are not.
+  notPlaying: string[];
 };
 
 export type BattingChartEntry = {
   entryId: string;
   battingOrder: number | null;
+  /// Absent reads as false, so a caller that predates the flag is unchanged.
+  notPlaying?: boolean;
 };
 
-/// allPlay teams bat everyone; otherwise a standard 9-slot order, shrunk to
-/// the roster when the roster is smaller than 9.
+/// allPlay teams bat everyone who is playing; otherwise a standard 9-slot
+/// order, shrunk to the roster when the roster is smaller than 9.
+///
+/// `rosterSize` counts **every** roster entry, not-playing ones included: a kid
+/// dragged back out of "Not playing" needs an empty slot to land in, so an
+/// allPlay board keeps one slot per rostered kid and lets the trailing ones sit
+/// empty (an empty slot collapses on save, like any other).
 export function slotCount(rosterSize: number, allPlay: boolean): number {
   return allPlay ? rosterSize : Math.min(9, rosterSize);
 }
@@ -48,19 +58,25 @@ export function slotCount(rosterSize: number, allPlay: boolean): number {
  * packed densely into slots in battingOrder order; overflow lands in the
  * unassigned pool, visible before anything is written.
  *
- * When allPlay is true every player gets a slot: entries with no battingOrder
- * fill the remaining slots in the order given (callers pass roster order), so
- * the pool is always empty. Nothing is persisted until Save.
+ * When allPlay is true every *playing* player gets a slot: entries with no
+ * battingOrder fill the remaining slots in the order given (callers pass roster
+ * order), so the pool is always empty. Entries flagged `notPlaying` are in
+ * neither place — they go to `notPlaying`, whatever battingOrder they carry.
+ * Nothing is persisted until Save.
  */
 export function buildBattingDraft(
   entries: readonly BattingChartEntry[],
   allPlay: boolean,
 ): BattingDraft {
   const count = slotCount(entries.length, allPlay);
-  const assigned = entries
+  const notPlaying = entries
+    .filter((entry) => entry.notPlaying)
+    .map((entry) => entry.entryId);
+  const playing = entries.filter((entry) => !entry.notPlaying);
+  const assigned = playing
     .filter((entry) => entry.battingOrder !== null)
     .sort((a, b) => a.battingOrder! - b.battingOrder!);
-  const rest = entries.filter((entry) => entry.battingOrder === null);
+  const rest = playing.filter((entry) => entry.battingOrder === null);
 
   const slots: (string | null)[] = new Array(count).fill(null);
   const unassigned: string[] = [];
@@ -84,7 +100,7 @@ export function buildBattingDraft(
     }
   }
 
-  return { slots, unassigned };
+  return { slots, unassigned, notPlaying };
 }
 
 /**
@@ -95,6 +111,9 @@ export function buildBattingDraft(
  *   - entry was unassigned, slot occupied → still a swap: the entry takes the
  *     slot and the displaced player takes the entry's place in the pool.
  *   - entry was unassigned, slot empty → the entry just takes the slot.
+ *   - entry was not playing → the same two rules, with the displaced player
+ *     going to "Not playing" rather than the pool: a swap hands back the
+ *     dragged player's old place, wherever that was.
  *
  * Out-of-range slots, unknown entries, and self-drops return the draft
  * unchanged. Never mutates its input.
@@ -110,7 +129,8 @@ export function placeInSlot(
 
   const fromSlot = draft.slots.indexOf(entryId);
   const fromPool = draft.unassigned.indexOf(entryId);
-  if (fromSlot === -1 && fromPool === -1) {
+  const fromNotPlaying = draft.notPlaying.indexOf(entryId);
+  if (fromSlot === -1 && fromPool === -1 && fromNotPlaying === -1) {
     return draft;
   }
   if (fromSlot === slot) {
@@ -119,31 +139,86 @@ export function placeInSlot(
 
   const slots = [...draft.slots];
   const unassigned = [...draft.unassigned];
+  const notPlaying = [...draft.notPlaying];
   const occupant = slots[slot];
 
   slots[slot] = entryId;
   if (fromSlot !== -1) {
     slots[fromSlot] = occupant;
-  } else if (occupant !== null) {
-    unassigned.splice(fromPool, 1, occupant);
   } else {
-    unassigned.splice(fromPool, 1);
+    // Came from a holding area: the displaced player (if any) takes the
+    // dragged player's place in that same area.
+    const area = fromPool !== -1 ? unassigned : notPlaying;
+    const index = fromPool !== -1 ? fromPool : fromNotPlaying;
+    if (occupant !== null) {
+      area.splice(index, 1, occupant);
+    } else {
+      area.splice(index, 1);
+    }
   }
 
-  return { slots, unassigned };
+  return { slots, unassigned, notPlaying };
 }
 
-/// Drop onto the unassigned pool: the entry leaves its slot. Only reachable
-/// when the pool is rendered (allPlay = false). No-op if already unassigned.
+/// Drop onto the unassigned pool: the entry leaves its slot — or comes back
+/// from "Not playing" to wait as a substitute. Only reachable when the pool is
+/// rendered (allPlay = false). No-op if already unassigned.
 export function unassign(draft: BattingDraft, entryId: string): BattingDraft {
   const fromSlot = draft.slots.indexOf(entryId);
-  if (fromSlot === -1) {
+  if (fromSlot !== -1) {
+    const slots = [...draft.slots];
+    slots[fromSlot] = null;
+    return {
+      slots,
+      unassigned: [...draft.unassigned, entryId],
+      notPlaying: draft.notPlaying,
+    };
+  }
+  if (draft.notPlaying.includes(entryId)) {
+    return {
+      slots: draft.slots,
+      unassigned: [...draft.unassigned, entryId],
+      notPlaying: draft.notPlaying.filter((id) => id !== entryId),
+    };
+  }
+  return draft;
+}
+
+/// Drop onto "Not playing": the entry leaves its slot or the pool and is out of
+/// the chart altogether. Reachable on every team, allPlay included — it is the
+/// one way to take a kid off an allPlay board, where everyone else bats.
+/// No-op if already not playing or unknown.
+export function markNotPlaying(
+  draft: BattingDraft,
+  entryId: string,
+): BattingDraft {
+  if (draft.notPlaying.includes(entryId)) {
+    return draft;
+  }
+  const fromSlot = draft.slots.indexOf(entryId);
+  const fromPool = draft.unassigned.indexOf(entryId);
+  if (fromSlot === -1 && fromPool === -1) {
     return draft;
   }
 
   const slots = [...draft.slots];
-  slots[fromSlot] = null;
-  return { slots, unassigned: [...draft.unassigned, entryId] };
+  if (fromSlot !== -1) {
+    slots[fromSlot] = null;
+  }
+  return {
+    slots,
+    unassigned: draft.unassigned.filter((id) => id !== entryId),
+    notPlaying: [...draft.notPlaying, entryId],
+  };
+}
+
+/// Order-insensitive id-list comparison, for the not-playing set: who is out
+/// matters, the order they were dragged there in does not.
+export function sameIdSet(
+  a: readonly string[],
+  b: readonly string[],
+): boolean {
+  return a.length === b.length && a.every((id) => b.includes(id));
 }
 
 /// Dirty check for Save/Cancel enablement. Only slots matter — pool order is
@@ -175,9 +250,18 @@ export function storedBattingOrder(
   entries: readonly BattingChartEntry[],
 ): string[] {
   return entries
-    .filter((entry) => entry.battingOrder !== null)
+    .filter((entry) => entry.battingOrder !== null && !entry.notPlaying)
     .sort((a, b) => a.battingOrder! - b.battingOrder!)
     .map((entry) => entry.entryId);
+}
+
+/// Who the database currently holds as not playing — the third lost-update
+/// baseline, beside the order and the board. Both editors write this flag (a
+/// kid can be taken out from either), so both guard it.
+export function storedNotPlaying(
+  entries: readonly { entryId: string; notPlaying?: boolean }[],
+): string[] {
+  return entries.filter((entry) => entry.notPlaying).map((entry) => entry.entryId);
 }
 
 // ---------------------------------------------------------------------------
@@ -186,6 +270,10 @@ export function storedBattingOrder(
 
 /// Droppable id of the unassigned pool container.
 export const UNASSIGNED_ID = "unassigned";
+
+/// Droppable id of the "Not playing" zone, shared by both editors so a drag
+/// means the same thing on either board.
+export const NOT_PLAYING_ID = "not-playing";
 
 /// Sortable item id for an empty slot (occupied slots use the entry id).
 export function emptySlotId(index: number): string {
@@ -214,6 +302,9 @@ export function resolveDrop(
   if (overId === UNASSIGNED_ID) {
     return unassign(draft, activeId);
   }
+  if (overId === NOT_PLAYING_ID) {
+    return markNotPlaying(draft, activeId);
+  }
 
   const emptyIndex = parseEmptySlotId(overId);
   const slot = emptyIndex ?? draft.slots.indexOf(overId);
@@ -236,7 +327,12 @@ export type BattingOrderInvalidReason =
   | "missing-players";
 
 export type BattingOrderValidation =
-  | { ok: true; assignments: BattingOrderAssignment[] }
+  | {
+      ok: true;
+      assignments: BattingOrderAssignment[];
+      /// The submitted not-playing set, verified against the roster.
+      notPlaying: string[];
+    }
   | { ok: false; reason: BattingOrderInvalidReason };
 
 /**
@@ -255,11 +351,16 @@ export type BattingOrderValidation =
  *
  * Checking against the roster and allPlay loaded at save time also catches a
  * roster edit or settings toggle that raced the editing session.
+ *
+ * `notPlayingIds` are the kids the coach took out of the chart. Someone both
+ * seated and not playing is `duplicate-entry` — no honest board produces it —
+ * and under allPlay "everyone bats" now means everyone *not* in that set.
  */
 export function validateBattingOrder(
   orderedIds: readonly (string | null)[],
   rosterEntryIds: readonly string[],
   allPlay: boolean,
+  notPlayingIds: readonly string[] = [],
 ): BattingOrderValidation {
   const count = slotCount(rosterEntryIds.length, allPlay);
   if (orderedIds.length > count) {
@@ -284,11 +385,48 @@ export function validateBattingOrder(
     assignments.push({ entryId, battingOrder: assignments.length + 1 });
   }
 
-  if (allPlay && seen.size < rosterEntryIds.length) {
+  const notPlaying = new Set<string>();
+  for (const entryId of notPlayingIds) {
+    if (!roster.has(entryId)) {
+      return { ok: false, reason: "unknown-entry" };
+    }
+    if (seen.has(entryId) || notPlaying.has(entryId)) {
+      return { ok: false, reason: "duplicate-entry" };
+    }
+    notPlaying.add(entryId);
+  }
+
+  if (allPlay && seen.size + notPlaying.size < rosterEntryIds.length) {
     return { ok: false, reason: "missing-players" };
   }
 
-  return { ok: true, assignments };
+  return { ok: true, assignments, notPlaying: [...notPlaying] };
+}
+
+/**
+ * The batting order renumbered after `removedIds` leave it, or null when none
+ * of them was batting (nothing to rewrite).
+ *
+ * The positions editor can take a kid out of the chart too, and "not playing"
+ * clears their batting slot. Leaving the others at 1, 2, 4 would persist the
+ * gap `validateBattingOrder` exists to prevent — /view would say a player bats
+ * 4th while the batting editor, which packs on load, shows them 3rd. So the
+ * survivors close ranks, in their existing order.
+ */
+export function compactBattingOrder(
+  entries: readonly BattingChartEntry[],
+  removedIds: readonly string[],
+): BattingOrderAssignment[] | null {
+  const removed = new Set(removedIds);
+  const batting = entries
+    .filter((entry) => entry.battingOrder !== null)
+    .sort((a, b) => a.battingOrder! - b.battingOrder!);
+  if (!batting.some((entry) => removed.has(entry.entryId))) {
+    return null;
+  }
+  return batting
+    .filter((entry) => !removed.has(entry.entryId))
+    .map((entry, index) => ({ entryId: entry.entryId, battingOrder: index + 1 }));
 }
 
 // ---------------------------------------------------------------------------
@@ -314,11 +452,17 @@ export type PositionsDraft = {
   /// general outfield zone under allPlay, the bench otherwise. Both persist as
   /// null.
   pool: string[];
+  /// Entries the coach has taken out of the chart entirely — on no spot and in
+  /// neither the outfield zone nor the substitutes. Persists as the flag, with
+  /// the position null.
+  notPlaying: string[];
 };
 
 export type PositionChartEntry = {
   entryId: string;
   position: Position | null;
+  /// Absent reads as false, so a caller that predates the flag is unchanged.
+  notPlaying?: boolean;
 };
 
 /// Where `entryId` currently stands, or null if they're in the pool or absent.
@@ -351,10 +495,13 @@ export function buildPositionsDraft(
 ): PositionsDraft {
   const assigned: Partial<Record<Position, string[]>> = {};
   const pool: string[] = [];
+  const notPlaying: string[] = [];
 
   for (const entry of entries) {
     const { position } = entry;
-    if (
+    if (entry.notPlaying) {
+      notPlaying.push(entry.entryId);
+    } else if (
       position !== null &&
       (assigned[position]?.length ?? 0) < positionCapacity(position, allPlay)
     ) {
@@ -364,7 +511,7 @@ export function buildPositionsDraft(
     }
   }
 
-  return { allPlay, assigned, pool };
+  return { allPlay, assigned, pool, notPlaying };
 }
 
 /**
@@ -388,7 +535,8 @@ export function placeAtPosition(
 ): PositionsDraft {
   const from = positionOf(draft, entryId);
   const fromPool = draft.pool.indexOf(entryId);
-  if (from === null && fromPool === -1) {
+  const fromNotPlaying = draft.notPlaying.indexOf(entryId);
+  if (from === null && fromPool === -1 && fromNotPlaying === -1) {
     return draft;
   }
   if (from === position) {
@@ -397,6 +545,7 @@ export function placeAtPosition(
 
   const assigned = { ...draft.assigned };
   const pool = [...draft.pool];
+  const notPlaying = [...draft.notPlaying];
   const target = [...(assigned[position] ?? [])];
   const capacity = positionCapacity(position, draft.allPlay);
 
@@ -416,25 +565,39 @@ export function placeAtPosition(
     } else {
       delete assigned[from];
     }
-  } else if (displaced !== undefined) {
-    pool.splice(fromPool, 1, displaced);
   } else {
-    pool.splice(fromPool, 1);
+    // Came from a holding area: the displaced player (if any) takes the
+    // dragged player's place in that same area.
+    const area = fromPool !== -1 ? pool : notPlaying;
+    const index = fromPool !== -1 ? fromPool : fromNotPlaying;
+    if (displaced !== undefined) {
+      area.splice(index, 1, displaced);
+    } else {
+      area.splice(index, 1);
+    }
   }
 
-  return { allPlay: draft.allPlay, assigned, pool };
+  return { allPlay: draft.allPlay, assigned, pool, notPlaying };
 }
 
-/// Drop onto the zone: the entry leaves the diamond. Under allPlay that means
-/// the general outfield, otherwise the bench — both are `position = null`.
-/// No-op for an entry already pooled.
+/// Drop onto the zone: the entry leaves the diamond — or comes back from "Not
+/// playing". Under allPlay that means the general outfield, otherwise the bench
+/// — both are `position = null`. No-op for an entry already pooled.
 export function unassignPosition(
   draft: PositionsDraft,
   entryId: string,
 ): PositionsDraft {
   const from = positionOf(draft, entryId);
   if (from === null) {
-    return draft;
+    if (!draft.notPlaying.includes(entryId)) {
+      return draft;
+    }
+    return {
+      allPlay: draft.allPlay,
+      assigned: draft.assigned,
+      pool: [...draft.pool, entryId],
+      notPlaying: draft.notPlaying.filter((id) => id !== entryId),
+    };
   }
 
   const assigned = { ...draft.assigned };
@@ -448,6 +611,40 @@ export function unassignPosition(
     allPlay: draft.allPlay,
     assigned,
     pool: [...draft.pool, entryId],
+    notPlaying: draft.notPlaying,
+  };
+}
+
+/// Drop onto "Not playing": the entry leaves its spot or the zone and is out of
+/// the chart altogether. The one way to take a kid off an allPlay board, where
+/// the zone is the outfield and everyone not on a spot is playing it.
+/// No-op if already not playing or unknown.
+export function markPositionNotPlaying(
+  draft: PositionsDraft,
+  entryId: string,
+): PositionsDraft {
+  if (draft.notPlaying.includes(entryId)) {
+    return draft;
+  }
+  const from = positionOf(draft, entryId);
+  if (from === null && !draft.pool.includes(entryId)) {
+    return draft;
+  }
+
+  const assigned = { ...draft.assigned };
+  if (from !== null) {
+    const remaining = (assigned[from] ?? []).filter((id) => id !== entryId);
+    if (remaining.length > 0) {
+      assigned[from] = remaining;
+    } else {
+      delete assigned[from];
+    }
+  }
+  return {
+    allPlay: draft.allPlay,
+    assigned,
+    pool: draft.pool.filter((id) => id !== entryId),
+    notPlaying: [...draft.notPlaying, entryId],
   };
 }
 
@@ -490,7 +687,7 @@ export function storedPositions(
   for (const entry of entries) {
     // Every row is kept, capacity or not — this is the database's answer, and
     // `samePositions` is order-insensitive, so entry order doesn't matter.
-    if (entry.position !== null) {
+    if (entry.position !== null && !entry.notPlaying) {
       (stored[entry.position] ??= []).push(entry.entryId);
     }
   }
@@ -518,6 +715,9 @@ export function resolvePositionDrop(
   if (overId === POSITION_POOL_ID) {
     return unassignPosition(draft, activeId);
   }
+  if (overId === NOT_PLAYING_ID) {
+    return markPositionNotPlaying(draft, activeId);
+  }
 
   const target =
     ALL_POSITIONS.find((position) => position === overId) ??
@@ -532,11 +732,11 @@ export function resolvePositionDrop(
  * A flat cycle, not spatial arrow navigation: the diamond's targets don't sit
  * on a grid, so "what is left of shortstop" has no answer a coach could
  * predict, whereas P → C → 1B → … → zone → P is the order the position labels
- * already imply. The same cycle on every board: allPlay changes how many kids
+ * already imply, with "Not playing" last. The same cycle on every board: allPlay changes how many kids
  * a spot holds, never which spots exist.
  */
 export function nextDroppableId(currentId: string, step: 1 | -1): string {
-  const ids: string[] = [...ALL_POSITIONS, POSITION_POOL_ID];
+  const ids: string[] = [...ALL_POSITIONS, POSITION_POOL_ID, NOT_PLAYING_ID];
   const index = ids.indexOf(currentId);
   if (index === -1) {
     return ids[0];
@@ -560,7 +760,12 @@ export type PositionsInvalidReason =
   | "position-full";
 
 export type PositionsValidation =
-  | { ok: true; assignments: PositionAssignment[] }
+  | {
+      ok: true;
+      assignments: PositionAssignment[];
+      /// The submitted not-playing set, verified against the roster.
+      notPlaying: string[];
+    }
   | { ok: false; reason: PositionsInvalidReason };
 
 /**
@@ -586,6 +791,7 @@ export function validatePositions(
   submitted: Readonly<Record<string, readonly string[]>>,
   rosterEntryIds: readonly string[],
   allPlay: boolean,
+  notPlayingIds: readonly string[] = [],
 ): PositionsValidation {
   const known = new Set<string>(ALL_POSITIONS);
 
@@ -621,7 +827,20 @@ export function validatePositions(
     }
   }
 
-  return { ok: true, assignments };
+  // Someone standing on a spot and also not playing is a forged or garbled
+  // POST, the same verdict as one kid on two spots.
+  const notPlaying = new Set<string>();
+  for (const entryId of notPlayingIds) {
+    if (!roster.has(entryId)) {
+      return { ok: false, reason: "unknown-entry" };
+    }
+    if (seen.has(entryId) || notPlaying.has(entryId)) {
+      return { ok: false, reason: "duplicate-entry" };
+    }
+    notPlaying.add(entryId);
+  }
+
+  return { ok: true, assignments, notPlaying: [...notPlaying] };
 }
 
 // ---------------------------------------------------------------------------

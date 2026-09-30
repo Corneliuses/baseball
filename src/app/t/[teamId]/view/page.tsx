@@ -310,6 +310,33 @@ export default async function ViewPage({
             </Card>
           ) : null}
 
+          {chart.notPlaying.length > 0 ? (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Not playing</CardTitle>
+                <CardDescription>
+                  Out of the batting order and the field chart for now.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2">
+                  {chart.notPlaying.map((player, index) => (
+                    <ChartRow
+                      key={player.playerId}
+                      player={player}
+                      slot=""
+                      index={index}
+                      // No RSVP tag either: whether a kid who isn't in the
+                      // chart is coming to Saturday changes nothing on it.
+                      showRsvp={false}
+                      isGuarded={guardedPlayerIds.has(player.playerId)}
+                    />
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {showRsvp ? (
             <>
               <StitchDivider className="mt-6" />

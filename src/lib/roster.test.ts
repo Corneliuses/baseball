@@ -582,7 +582,7 @@ describe("saveBattingOrder", () => {
 
     expect(updateManyRosterEntries).toHaveBeenCalledWith({
       where: { teamId: "team-1" },
-      data: { battingOrder: null },
+      data: { battingOrder: null, notPlaying: false },
     });
   });
 
@@ -620,6 +620,87 @@ describe("saveBattingOrder", () => {
   });
 });
 
+describe("saveBattingOrder — not playing", () => {
+  beforeEach(() => {
+    transaction.mockResolvedValue([]);
+  });
+
+  it("clears the flag team-wide, then sets it for the submitted kids and takes them off the diamond", async () => {
+    updateManyRosterEntries
+      .mockReturnValueOnce("phase-1")
+      .mockReturnValueOnce("flag");
+    updateRosterEntry.mockReturnValueOnce("upd-a");
+
+    await saveBattingOrder(
+      "team-1",
+      [{ entryId: "entry-a", battingOrder: 1 }],
+      ["entry-b"],
+    );
+
+    expect(transaction).toHaveBeenCalledWith(["phase-1", "upd-a", "flag"]);
+    expect(updateManyRosterEntries).toHaveBeenNthCalledWith(2, {
+      where: { teamId: "team-1", id: { in: ["entry-b"] } },
+      data: { notPlaying: true, position: null, positionSlot: 0 },
+    });
+  });
+
+  it("issues no flag statement when nobody is out", async () => {
+    await saveBattingOrder("team-1", []);
+
+    expect(updateManyRosterEntries).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("savePositions — not playing", () => {
+  beforeEach(() => {
+    transaction.mockResolvedValue([]);
+  });
+
+  it("sets the flag and nulls the batting slot for the submitted kids", async () => {
+    updateManyRosterEntries
+      .mockReturnValueOnce("phase-1")
+      .mockReturnValueOnce("flag");
+
+    await savePositions("team-1", [], ["entry-b"]);
+
+    expect(transaction).toHaveBeenCalledWith(["phase-1", "flag"]);
+    expect(updateManyRosterEntries).toHaveBeenNthCalledWith(2, {
+      where: { teamId: "team-1", id: { in: ["entry-b"] } },
+      data: { notPlaying: true, battingOrder: null },
+    });
+  });
+
+  it("rewrites the batting order in two phases when a batter left it", async () => {
+    updateManyRosterEntries
+      .mockReturnValueOnce("phase-1")
+      .mockReturnValueOnce("flag")
+      .mockReturnValueOnce("null-batting");
+    updateRosterEntry.mockReturnValueOnce("renumber-a");
+
+    await savePositions("team-1", [], ["entry-b"], [
+      { entryId: "entry-a", battingOrder: 1 },
+    ]);
+
+    // Null-all before any renumber: the unique index is not deferrable.
+    expect(transaction).toHaveBeenCalledWith([
+      "phase-1",
+      "flag",
+      "null-batting",
+      "renumber-a",
+    ]);
+    expect(updateManyRosterEntries).toHaveBeenNthCalledWith(3, {
+      where: { teamId: "team-1" },
+      data: { battingOrder: null },
+    });
+  });
+
+  it("leaves the batting column alone when told nothing changed there", async () => {
+    await savePositions("team-1", [], []);
+
+    expect(updateManyRosterEntries).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("savePositions", () => {
   beforeEach(() => {
     // Array-form $transaction, as in saveBattingOrder above.
@@ -644,7 +725,7 @@ describe("savePositions", () => {
 
     expect(updateManyRosterEntries).toHaveBeenCalledWith({
       where: { teamId: "team-1" },
-      data: { position: null, positionSlot: 0 },
+      data: { position: null, positionSlot: 0, notPlaying: false },
     });
   });
 

@@ -15,6 +15,16 @@
  * A field that is absent entirely stringifies to "null", which parses cleanly
  * and then fails the schema — the same outcome by a different route.
  */
+/**
+ * `parseJson` for a field an older form never sent: absent means "an empty
+ * list", not a failure. The not-playing fields landed after both editors
+ * already posted without them, and a tab left open across that deploy still
+ * submits the old shape — which honestly says nobody is not playing.
+ */
+export function parseJsonList(value: FormDataEntryValue | null): unknown {
+  return value === null ? [] : parseJson(value);
+}
+
 export function parseJson(value: FormDataEntryValue | null): unknown {
   try {
     return JSON.parse(String(value));

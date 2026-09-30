@@ -21,6 +21,10 @@ export function ordinal(n: number): string {
   return `${n}th`;
 }
 
+/// The word for a kid the coach has taken out of the chart, on every page a
+/// family reads and on the coach's own drop zones.
+export const NOT_PLAYING_LABEL = "Not playing";
+
 export type ChartRoleOptions = {
   /**
    * What to print when this team fields no spot for the player — "Substitute"
@@ -63,10 +67,15 @@ export type ChartRoleOptions = {
  * and the readiness list both do.
  */
 export function chartRole(
-  entry: Pick<ChartViewEntry, "battingOrder" | "position">,
+  entry: Pick<ChartViewEntry, "battingOrder" | "position"> &
+    Partial<Pick<ChartViewEntry, "notPlaying">>,
   allPlay: boolean,
   { benchLabel }: ChartRoleOptions = {},
 ): string {
+  // Out of the chart altogether: the coach said so, which is a statement a
+  // parent needs in every context, so unlike `benchLabel` it is never opt-in.
+  if (entry.notPlaying) return NOT_PLAYING_LABEL;
+
   const parts: string[] = [];
   if (entry.battingOrder !== null) parts.push(`Bats ${ordinal(entry.battingOrder)}`);
 
@@ -94,9 +103,12 @@ export function chartRole(
  * two agree on every shape of entry.
  */
 export function isBenched(
-  entry: Pick<ChartViewEntry, "battingOrder" | "position">,
+  entry: Pick<ChartViewEntry, "battingOrder" | "position"> &
+    Partial<Pick<ChartViewEntry, "notPlaying">>,
   allPlay: boolean,
 ): boolean {
+  // Not playing is the quietest state of all, so it takes the quiet styling.
+  if (entry.notPlaying) return true;
   if (entry.battingOrder !== null) return false;
   if (allPlay) return false;
   return entry.position === null;
