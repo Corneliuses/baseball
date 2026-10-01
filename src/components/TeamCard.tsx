@@ -76,9 +76,16 @@ export function TeamCard({
     </Card>
   );
 
+  // prefetch={false}: /t/[teamId]/loading.tsx makes every team route
+  // prefetchable "down to the first loading boundary", and that boundary sits
+  // under the team layout. A prefetch would therefore run the layout's access
+  // check and team queries for every card that scrolls into view, on every
+  // visit to /, for an owner who sees every team the app has ever had. With
+  // prefetch off, a tap waits for that same layout once, then shows the team
+  // header with the loading ball under it.
   if (isClickable) {
     return (
-      <Link href={`/t/${id}`} className="block">
+      <Link href={`/t/${id}`} prefetch={false} className="block">
         {content}
       </Link>
     );

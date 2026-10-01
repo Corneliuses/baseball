@@ -1,5 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
+
+// next/link renders no attribute for its prefetch prop, so the real component
+// cannot show whether a card prefetches. This stand-in renders a plain anchor
+// and writes the prop onto it; href and children behave as before.
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    prefetch,
+    children,
+    ...rest
+  }: {
+    href: string;
+    prefetch?: boolean | null;
+    children: ReactNode;
+  }) => (
+    <a href={href} data-prefetch={String(prefetch)} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 import { TeamCard } from "./TeamCard";
 
 describe("TeamCard", () => {
@@ -62,5 +84,15 @@ describe("TeamCard", () => {
 
     const link = screen.getByRole("link");
     expect(link).toHaveAttribute("href", "/t/team-1");
+  });
+
+  it("does not prefetch the team it links to", () => {
+    // /t/[teamId]/loading.tsx makes team routes prefetchable down to that
+    // boundary, which sits under the team layout. A prefetching card would run
+    // the layout's access check and team queries for every card in view, on
+    // every visit to /. See the comment beside the Link in TeamCard.tsx.
+    render(<TeamCard {...baseProps} isClickable={true} />);
+
+    expect(screen.getByRole("link")).toHaveAttribute("data-prefetch", "false");
   });
 });

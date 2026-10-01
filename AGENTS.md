@@ -267,6 +267,35 @@ production — the dev command can prompt, generate new migrations, and reset th
   `prisma-client-api` were kept (from `github:prisma/skills`, MIT). **If anyone re-runs
   `prisma init`, remove the rest again.** `prisma-cli/SKILL.md` was edited locally to drop
   a dangling reference to the uninstalled `prisma-compute` skill.
+- **The loading ball is two `loading.tsx` files, and there is deliberately no root one.**
+  Every page under `/t/[teamId]` reads the database on demand, so a tab tap used to show
+  nothing until the new page's data came back. `src/app/t/[teamId]/loading.tsx` (the shared
+  `LoadingInterstitial`, a spinning baseball) is the Suspense fallback Next puts around each
+  page beneath the team layout. Tab-to-tab, the header and nav stay mounted and the ball
+  shows under them at once. It renders *inside* that layout, so it must not wrap
+  `PageContainer`, or two header bands flash. `src/app/profile/loading.tsx` covers the one
+  nav tab outside `/t`, and that one *does* wrap `PageContainer`, because the root layout
+  draws no chrome. All of this was checked against a production build of this Next version,
+  not inferred from the docs.
+
+  **A `src/app/loading.tsx` would look like the tidy version, and it changes every status
+  code in the app.** A page streamed behind a fallback has already sent its headers, so a
+  server `notFound()` or `redirect()` beneath it answers **200** and finishes in the
+  browser, instead of 404 or 307. At the root that reaches the team layout's membership
+  check and the sign-in bounces. The team-level boundary carries the same cost for a
+  *page's* own `notFound()`/`redirect()` on a cold load. The membership check is untouched,
+  because it runs in the layout above that boundary.
+
+  **Arriving at a team waits for the team layout, then shows the ball.** The layout's reads
+  (`requireTeamAccess`, `getTeamById`, the switcher's team list) happen before any boundary
+  beneath it exists, and without Cache Components Next blocks a navigation on a layout's
+  uncached reads (`file-conventions/loading.md`). So `TeamSwitcher` and the cards on `/`
+  hold the old page for that long, then show the team header with the ball. The cards also
+  pass `prefetch={false}`. A `loading.tsx` makes a dynamic route prefetchable "down to the
+  first loading boundary", which here means *running the team layout*, queries and all, for
+  every card in view on every visit to `/`. Tabs inside a team prefetch nothing dynamic,
+  because the layout they share is already mounted. Don't move data reads up into the team
+  layout to tidy a page: everything it reads is what an arrival waits on.
 - **Three surfaces paint `FieldArt`, and their fences are the banana budget.** design-plan.md
   §2 allows exactly one Banana Yellow element per screen. `FieldArt` takes a `fence` prop
   because the wall is the loudest thing it paints: the positions editor spends its banana
