@@ -15,7 +15,18 @@
 /// forbids anything that loops forever; this loops only while a submission is
 /// in flight, and the label beside it ("Sending…") carries the same news in
 /// words — so a reader who gets no motion at all still learns the form is busy.
-export function BaseballSpinner({ className = "" }: { className?: string }) {
+///
+/// `seamClassName` lets a caller colour the two seams on their own — the
+/// navigation interstitial stitches them in seam red at 56px, where a ball
+/// drawn in one colour reads as a ring. Inside a button it stays unset, so the
+/// whole glyph follows the button's text colour as before.
+export function BaseballSpinner({
+  className = "",
+  seamClassName,
+}: {
+  className?: string;
+  seamClassName?: string;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -28,8 +39,18 @@ export function BaseballSpinner({ className = "" }: { className?: string }) {
     >
       <circle cx="12" cy="12" r="8.5" strokeWidth={1.75} />
       {/* The two seams, bowing away from each other the way they do on a ball. */}
-      <path d="M6.2 6.2a9 9 0 013.1 11.6" strokeWidth={1.5} strokeDasharray="1.6 2" />
-      <path d="M17.8 17.8a9 9 0 00-3.1-11.6" strokeWidth={1.5} strokeDasharray="1.6 2" />
+      <path
+        d="M6.2 6.2a9 9 0 013.1 11.6"
+        strokeWidth={1.5}
+        strokeDasharray="1.6 2"
+        className={seamClassName}
+      />
+      <path
+        d="M17.8 17.8a9 9 0 00-3.1-11.6"
+        strokeWidth={1.5}
+        strokeDasharray="1.6 2"
+        className={seamClassName}
+      />
     </svg>
   );
 }

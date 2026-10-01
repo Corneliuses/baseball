@@ -267,6 +267,20 @@ production — the dev command can prompt, generate new migrations, and reset th
   `prisma-client-api` were kept (from `github:prisma/skills`, MIT). **If anyone re-runs
   `prisma init`, remove the rest again.** `prisma-cli/SKILL.md` was edited locally to drop
   a dangling reference to the uninstalled `prisma-compute` skill.
+- **Two `loading.tsx` files, and each covers a leg the other cannot.** Every page under
+  `/t/[teamId]` reads the database on demand, so a tab tap used to show nothing until the
+  new page's data came back. `src/app/t/[teamId]/loading.tsx` (the shared
+  `LoadingInterstitial`, a spinning baseball) is the Suspense fallback Next puts around each
+  page beneath the team layout, so tab-to-tab navigation shows it instantly under the
+  header and nav, which stay mounted. It renders *inside* the layout, so it must not wrap
+  `PageContainer` or two header bands flash. It also cannot cover the first arrival at a
+  team: the layout's own reads (`requireTeamAccess`, `getTeamById`, the switcher's team
+  list) happen before any boundary beneath it exists, and without Cache Components Next
+  blocks the navigation on a layout's uncached reads (`file-conventions/loading.md`). So
+  `src/app/loading.tsx`, above the team segment, covers `/` and `/profile` ↔ team, and
+  that one *does* wrap `PageContainer`, because the root layout draws no chrome. Don't
+  move data reads into either layout to tidy a page — it silently takes the interstitial
+  away from every navigation through it.
 - **Three surfaces paint `FieldArt`, and their fences are the banana budget.** design-plan.md
   §2 allows exactly one Banana Yellow element per screen. `FieldArt` takes a `fence` prop
   because the wall is the loudest thing it paints: the positions editor spends its banana

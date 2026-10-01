@@ -395,6 +395,14 @@ Via the existing `LazyMotion`/`m` setup only:
   reports — `useFormStatus` unmounts it the moment the action settles. Under reduced motion
   the ball holds still and the button's swapped label ("Sending…") carries the news alone,
   which is why that label is required copy and not decoration.
+- The same ball is the **navigation interstitial**: `LoadingInterstitial` is the
+  `loading.tsx` fallback under `/t/[teamId]` and at the app root, so tapping a tab shows a
+  spinning ball under the team header the instant the tap lands, instead of nothing until
+  Postgres answers. Legal by the same argument — the loop is bounded by the navigation it
+  reports, since Next unmounts the fallback the moment the segment resolves — and it reads
+  "Loading…" in words for the reduced-motion reader. Its seams are stitched in seam red,
+  the one place the spinner gets a second colour: at 56px a single-colour ball reads as a
+  ring. No banana: it is not a screen, and the page replacing it has its own.
 - Micro: RSVP pop and pennant hover tilt (±2°). **Not built** — see the status note at the
   top.
 - Celebration: one confetti burst (green/yellow/cream, ~1.2s) on chart save success only.
