@@ -458,6 +458,38 @@ describe("TeamHomePage your players", () => {
     expect(html).not.toContain("Bench");
   });
 
+  it("tells a parent their kid is not playing, on an allPlay team where the outfield would otherwise claim them", async () => {
+    // allPlay reads a null position as the general outfield, so without the
+    // flag this kid would be told "OF" — the opposite of what the coach set.
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Sluggers",
+      season: "Fall 2026",
+      allPlay: true,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([
+      { ...REESE, position: null, battingOrder: null, notPlaying: true },
+      { ...REESE, entryId: "entry-9", playerId: "player-9", playerName: "Kit" },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Not playing");
+    expect(html).not.toContain("OF");
+  });
+
+  it("says Not playing even before a chart exists", async () => {
+    getChart.mockResolvedValue([
+      { ...REESE, position: null, battingOrder: null, notPlaying: true },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Not playing");
+    expect(html).not.toContain("No chart set yet");
+  });
+
   // The view page's rule, which team home contradicted: a kid batting third
   // with no fielding spot is in the order. Calling that a substitute would
   // both misdescribe a kid who is playing and disagree with /view, which lists

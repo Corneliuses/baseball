@@ -333,3 +333,60 @@ describe("BattingOrderEditor decline badges", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   });
 });
+
+describe("BattingOrderEditor — not playing", () => {
+  const out = (entryId: string): ChartEditorEntry => ({
+    ...entry(entryId, null),
+    notPlaying: true,
+  });
+
+  function formInput(name: string): string {
+    const form = screen.getByRole("button", { name: "Save order" }).closest("form")!;
+    return form.querySelector<HTMLInputElement>(`input[name="${name}"]`)!.value;
+  }
+
+  it("always offers a Not playing zone, allPlay included — where there is no pool to take anyone out to", () => {
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", 1), entry("b", 2)]}
+      />,
+    );
+
+    const zone = screen.getByRole("region", { name: "Not playing" });
+    expect(zone).toHaveTextContent("Drag a player here");
+    expect(screen.queryByText("Not batting")).not.toBeInTheDocument();
+  });
+
+  it("lists a not-playing player in the zone and not in the order", () => {
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", 1), out("b")]}
+      />,
+    );
+
+    const zone = screen.getByRole("region", { name: "Not playing" });
+    expect(zone).toHaveTextContent("Player b");
+    expect(screen.getByRole("list", { name: "Batting order" })).not.toHaveTextContent(
+      "Player b",
+    );
+  });
+
+  it("posts who is out and who was out when the page loaded", () => {
+    render(
+      <BattingOrderEditor
+        teamId="team-1"
+        allPlay={false}
+        entries={[entry("a", 1), out("b")]}
+      />,
+    );
+
+    expect(JSON.parse(formInput("notPlaying"))).toEqual(["b"]);
+    expect(JSON.parse(formInput("baselineNotPlaying"))).toEqual(["b"]);
+    // Nothing edited, nothing to save.
+    expect(screen.getByRole("button", { name: "Save order" })).toBeDisabled();
+  });
+});

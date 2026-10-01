@@ -110,7 +110,7 @@ describe("saveBattingOrderAction", () => {
       { entryId: "c", battingOrder: 1 },
       { entryId: "a", battingOrder: 2 },
       { entryId: "b", battingOrder: 3 },
-    ]);
+    ], []);
     expect(url).toBe("/t/team-1/chart?saved=1");
     expect(revalidatePath).toHaveBeenCalledWith("/t/[teamId]/chart", "page");
     expect(revalidatePath).toHaveBeenCalledWith("/t/[teamId]/view", "page");
@@ -132,7 +132,7 @@ describe("saveBattingOrderAction", () => {
     expect(saveBattingOrder).toHaveBeenCalledWith("team-1", [
       { entryId: "a", battingOrder: 1 },
       { entryId: "b", battingOrder: 2 },
-    ]);
+    ], []);
   });
 
   it("rejects unparseable and malformed payloads without hitting the database", async () => {
@@ -203,7 +203,7 @@ describe("saveBattingOrderAction", () => {
       { entryId: "c", battingOrder: 1 },
       { entryId: "a", battingOrder: 2 },
       { entryId: "b", battingOrder: 3 },
-    ]);
+    ], []);
   });
 
   it("does not call a pure renumber a conflict", async () => {
@@ -308,5 +308,106 @@ describe("saveBattingOrderAction", () => {
       ),
     ).rejects.toThrow("connection lost");
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveBattingOrderAction — not playing", () => {
+  it("saves the not-playing set beside the order, and allPlay no longer needs them to bat", async () => {
+    // Three rostered, allPlay: "everyone bats" now means everyone who is
+    // playing, so c being out is what lets two slots satisfy it.
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(
+        form({
+          teamId: "team-1",
+          order: '["b","a"]',
+          notPlaying: '["c"]',
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart?saved=1");
+    expect(saveBattingOrder).toHaveBeenCalledWith(
+      "team-1",
+      [
+        { entryId: "b", battingOrder: 1 },
+        { entryId: "a", battingOrder: 2 },
+      ],
+      ["c"],
+    );
+  });
+
+  it("still refuses an allPlay order that leaves a playing kid out", async () => {
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(
+        form({ teamId: "team-1", order: '["a"]', notPlaying: '["c"]' }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart?error=missing-players");
+    expect(saveBattingOrder).not.toHaveBeenCalled();
+  });
+
+  it("refuses a kid who is both batting and not playing", async () => {
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(
+        form({ teamId: "team-1", order: '["a","b","c"]', notPlaying: '["a"]' }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart?error=duplicate-entry");
+    expect(saveBattingOrder).not.toHaveBeenCalled();
+  });
+
+  it("refuses a not-playing id that is not on the roster", async () => {
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(
+        form({
+          teamId: "team-1",
+          order: '["a","b","c"]',
+          notPlaying: '["someone-else"]',
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart?error=unknown-entry");
+  });
+
+  it("refuses the save when another coach changed who is not playing", async () => {
+    // This coach loaded with nobody out; the other has since taken c out. The
+    // save replaces the whole set, so going through would put c back silently.
+    getChart.mockResolvedValue([
+      chartEntry("a"),
+      chartEntry("b"),
+      { ...chartEntry("c"), notPlaying: true },
+    ]);
+
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(
+        form({ teamId: "team-1", order: '["a","b","c"]', baselineNotPlaying: "[]" }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart?error=chart-changed");
+    expect(saveBattingOrder).not.toHaveBeenCalled();
+  });
+
+  it("treats a form from before the field existed as 'nobody is out'", async () => {
+    // A tab left open across the deploy posts the old shape. No notPlaying and
+    // no baselineNotPlaying is a coherent, honest save for an empty set.
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(form({ teamId: "team-1", order: '["a","b","c"]' })),
+    );
+
+    expect(url).toBe("/t/team-1/chart?saved=1");
+  });
+
+  it("rejects a not-playing field that isn't a list of ids", async () => {
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(
+        form({ teamId: "team-1", order: '["a","b","c"]', notPlaying: '{"a":1}' }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart?error=invalid-order");
   });
 });

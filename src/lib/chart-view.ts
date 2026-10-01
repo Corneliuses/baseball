@@ -26,6 +26,10 @@ export type ChartViewEntry = {
   battingOrder: number | null;
   /// Null means the player has no fielding assignment (bench).
   position: Position | null;
+  /// Taken out of the chart entirely by the coach. Implies both columns above
+  /// are null, and is the state that separates "not playing" from a substitute
+  /// (waiting to play) or, on an allPlay team, the general outfield.
+  notPlaying: boolean;
 };
 
 export type ChartViewPlayer = ChartViewEntry & {
@@ -61,6 +65,10 @@ export type ChartView = {
   /// the coach hasn't pinned to a named spot — see `buildPositionsDraft` in
   /// chart.ts), and otherwise it's the bench. The page decides how to say it.
   unassigned: ChartViewPlayer[];
+  /// Players the coach has taken out of the chart, in jersey-then-name order.
+  /// In none of the lists above: not batting, not seated, and not the general
+  /// outfield or the bench either.
+  notPlaying: ChartViewPlayer[];
   /// True when at least one roster entry has a batting order or a position
   /// set — a partial chart (entered incrementally by hand during the
   /// validation weekend) still counts. Only a fully empty chart is "no chart
@@ -146,13 +154,17 @@ function seat<T extends Pick<ChartViewEntry, "position">>(
  * Sorts internally, so a caller may hand it `getChart`'s rows as they came.
  */
 export function seatedEntryIds(
-  entries: readonly Pick<
+  entries: readonly (Pick<
     ChartViewEntry,
     "entryId" | "jerseyNumber" | "playerName" | "position"
-  >[],
+  > &
+    Partial<Pick<ChartViewEntry, "notPlaying">>)[],
   allPlay: boolean,
 ): Set<string> {
-  const { byPosition } = seat([...entries].sort(byJerseyThenName), allPlay);
+  const { byPosition } = seat(
+    entries.filter((entry) => !entry.notPlaying).sort(byJerseyThenName),
+    allPlay,
+  );
   return new Set(
     [...byPosition.values()].flat().map((player) => player.entryId),
   );
@@ -194,11 +206,17 @@ export function buildChartView(
     // positions page hands `buildPositionsDraft` a `sortRoster`ed list.
     .sort(byJerseyThenName);
 
-  const lineup = players
+  // Not-playing kids are set aside before anything is counted or seated, so
+  // they cannot fill an outfield spot's capacity or crowd the zone. A stored
+  // position on one is stale by the `notPlaying` invariant and is ignored.
+  const notPlaying = players.filter((player) => player.notPlaying);
+  const active = players.filter((player) => !player.notPlaying);
+
+  const lineup = active
     .filter((player) => player.battingOrder !== null)
     .sort((a, b) => a.battingOrder! - b.battingOrder!);
 
-  const { byPosition, unseated } = seat(players, allPlay);
+  const { byPosition, unseated } = seat(active, allPlay);
 
   // Already in jersey-then-name order — `players` was sorted above, and both
   // loops below preserve it. That order is `sortRoster`'s (roster-rules.ts),
@@ -207,7 +225,13 @@ export function buildChartView(
   // between two requests.
   const unassigned = unseated;
 
-  return { lineup, byPosition, unassigned, hasChart: hasChartSet(entries) };
+  return {
+    lineup,
+    byPosition,
+    unassigned,
+    notPlaying,
+    hasChart: hasChartSet(entries),
+  };
 }
 
 /**

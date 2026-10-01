@@ -157,6 +157,7 @@ export async function getChart(teamId: string): Promise<ChartViewEntry[]> {
       jerseyNumber: true,
       battingOrder: true,
       position: true,
+      notPlaying: true,
       player: { select: { id: true, name: true } },
     },
   });
@@ -168,6 +169,7 @@ export async function getChart(teamId: string): Promise<ChartViewEntry[]> {
     jerseyNumber: entry.jerseyNumber,
     battingOrder: entry.battingOrder,
     position: entry.position,
+    notPlaying: entry.notPlaying,
   }));
 }
 
@@ -262,15 +264,23 @@ export async function getRosterEntry(
  * `battingOrder` values come from `validateBattingOrder`, never raw from the
  * client. Unassigned entries need no phase-2 statement — phase 1 already
  * nulled them.
+ *
+ * `notPlayingIds` is the **whole** not-playing set, replacing the stored one
+ * exactly as the order replaces the order: phase 1 clears the flag team-wide and
+ * a final statement sets it for the submitted kids, also nulling their
+ * positions so a not-playing kid never stands on the diamond (the invariant on
+ * `RosterEntry.notPlaying`). Their batting slot needs no statement — they were
+ * never in `assignments`.
  */
 export async function saveBattingOrder(
   teamId: string,
   assignments: readonly { entryId: string; battingOrder: number }[],
+  notPlayingIds: readonly string[] = [],
 ): Promise<void> {
   await db.$transaction([
     db.rosterEntry.updateMany({
       where: { teamId },
-      data: { battingOrder: null },
+      data: { battingOrder: null, notPlaying: false },
     }),
     ...assignments.map(({ entryId, battingOrder }) =>
       db.rosterEntry.update({
@@ -278,6 +288,14 @@ export async function saveBattingOrder(
         data: { battingOrder },
       }),
     ),
+    ...(notPlayingIds.length > 0
+      ? [
+          db.rosterEntry.updateMany({
+            where: { teamId, id: { in: [...notPlayingIds] } },
+            data: { notPlaying: true, position: null, positionSlot: 0 },
+          }),
+        ]
+      : []),
   ]);
 }
 
@@ -302,6 +320,13 @@ export async function saveBattingOrder(
  * nulled them, which is exactly the state the editor showed: the bench, or the
  * general outfield on an allPlay team (see `buildPositionsDraft` in chart.ts).
  * Values come from `validatePositions`, never raw from the client.
+ *
+ * `notPlayingIds` is the whole not-playing set, replacing the stored one — see
+ * `saveBattingOrder`. Taking a kid out of the chart also takes them out of the
+ * batting order, which this editor doesn't otherwise write, so `battingOrder`
+ * is the optional last argument: the renumbered order
+ * (`battingOrderAfterNotPlaying`) when a batter left or an allPlay kid came
+ * back, rewritten in the same two phases, and null to leave the column alone.
  */
 export async function savePositions(
   teamId: string,
@@ -310,11 +335,13 @@ export async function savePositions(
     position: Position;
     positionSlot: number;
   }[],
+  notPlayingIds: readonly string[] = [],
+  battingOrder: readonly { entryId: string; battingOrder: number }[] | null = null,
 ): Promise<void> {
   await db.$transaction([
     db.rosterEntry.updateMany({
       where: { teamId },
-      data: { position: null, positionSlot: 0 },
+      data: { position: null, positionSlot: 0, notPlaying: false },
     }),
     ...assignments.map(({ entryId, position, positionSlot }) =>
       db.rosterEntry.update({
@@ -322,6 +349,28 @@ export async function savePositions(
         data: { position, positionSlot },
       }),
     ),
+    ...(notPlayingIds.length > 0
+      ? [
+          db.rosterEntry.updateMany({
+            where: { teamId, id: { in: [...notPlayingIds] } },
+            data: { notPlaying: true, battingOrder: null },
+          }),
+        ]
+      : []),
+    ...(battingOrder !== null
+      ? [
+          db.rosterEntry.updateMany({
+            where: { teamId },
+            data: { battingOrder: null },
+          }),
+          ...battingOrder.map(({ entryId, battingOrder: slot }) =>
+            db.rosterEntry.update({
+              where: { id: entryId, teamId },
+              data: { battingOrder: slot },
+            }),
+          ),
+        ]
+      : []),
   ]);
 }
 

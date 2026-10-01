@@ -94,13 +94,15 @@ export default async function PositionsPage({
       playerName: entry.playerName,
       jerseyNumber: entry.jerseyNumber,
       position: entry.position,
+      notPlaying: entry.notPlaying,
       player: { name: entry.playerName },
     })),
-  ).map(({ entryId, playerName, jerseyNumber, position }) => ({
+  ).map(({ entryId, playerName, jerseyNumber, position, notPlaying }) => ({
     entryId,
     playerName,
     jerseyNumber,
     position,
+    notPlaying,
   }));
 
   // Who has said they can't make the next game (#55). Read-only decoration:
@@ -172,7 +174,7 @@ export default async function PositionsPage({
           <p className="text-sm text-muted-foreground">
             {team.allPlay
               ? "Hold and drag a player onto a spot — each outfield spot holds up to three. Anyone left over plays the general outfield."
-              : "Hold and drag a player onto a spot. Dropping onto a player swaps the two; anyone left over sits on the bench."}
+              : "Hold and drag a player onto a spot. Dropping onto a player swaps the two; anyone left over sits on the bench. Drag someone to Not playing to take them out of the chart altogether."}
           </p>
           <PositionsEditor
             // Remount whenever the server data changes (a save landed, an

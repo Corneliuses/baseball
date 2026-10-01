@@ -303,13 +303,18 @@ export default async function TeamHomePage({
           <ul className="space-y-3">
             {myKids.map((entry, index) => {
               const seatedEntry = asSeated(entry);
-              const roleLine = hasChart
+              // "Not playing" is the coach's explicit word about this kid, so
+              // it is said even before any chart exists — "No chart set yet"
+              // over a kid the coach has already ruled out would be wrong.
+              const roleLine = hasChart || entry.notPlaying
                 ? chartRole(seatedEntry, team.allPlay, {
                     benchLabel: "Substitute",
                   })
                 : "No chart set yet";
               const celebrate =
                 hasChart && !isBenched(seatedEntry, team.allPlay);
+              // (`isBenched` is true for a not-playing kid, so they take the
+              // quiet stock too — never the banana.)
 
               // Where the hero frames the kid, by the diamonds' own rules: a
               // fielded position at its spot, anyone else on an allPlay team

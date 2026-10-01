@@ -490,3 +490,47 @@ describe("PositionsEditor decline badges", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   });
 });
+
+describe("PositionsEditor — not playing", () => {
+  const out = (entryId: string): PositionsEditorEntry => ({
+    ...entry(entryId),
+    notPlaying: true,
+  });
+
+  it("always offers a Not playing zone, allPlay included — where the zone is the outfield", () => {
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b")]}
+      />,
+    );
+
+    expect(screen.getByRole("region", { name: "Not playing" })).toHaveTextContent(
+      "Drag a player here",
+    );
+  });
+
+  it("keeps a not-playing player out of the Outfield zone and the diamond", () => {
+    render(
+      <PositionsEditor
+        teamId="team-1"
+        allPlay={true}
+        entries={[entry("a", "PITCHER"), entry("b"), out("c")]}
+      />,
+    );
+
+    expect(screen.getByRole("region", { name: "Not playing" })).toHaveTextContent(
+      "Player-c",
+    );
+    expect(screen.getByRole("region", { name: "Outfield" })).not.toHaveTextContent(
+      "Player-c",
+    );
+    expect(screen.getByRole("region", { name: "Diamond" })).not.toHaveTextContent(
+      "Player-c",
+    );
+    expect(fieldOf("notPlaying")).toEqual(["c"]);
+    expect(fieldOf("baselineNotPlaying")).toEqual(["c"]);
+    expect(screen.getByRole("button", { name: "Save positions" })).toBeDisabled();
+  });
+});

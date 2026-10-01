@@ -27,12 +27,16 @@ import { SubmitButton } from "@/components/SubmitButton";
 import {
   buildBattingDraft,
   emptySlotId,
+  NOT_PLAYING_ID,
   resolveDrop,
+  sameIdSet,
   sameOrder,
   storedBattingOrder,
+  storedNotPlaying,
   UNASSIGNED_ID,
   type BattingDraft,
 } from "@/lib/chart";
+import { NOT_PLAYING_LABEL } from "@/lib/chart-role";
 
 import { saveBattingOrderAction } from "./actions";
 import { stashDraft } from "./draft-stash";
@@ -49,6 +53,8 @@ export type ChartEditorEntry = {
   playerName: string;
   jerseyNumber: number | null;
   battingOrder: number | null;
+  /// Taken out of the chart by the coach. Absent reads as false.
+  notPlaying?: boolean;
 };
 
 type BattingOrderEditorProps = {
@@ -122,10 +128,17 @@ export function BattingOrderEditor({
   // persisting. That also makes a pure renumber (a hand-set 1, 2, 5 the save
   // would compact to 1, 2, 3) correctly *not* saveable — same players, same
   // order, nothing a coach or a parent could see.
+  //
+  // "Not playing" rides both questions: who is out is chart state the save
+  // writes, so moving a kid there is an edit, and a saveable one.
   const stored = useMemo(() => storedBattingOrder(entries), [entries]);
+  const storedOut = useMemo(() => storedNotPlaying(entries), [entries]);
   const seated = draft.slots.filter((entryId) => entryId !== null);
-  const edited = !sameOrder(draft.slots, original.slots);
-  const saveable = !sameOrder(seated, stored);
+  const edited =
+    !sameOrder(draft.slots, original.slots) ||
+    !sameIdSet(draft.notPlaying, original.notPlaying);
+  const saveable =
+    !sameOrder(seated, stored) || !sameIdSet(draft.notPlaying, storedOut);
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     setDraft((current) =>
@@ -158,6 +171,8 @@ export function BattingOrderEditor({
           <UnassignedPool draft={draft} byId={byId} declined={declined} />
         ) : null}
 
+        <NotPlayingZone draft={draft} byId={byId} declined={declined} />
+
         <form
           action={saveBattingOrderAction}
           className="flex items-center justify-end gap-2"
@@ -170,15 +185,31 @@ export function BattingOrderEditor({
             stashDraft(
               teamId,
               "order",
-              draft.slots.map((entryId, index) => {
-                const entry = entryId !== null ? byId.get(entryId) : undefined;
-                return `${index + 1}. ${entry?.playerName ?? "—"}`;
-              }),
+              [
+                ...draft.slots.map((entryId, index) => {
+                  const entry = entryId !== null ? byId.get(entryId) : undefined;
+                  return `${index + 1}. ${entry?.playerName ?? "—"}`;
+                }),
+                ...draft.notPlaying.map(
+                  (entryId) =>
+                    `${NOT_PLAYING_LABEL} — ${byId.get(entryId)?.playerName ?? "—"}`,
+                ),
+              ],
             )
           }
         >
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="order" value={JSON.stringify(draft.slots)} />
+          <input
+            type="hidden"
+            name="notPlaying"
+            value={JSON.stringify(draft.notPlaying)}
+          />
+          <input
+            type="hidden"
+            name="baselineNotPlaying"
+            value={JSON.stringify(storedOut)}
+          />
           {/* The order this page loaded. The action compares it against a
               fresh read and refuses the save if another coach reordered in the
               meantime — the write replaces the whole order, so without this it
@@ -294,6 +325,52 @@ function UnassignedPool({
           </p>
         ) : (
           draft.unassigned.map((entryId) => {
+            const entry = byId.get(entryId);
+            return entry !== undefined ? (
+              <PoolItem
+                key={entryId}
+                entry={entry}
+                declined={declined.has(entryId)}
+              />
+            ) : null;
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+/// The third place a player can be: out of the chart entirely. Always rendered,
+/// allPlay included — there the batting order seats everyone else, so this is
+/// the only way a kid leaves it.
+function NotPlayingZone({
+  draft,
+  byId,
+  declined,
+}: {
+  draft: BattingDraft;
+  byId: Map<string, ChartEditorEntry>;
+  declined: ReadonlySet<string>;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: NOT_PLAYING_ID });
+
+  return (
+    <section aria-label={NOT_PLAYING_LABEL}>
+      <h4 className="mb-2 text-sm font-medium text-muted-foreground">
+        {NOT_PLAYING_LABEL}
+      </h4>
+      <div
+        ref={setNodeRef}
+        className={`min-h-16 space-y-2 rounded-md border-2 border-dashed p-3 ${
+          isOver ? "border-banana bg-banana/20" : "border-border"
+        }`}
+      >
+        {draft.notPlaying.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Drag a player here to take them out of the lineup and the field.
+          </p>
+        ) : (
+          draft.notPlaying.map((entryId) => {
             const entry = byId.get(entryId);
             return entry !== undefined ? (
               <PoolItem

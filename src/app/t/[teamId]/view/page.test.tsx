@@ -784,6 +784,57 @@ describe("ViewPage bench", () => {
     expect(html).toContain("Eli Nakamura");
   });
 
+  it("lists a not-playing kid in their own card, on an allPlay team too", async () => {
+    // On allPlay a kid with no position is in the outfield zone, so without
+    // the flag there is no way to say "this kid is not playing" at all.
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getChart.mockResolvedValue(
+      benched.map((entry) =>
+        entry.playerId === "eli" ? { ...entry, notPlaying: true } : entry,
+      ),
+    );
+
+    const html = await render();
+    const card = html.slice(html.indexOf("Not playing"));
+
+    expect(html).toContain("Not playing");
+    expect(card).toContain("Eli Nakamura");
+    // Not a substitute, and not standing in the outfield zone either.
+    expect(html).not.toContain("Substitutes");
+    expect(html.slice(0, html.indexOf("Not playing"))).not.toContain(
+      "Eli Nakamura",
+    );
+  });
+
+  it("still shows who is not playing before any chart is set", async () => {
+    // The coach marked one injured kid out before setting an order or a
+    // position. "No chart set yet" stays true for everyone else — and the
+    // card still has to say what the coach said about this kid.
+    getChart.mockResolvedValue([
+      { ...benched[1], notPlaying: true },
+      { ...benched[0], playerId: "ben", playerName: "Ben Okafor", battingOrder: null, position: null },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("No chart set yet");
+    expect(html).toContain("Not playing");
+    expect(html.slice(html.indexOf("Not playing"))).toContain("Eli Nakamura");
+  });
+
+  it("marks the reader's own not-playing kid", async () => {
+    getChart.mockResolvedValue(
+      benched.map((entry) =>
+        entry.playerId === "eli" ? { ...entry, notPlaying: true } : entry,
+      ),
+    );
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["eli"]));
+
+    const html = await render();
+
+    expect(html.slice(html.indexOf("Not playing"))).toContain(YOUR_PLAYER_TEXT);
+  });
+
   it("draws no bench card when everyone is placed", async () => {
     const html = await render();
 

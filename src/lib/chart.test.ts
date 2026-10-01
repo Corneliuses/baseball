@@ -3,20 +3,27 @@ import { describe, expect, it } from "vitest";
 import type { Position } from "@/generated/prisma/enums";
 
 import {
+  battingOrderAfterNotPlaying,
   buildBattingDraft,
   buildPositionsDraft,
   chartWriteFailure,
+  compactBattingOrder,
   emptySlotId,
+  markNotPlaying,
+  markPositionNotPlaying,
   nextDroppableId,
+  NOT_PLAYING_ID,
   placeAtPosition,
   placeInSlot,
   POSITION_POOL_ID,
   positionOf,
   resolveDrop,
   resolvePositionDrop,
+  sameIdSet,
   sameOrder,
   samePositions,
   storedBattingOrder,
+  storedNotPlaying,
   storedPositions,
   slotCount,
   unassign,
@@ -43,7 +50,7 @@ function draftOf(
   assigned: Partial<Record<Position, readonly string[]>>,
   pool: string[] = [],
 ): PositionsDraft {
-  return { allPlay, assigned, pool };
+  return { allPlay, assigned, pool, notPlaying: [] };
 }
 
 describe("slotCount", () => {
@@ -123,8 +130,8 @@ describe("buildBattingDraft", () => {
   });
 
   it("handles an empty roster", () => {
-    expect(buildBattingDraft([], true)).toEqual({ slots: [], unassigned: [] });
-    expect(buildBattingDraft([], false)).toEqual({ slots: [], unassigned: [] });
+    expect(buildBattingDraft([], true)).toEqual({ slots: [], unassigned: [], notPlaying: [] });
+    expect(buildBattingDraft([], false)).toEqual({ slots: [], unassigned: [], notPlaying: [] });
   });
 
   it("handles a fully unset chart", () => {
@@ -138,6 +145,7 @@ describe("placeInSlot", () => {
   const base: BattingDraft = {
     slots: ["a", "b", null],
     unassigned: ["x", "y"],
+    notPlaying: []
   };
 
   it("swaps two occupied slots", () => {
@@ -182,7 +190,7 @@ describe("placeInSlot", () => {
 });
 
 describe("unassign", () => {
-  const base: BattingDraft = { slots: ["a", "b"], unassigned: ["x"] };
+  const base: BattingDraft = { slots: ["a", "b"], unassigned: ["x"], notPlaying: [] };
 
   it("empties the entry's slot and appends it to the pool", () => {
     const next = unassign(base, "a");
@@ -288,6 +296,7 @@ describe("resolveDrop", () => {
   const base: BattingDraft = {
     slots: ["a", "b", null],
     unassigned: ["x"],
+    notPlaying: []
   };
 
   it("drops onto an occupied slot by entry id", () => {
@@ -301,7 +310,7 @@ describe("resolveDrop", () => {
   });
 
   it("resolves empty slot index 0 correctly", () => {
-    const draft: BattingDraft = { slots: [null, "b"], unassigned: ["x"] };
+    const draft: BattingDraft = { slots: [null, "b"], unassigned: ["x"], notPlaying: [] };
     const next = resolveDrop(draft, "x", emptySlotId(0));
     expect(next.slots).toEqual(["x", "b"]);
     expect(next.unassigned).toEqual([]);
@@ -327,6 +336,7 @@ describe("validateBattingOrder", () => {
     const result = validateBattingOrder(["c", "a", "b"], roster, true);
     expect(result).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [
         { entryId: "c", battingOrder: 1 },
         { entryId: "a", battingOrder: 2 },
@@ -342,6 +352,7 @@ describe("validateBattingOrder", () => {
     const result = validateBattingOrder(["a", null, "b"], roster, false);
     expect(result).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [
         { entryId: "a", battingOrder: 1 },
         { entryId: "b", battingOrder: 2 },
@@ -353,13 +364,14 @@ describe("validateBattingOrder", () => {
     const result = validateBattingOrder([null, null, "c"], roster, false);
     expect(result).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [{ entryId: "c", battingOrder: 1 }],
     });
   });
 
   it("accepts an all-empty order when allPlay is false", () => {
     const result = validateBattingOrder([null, null, null], roster, false);
-    expect(result).toEqual({ ok: true, assignments: [] });
+    expect(result).toEqual({ ok: true, assignments: [], notPlaying: [] });
   });
 
   it("rejects ids not on this roster", () => {
@@ -396,6 +408,7 @@ describe("validateBattingOrder", () => {
   it("accepts fewer submitted slots than allowed when allPlay is false", () => {
     expect(validateBattingOrder(["a"], roster, false)).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [{ entryId: "a", battingOrder: 1 }],
     });
   });
@@ -837,12 +850,13 @@ describe("nextDroppableId", () => {
     expect(nextDroppableId("CATCHER", 1)).toBe("FIRST_BASE");
     expect(nextDroppableId("SHORTSTOP", 1)).toBe("LEFT_FIELD");
     expect(nextDroppableId("RIGHT_FIELD", 1)).toBe(POSITION_POOL_ID);
-    expect(nextDroppableId(POSITION_POOL_ID, 1)).toBe("PITCHER");
+    expect(nextDroppableId(POSITION_POOL_ID, 1)).toBe(NOT_PLAYING_ID);
+    expect(nextDroppableId(NOT_PLAYING_ID, 1)).toBe("PITCHER");
   });
 
   it("cycles backward too", () => {
     expect(nextDroppableId("FIRST_BASE", -1)).toBe("CATCHER");
-    expect(nextDroppableId("PITCHER", -1)).toBe(POSITION_POOL_ID);
+    expect(nextDroppableId("PITCHER", -1)).toBe(NOT_PLAYING_ID);
   });
 
   it("starts at the first target for an id that isn't a droppable", () => {
@@ -858,6 +872,7 @@ describe("validatePositions", () => {
       validatePositions({ SHORTSTOP: ["c"], PITCHER: ["a"] }, roster, true),
     ).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [
         { entryId: "a", position: "PITCHER", positionSlot: 0 },
         { entryId: "c", position: "SHORTSTOP", positionSlot: 0 },
@@ -874,6 +889,7 @@ describe("validatePositions", () => {
       ),
     ).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [
         { entryId: "a", position: "PITCHER", positionSlot: 0 },
         { entryId: "b", position: "CENTER_FIELD", positionSlot: 0 },
@@ -886,10 +902,12 @@ describe("validatePositions", () => {
   it("accepts a partial chart — unplaced players are the outfield or the bench", () => {
     expect(validatePositions({}, roster, true)).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [],
     });
     expect(validatePositions({ PITCHER: ["a"] }, roster, false)).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [{ entryId: "a", position: "PITCHER", positionSlot: 0 }],
     });
   });
@@ -913,6 +931,7 @@ describe("validatePositions", () => {
   it("accepts the catcher on every board, allPlay included", () => {
     const expected = {
       ok: true,
+      notPlaying: [],
       assignments: [{ entryId: "a", position: "CATCHER", positionSlot: 0 }],
     };
     expect(validatePositions({ CATCHER: ["a"] }, roster, true)).toEqual(expected);
@@ -943,6 +962,7 @@ describe("validatePositions", () => {
       validatePositions({ LEFT_FIELD: ["a", "b", "c"] }, roster, true),
     ).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [
         { entryId: "a", position: "LEFT_FIELD", positionSlot: 0 },
         { entryId: "b", position: "LEFT_FIELD", positionSlot: 1 },
@@ -959,6 +979,7 @@ describe("validatePositions", () => {
     // board this team can field, and the coach should see what it has become.
     expect(validatePositions({ LEFT_FIELD: ["a"] }, roster, false)).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [{ entryId: "a", position: "LEFT_FIELD", positionSlot: 0 }],
     });
     expect(
@@ -1055,6 +1076,7 @@ describe("positions save then reload round trip", () => {
     // leaves them null — on the bench, where the editor already showed them.
     expect(result).toEqual({
       ok: true,
+      notPlaying: [],
       assignments: [{ entryId: "a", position: "CENTER_FIELD", positionSlot: 0 }],
     });
   });
@@ -1099,5 +1121,332 @@ describe("chartWriteFailure", () => {
     expect(chartWriteFailure(new Error("boom"))).toBe(null);
     expect(chartWriteFailure(null)).toBe(null);
     expect(chartWriteFailure("P2025")).toBe(null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Not playing
+// ---------------------------------------------------------------------------
+
+describe("not playing — batting draft", () => {
+  const out = (entryId: string, battingOrder: number | null = null) => ({
+    entryId,
+    battingOrder,
+    notPlaying: true,
+  });
+
+  it("puts a flagged entry in neither a slot nor the pool, whatever order it carries", () => {
+    const draft = buildBattingDraft(
+      [entry("a", 1), out("b", 2), entry("c", 3)],
+      false,
+    );
+
+    // One slot per rostered kid, so the trailing one sits empty: a kid dragged
+    // back out of Not playing needs somewhere to land.
+    expect(draft.slots).toEqual(["a", "c", null]);
+    expect(draft.unassigned).toEqual([]);
+    expect(draft.notPlaying).toEqual(["b"]);
+  });
+
+  it("keeps one slot per rostered kid under allPlay so a kid can be dragged back in", () => {
+    const draft = buildBattingDraft([entry("a"), entry("b"), out("c")], true);
+
+    expect(draft.slots).toEqual(["a", "b", null]);
+    expect(draft.unassigned).toEqual([]);
+    expect(draft.notPlaying).toEqual(["c"]);
+  });
+
+  it("takes a slotted player out, leaving an empty slot behind", () => {
+    const base = buildBattingDraft([entry("a", 1), entry("b", 2)], true);
+
+    const next = markNotPlaying(base, "a");
+
+    expect(next.slots).toEqual([null, "b"]);
+    expect(next.notPlaying).toEqual(["a"]);
+  });
+
+  it("takes a substitute out of the pool", () => {
+    const base = buildBattingDraft([entry("a", 1), entry("x")], false);
+
+    const next = markNotPlaying(base, "x");
+
+    expect(next.unassigned).toEqual([]);
+    expect(next.notPlaying).toEqual(["x"]);
+  });
+
+  it("ignores an unknown or already-out entry, and does not mutate its input", () => {
+    const base = buildBattingDraft([entry("a", 1), out("b")], false);
+    const snapshot = JSON.stringify(base);
+
+    expect(markNotPlaying(base, "b")).toBe(base);
+    expect(markNotPlaying(base, "nobody")).toBe(base);
+    markNotPlaying(base, "a");
+    expect(JSON.stringify(base)).toBe(snapshot);
+  });
+
+  it("drops onto the zone via resolveDrop", () => {
+    const base = buildBattingDraft([entry("a", 1), entry("b", 2)], true);
+
+    expect(resolveDrop(base, "a", NOT_PLAYING_ID).notPlaying).toEqual(["a"]);
+  });
+
+  it("brings a not-playing kid into an empty slot", () => {
+    const base = buildBattingDraft([entry("a", 1), out("b")], true);
+
+    const next = placeInSlot(base, "b", 1);
+
+    expect(next.slots).toEqual(["a", "b"]);
+    expect(next.notPlaying).toEqual([]);
+  });
+
+  it("swaps with an occupant by sending the occupant to Not playing", () => {
+    const base = buildBattingDraft([entry("a", 1), out("b")], false);
+
+    const next = placeInSlot(base, "b", 0);
+
+    expect(next.slots).toEqual(["b", null]);
+    expect(next.notPlaying).toEqual(["a"]);
+  });
+
+  it("brings a not-playing kid back as a substitute", () => {
+    const base = buildBattingDraft([entry("a", 1), out("b")], false);
+
+    const next = unassign(base, "b");
+
+    expect(next.unassigned).toEqual(["b"]);
+    expect(next.notPlaying).toEqual([]);
+  });
+});
+
+describe("not playing — positions draft", () => {
+  const out = (entryId: string, position: Position | null = null) => ({
+    entryId,
+    position,
+    notPlaying: true,
+  });
+
+  it("puts a flagged entry in neither a spot nor the zone, even one with a stale position", () => {
+    const draft = buildPositionsDraft(
+      [fielder("a", "PITCHER"), out("b", "SHORTSTOP"), fielder("c")],
+      true,
+    );
+
+    expect(draft.assigned).toEqual({ PITCHER: ["a"] });
+    expect(draft.pool).toEqual(["c"]);
+    expect(draft.notPlaying).toEqual(["b"]);
+  });
+
+  it("takes a player off a spot, and out of the zone", () => {
+    const base = buildPositionsDraft([fielder("a", "PITCHER"), fielder("z")], true);
+
+    const offSpot = markPositionNotPlaying(base, "a");
+    expect(offSpot.assigned).toEqual({});
+    expect(offSpot.notPlaying).toEqual(["a"]);
+
+    const offZone = markPositionNotPlaying(base, "z");
+    expect(offZone.pool).toEqual([]);
+    expect(offZone.notPlaying).toEqual(["z"]);
+  });
+
+  it("drops onto the zone via resolvePositionDrop", () => {
+    const base = buildPositionsDraft([fielder("a", "PITCHER")], true);
+
+    expect(resolvePositionDrop(base, "a", NOT_PLAYING_ID).notPlaying).toEqual([
+      "a",
+    ]);
+  });
+
+  it("puts a not-playing kid on an empty spot, and swaps back into Not playing", () => {
+    const base = buildPositionsDraft(
+      [out("a"), fielder("b", "PITCHER")],
+      false,
+    );
+
+    const toEmpty = placeAtPosition(base, "a", "CATCHER");
+    expect(toEmpty.assigned).toEqual({ PITCHER: ["b"], CATCHER: ["a"] });
+    expect(toEmpty.notPlaying).toEqual([]);
+
+    // Onto a full spot: the displaced player takes the dragged kid's old place,
+    // which was Not playing.
+    const swapped = placeAtPosition(base, "a", "PITCHER");
+    expect(swapped.assigned).toEqual({ PITCHER: ["a"] });
+    expect(swapped.notPlaying).toEqual(["b"]);
+  });
+
+  it("brings a not-playing kid back to the zone", () => {
+    const base = buildPositionsDraft([out("a")], true);
+
+    const next = unassignPosition(base, "a");
+
+    expect(next.pool).toEqual(["a"]);
+    expect(next.notPlaying).toEqual([]);
+  });
+
+  it("does not count a not-playing row as stored on a spot", () => {
+    expect(storedPositions([out("a", "PITCHER"), fielder("b", "CATCHER")])).toEqual({
+      CATCHER: ["b"],
+    });
+  });
+});
+
+describe("not playing — validation and baselines", () => {
+  it("validateBattingOrder counts the not-playing kids toward allPlay's 'everyone'", () => {
+    expect(validateBattingOrder(["a", "b"], ["a", "b", "c"], true, ["c"])).toEqual(
+      {
+        ok: true,
+        assignments: [
+          { entryId: "a", battingOrder: 1 },
+          { entryId: "b", battingOrder: 2 },
+        ],
+        notPlaying: ["c"],
+      },
+    );
+    expect(validateBattingOrder(["a"], ["a", "b", "c"], true, ["c"])).toEqual({
+      ok: false,
+      reason: "missing-players",
+    });
+  });
+
+  it("validateBattingOrder rejects unknown, doubled and seated-and-out ids", () => {
+    const roster = ["a", "b"];
+    expect(validateBattingOrder(["a"], roster, false, ["zz"])).toEqual({
+      ok: false,
+      reason: "unknown-entry",
+    });
+    expect(validateBattingOrder(["a"], roster, false, ["b", "b"])).toEqual({
+      ok: false,
+      reason: "duplicate-entry",
+    });
+    expect(validateBattingOrder(["a"], roster, false, ["a"])).toEqual({
+      ok: false,
+      reason: "duplicate-entry",
+    });
+  });
+
+  it("validatePositions rejects unknown, doubled and placed-and-out ids", () => {
+    const roster = ["a", "b"];
+    expect(validatePositions({}, roster, true, ["b"])).toEqual({
+      ok: true,
+      assignments: [],
+      notPlaying: ["b"],
+    });
+    expect(validatePositions({}, roster, true, ["zz"])).toEqual({
+      ok: false,
+      reason: "unknown-entry",
+    });
+    expect(validatePositions({}, roster, true, ["b", "b"])).toEqual({
+      ok: false,
+      reason: "duplicate-entry",
+    });
+    expect(validatePositions({ PITCHER: ["a"] }, roster, true, ["a"])).toEqual({
+      ok: false,
+      reason: "duplicate-entry",
+    });
+  });
+
+  it("storedNotPlaying lists the flagged entries, and sameIdSet ignores order", () => {
+    expect(
+      storedNotPlaying([
+        { entryId: "a" },
+        { entryId: "b", notPlaying: true },
+        { entryId: "c", notPlaying: true },
+      ]),
+    ).toEqual(["b", "c"]);
+    expect(sameIdSet(["b", "c"], ["c", "b"])).toBe(true);
+    expect(sameIdSet(["b"], ["b", "c"])).toBe(false);
+  });
+});
+
+describe("compactBattingOrder", () => {
+  const order = [
+    { entryId: "a", battingOrder: 1 },
+    { entryId: "b", battingOrder: 2 },
+    { entryId: "c", battingOrder: 3 },
+    { entryId: "x", battingOrder: null },
+  ];
+
+  it("closes ranks over a removed batter, keeping the survivors' order", () => {
+    expect(compactBattingOrder(order, ["b"])).toEqual([
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "c", battingOrder: 2 },
+    ]);
+  });
+
+  it("is null when nobody removed was batting — there is nothing to rewrite", () => {
+    expect(compactBattingOrder(order, ["x"])).toBeNull();
+    expect(compactBattingOrder(order, [])).toBeNull();
+  });
+
+  it("empties the order when every batter is removed", () => {
+    expect(compactBattingOrder(order, ["a", "b", "c"])).toEqual([]);
+  });
+});
+
+describe("battingOrderAfterNotPlaying", () => {
+  const out = (entryId: string) => ({ entryId, battingOrder: null, notPlaying: true });
+
+  it("gives a kid brought back on an allPlay team their slot back, at the end", () => {
+    // b went out (slot cleared, order closed up to a=1, c=2) and is now back:
+    // without this, b fields but bats nowhere on a team where everyone bats.
+    expect(
+      battingOrderAfterNotPlaying(
+        [entry("a", 1), out("b"), entry("c", 2)],
+        [],
+        true,
+      ),
+    ).toEqual([
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "c", battingOrder: 2 },
+      { entryId: "b", battingOrder: 3 },
+    ]);
+  });
+
+  it("appends several returned kids in the order given — the caller's roster order", () => {
+    expect(
+      battingOrderAfterNotPlaying([out("y"), entry("a", 1), out("x")], [], true),
+    ).toEqual([
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "y", battingOrder: 2 },
+      { entryId: "x", battingOrder: 3 },
+    ]);
+  });
+
+  it("closes the gap and restores in one pass when one kid goes out as another comes back", () => {
+    expect(
+      battingOrderAfterNotPlaying(
+        [entry("a", 1), entry("b", 2), out("c")],
+        ["a"],
+        true,
+      ),
+    ).toEqual([
+      { entryId: "b", battingOrder: 1 },
+      { entryId: "c", battingOrder: 2 },
+    ]);
+  });
+
+  it("leaves a kid brought back on a selective team as a substitute", () => {
+    // A null slot already means "substitute" there, so nothing to rewrite.
+    expect(
+      battingOrderAfterNotPlaying([entry("a", 1), out("b")], [], false),
+    ).toBeNull();
+  });
+
+  it("is null when nobody still out came back and no batter left", () => {
+    expect(
+      battingOrderAfterNotPlaying([entry("a", 1), out("b")], ["b"], true),
+    ).toBeNull();
+  });
+
+  it("never seats a returned kid twice, even with a stale slot on their row", () => {
+    expect(
+      battingOrderAfterNotPlaying(
+        [entry("a", 1), { entryId: "b", battingOrder: 2, notPlaying: true }],
+        [],
+        true,
+      ),
+    ).toEqual([
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "b", battingOrder: 2 },
+    ]);
   });
 });

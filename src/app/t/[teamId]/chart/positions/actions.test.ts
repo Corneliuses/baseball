@@ -113,7 +113,7 @@ describe("savePositionsAction", () => {
     expect(savePositions).toHaveBeenCalledWith("team-1", [
       { entryId: "a", position: "PITCHER", positionSlot: 0 },
       { entryId: "c", position: "SHORTSTOP", positionSlot: 0 },
-    ]);
+    ], [], null);
     expect(url).toBe("/t/team-1/chart/positions?saved=1");
     expect(revalidatePath).toHaveBeenCalledWith(
       "/t/[teamId]/chart/positions",
@@ -127,7 +127,7 @@ describe("savePositionsAction", () => {
       savePositionsAction(form({ teamId: "team-1", positions: "{}" })),
     );
 
-    expect(savePositions).toHaveBeenCalledWith("team-1", []);
+    expect(savePositions).toHaveBeenCalledWith("team-1", [], [], null);
   });
 
   it("rejects unparseable and malformed payloads without hitting the database", async () => {
@@ -218,6 +218,8 @@ describe("savePositionsAction", () => {
         position,
         positionSlot: 0,
       })),
+      [],
+      null,
     );
   });
 
@@ -264,7 +266,7 @@ describe("savePositionsAction", () => {
     expect(savePositions).toHaveBeenCalledWith("team-1", [
       { entryId: "a", position: "PITCHER", positionSlot: 0 },
       { entryId: "b", position: "SHORTSTOP", positionSlot: 0 },
-    ]);
+    ], [], null);
   });
 
   it("catches a stale baseline even when the submitted board is unchanged", async () => {
@@ -352,7 +354,7 @@ describe("savePositionsAction", () => {
       { entryId: "a", position: "LEFT_FIELD", positionSlot: 0 },
       { entryId: "b", position: "LEFT_FIELD", positionSlot: 1 },
       { entryId: "c", position: "LEFT_FIELD", positionSlot: 2 },
-    ]);
+    ], [], null);
   });
 
   it("rejects a stacked outfield spot once allPlay is off, using the freshly loaded flag", async () => {
@@ -385,7 +387,7 @@ describe("savePositionsAction", () => {
 
     expect(savePositions).toHaveBeenCalledWith("team-1", [
       { entryId: "a", position: "CATCHER", positionSlot: 0 },
-    ]);
+    ], [], null);
     expect(url).toBe("/t/team-1/chart/positions?saved=1");
   });
 
@@ -470,5 +472,142 @@ describe("savePositionsAction", () => {
       ),
     ).rejects.toThrow("connection lost");
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("savePositionsAction — not playing", () => {
+  it("saves the not-playing set beside the board", async () => {
+    await redirectUrlOf(
+      savePositionsAction(
+        form({
+          teamId: "team-1",
+          positions: '{"PITCHER":["a"]}',
+          notPlaying: '["c"]',
+        }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith(
+      "team-1",
+      [{ entryId: "a", position: "PITCHER", positionSlot: 0 }],
+      ["c"],
+      // Nobody who left was batting, so the batting column is left alone.
+      null,
+    );
+  });
+
+  it("closes up the batting order when a batter is taken out of the chart", async () => {
+    // b bats 2nd; taking them out must renumber c to 2nd, or /view would say
+    // c bats 3rd while the batting editor, which packs on load, shows 2nd.
+    getChart.mockResolvedValue([
+      { ...chartEntry("a"), battingOrder: 1 },
+      { ...chartEntry("b"), battingOrder: 2 },
+      { ...chartEntry("c"), battingOrder: 3 },
+    ]);
+
+    await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: "{}", notPlaying: '["b"]' }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith("team-1", [], ["b"], [
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "c", battingOrder: 2 },
+    ]);
+  });
+
+  it("gives a kid brought back on an allPlay team their batting slot back", async () => {
+    // b was out; dropping them back on the zone clears the flag, and on a
+    // team where everyone bats they must rejoin the order — at the end, after
+    // the batters already there.
+    getChart.mockResolvedValue([
+      { ...chartEntry("a"), battingOrder: 1 },
+      { ...chartEntry("b"), notPlaying: true },
+      { ...chartEntry("c"), battingOrder: 2 },
+    ]);
+
+    await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: "{}", baselineNotPlaying: '["b"]' }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith("team-1", [], [], [
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "c", battingOrder: 2 },
+      { entryId: "b", battingOrder: 3 },
+    ]);
+  });
+
+  it("leaves the batting order alone when a kid comes back on a selective team", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: false, archivedAt: null });
+    getChart.mockResolvedValue([
+      { ...chartEntry("a"), battingOrder: 1 },
+      { ...chartEntry("b"), notPlaying: true },
+    ]);
+
+    await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: "{}", baselineNotPlaying: '["b"]' }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith("team-1", [], [], null);
+  });
+
+  it("refuses a kid who is both on a spot and not playing", async () => {
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({
+          teamId: "team-1",
+          positions: '{"PITCHER":["a"]}',
+          notPlaying: '["a"]',
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=duplicate-entry");
+    expect(savePositions).not.toHaveBeenCalled();
+  });
+
+  it("refuses the save when another coach changed who is not playing", async () => {
+    getChart.mockResolvedValue([
+      chartEntry("a"),
+      { ...chartEntry("b"), notPlaying: true },
+    ]);
+
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({
+          teamId: "team-1",
+          positions: '{"PITCHER":["a"]}',
+          baselineNotPlaying: "[]",
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=chart-changed");
+    expect(savePositions).not.toHaveBeenCalled();
+  });
+
+  it("accepts the save when the baseline names who is already out", async () => {
+    getChart.mockResolvedValue([
+      chartEntry("a"),
+      { ...chartEntry("b"), notPlaying: true },
+    ]);
+
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({
+          teamId: "team-1",
+          positions: '{"PITCHER":["a"]}',
+          notPlaying: '["b"]',
+          baselineNotPlaying: '["b"]',
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?saved=1");
   });
 });

@@ -16,6 +16,7 @@ const fullChart: ChartViewEntry[] = [
     jerseyNumber: 7,
     battingOrder: 2,
     position: "SHORTSTOP",
+    notPlaying: false,
   },
   {
     entryId: "re-ben",
@@ -24,6 +25,7 @@ const fullChart: ChartViewEntry[] = [
     jerseyNumber: 4,
     battingOrder: 1,
     position: "PITCHER",
+    notPlaying: false,
   },
   {
     entryId: "re-cy",
@@ -32,9 +34,11 @@ const fullChart: ChartViewEntry[] = [
     jerseyNumber: null,
     battingOrder: 3,
     position: "FIRST_BASE",
+    notPlaying: false,
   },
   // Benched: allPlay = false leaves these null.
-  { entryId: "re-eli", playerId: "eli", playerName: "Eli", jerseyNumber: 9, battingOrder: null, position: null },
+  { entryId: "re-eli", playerId: "eli", playerName: "Eli", jerseyNumber: 9, battingOrder: null, position: null,
+    notPlaying: false },
 ];
 
 const noRsvps = new Map<string, RsvpState>();
@@ -65,10 +69,14 @@ describe("buildChartView", () => {
     // Postgres felt like — sorting here is what stops the outfield cluster
     // from reshuffling between two loads of the same page.
     const scrambled: ChartViewEntry[] = [
-      { entryId: "re-4", playerId: "zoe", playerName: "Zoe", jerseyNumber: null, battingOrder: null, position: null },
-      { entryId: "re-1", playerId: "cy", playerName: "Cy", jerseyNumber: 12, battingOrder: null, position: null },
-      { entryId: "re-3", playerId: "ada", playerName: "Ada", jerseyNumber: null, battingOrder: null, position: null },
-      { entryId: "re-2", playerId: "ben", playerName: "Ben", jerseyNumber: 3, battingOrder: null, position: null },
+      { entryId: "re-4", playerId: "zoe", playerName: "Zoe", jerseyNumber: null, battingOrder: null, position: null,
+    notPlaying: false },
+      { entryId: "re-1", playerId: "cy", playerName: "Cy", jerseyNumber: 12, battingOrder: null, position: null,
+    notPlaying: false },
+      { entryId: "re-3", playerId: "ada", playerName: "Ada", jerseyNumber: null, battingOrder: null, position: null,
+    notPlaying: false },
+      { entryId: "re-2", playerId: "ben", playerName: "Ben", jerseyNumber: 3, battingOrder: null, position: null,
+    notPlaying: false },
     ];
 
     const view = buildChartView(scrambled, noRsvps, false);
@@ -150,6 +158,7 @@ describe("buildChartView", () => {
         jerseyNumber: null,
         battingOrder: 1,
         position: null,
+    notPlaying: false,
       },
     ];
 
@@ -165,6 +174,7 @@ describe("buildChartView", () => {
         jerseyNumber: null,
         battingOrder: null,
         position: "CATCHER",
+    notPlaying: false,
       },
     ];
 
@@ -180,6 +190,7 @@ describe("buildChartView", () => {
         jerseyNumber: null,
         battingOrder: null,
         position: null,
+    notPlaying: false,
       },
     ];
 
@@ -202,6 +213,7 @@ describe("buildChartView", () => {
       jerseyNumber,
       battingOrder: null,
       position: "CENTER_FIELD",
+      notPlaying: false,
     });
 
     const view = buildChartView([named("zoe", 9), named("cal", 3)], noRsvps, true);
@@ -227,6 +239,7 @@ describe("buildChartView", () => {
       jerseyNumber,
       battingOrder: null,
       position: "CENTER_FIELD",
+      notPlaying: false,
     });
     const rows = [named("cal", 9), named("dee", 3), named("eli", 5)];
 
@@ -249,6 +262,7 @@ describe("buildChartView", () => {
       jerseyNumber,
       battingOrder: null,
       position: "CENTER_FIELD",
+      notPlaying: false,
     });
 
     const four = [named("a", 1), named("b", 2), named("c", 3), named("d", 4)];
@@ -274,6 +288,7 @@ describe("buildChartView", () => {
         jerseyNumber: 3,
         battingOrder: 1,
         position: "CATCHER",
+    notPlaying: false,
       },
     ];
 
@@ -292,6 +307,7 @@ describe("buildChartView", () => {
         jerseyNumber: 3,
         battingOrder: 1,
         position: "CENTER_FIELD",
+    notPlaying: false,
       },
     ];
 
@@ -330,6 +346,7 @@ describe("buildChartView diamond names", () => {
       jerseyNumber: index + 1,
       battingOrder: index + 1,
       position: null,
+      notPlaying: false,
     }));
 
   const namesById = (entries: ChartViewEntry[], allPlay = false) => {
@@ -401,6 +418,7 @@ describe("buildChartView diamond names", () => {
         jerseyNumber: 7,
         battingOrder: 1,
         position: "SHORTSTOP",
+    notPlaying: false,
       },
       {
         entryId: "re-benched",
@@ -409,6 +427,7 @@ describe("buildChartView diamond names", () => {
         jerseyNumber: 8,
         battingOrder: null,
         position: null,
+    notPlaying: false,
       },
     ];
 
@@ -548,6 +567,7 @@ describe("seatedEntryIds", () => {
     jerseyNumber,
     battingOrder: null,
     position,
+    notPlaying: false,
   });
 
   it("is exactly who buildChartView seats, so the pages cannot disagree", () => {
@@ -596,5 +616,66 @@ describe("seatedEntryIds", () => {
       seatedEntryIds([...entries].reverse(), false),
     );
     expect(seatedEntryIds(entries, false)).toEqual(new Set(["re-dee"]));
+  });
+});
+
+describe("not playing", () => {
+  const entry = (
+    playerId: string,
+    overrides: Partial<ChartViewEntry> = {},
+  ): ChartViewEntry => ({
+    entryId: `re-${playerId}`,
+    playerId,
+    playerName: playerId,
+    jerseyNumber: null,
+    battingOrder: null,
+    position: null,
+    notPlaying: false,
+    ...overrides,
+  });
+
+  it("lists a not-playing kid apart from the lineup, the diamond and the outfield", () => {
+    const view = buildChartView(
+      [
+        entry("ava", { battingOrder: 1, position: "SHORTSTOP" }),
+        entry("ben"),
+        // A stale order and position on a flagged row must not leak anywhere.
+        entry("cy", { battingOrder: 2, position: "PITCHER", notPlaying: true }),
+      ],
+      noRsvps,
+      true,
+    );
+
+    expect(view.lineup.map((p) => p.playerId)).toEqual(["ava"]);
+    expect([...view.byPosition.keys()]).toEqual(["SHORTSTOP"]);
+    expect(view.unassigned.map((p) => p.playerId)).toEqual(["ben"]);
+    expect(view.notPlaying.map((p) => p.playerId)).toEqual(["cy"]);
+  });
+
+  it("does not let a not-playing kid fill an outfield spot's capacity", () => {
+    const view = buildChartView(
+      [
+        entry("ava", { position: "CENTER_FIELD", notPlaying: true }),
+        entry("ben", { position: "CENTER_FIELD" }),
+      ],
+      noRsvps,
+      false,
+    );
+
+    expect(view.byPosition.get("CENTER_FIELD")?.map((p) => p.playerId)).toEqual([
+      "ben",
+    ]);
+  });
+
+  it("seatedEntryIds skips them too", () => {
+    const seated = seatedEntryIds(
+      [
+        entry("ava", { position: "PITCHER", notPlaying: true }),
+        entry("ben", { position: "CATCHER" }),
+      ],
+      true,
+    );
+
+    expect([...seated]).toEqual(["re-ben"]);
   });
 });

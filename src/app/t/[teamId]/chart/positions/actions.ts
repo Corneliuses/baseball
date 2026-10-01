@@ -6,16 +6,20 @@ import { z } from "zod";
 
 import {
   chartWriteFailure,
+  battingOrderAfterNotPlaying,
+  sameIdSet,
   samePositions,
+  storedNotPlaying,
   storedPositions,
   validatePositions,
 } from "@/lib/chart";
+import { byJerseyThenName } from "@/lib/chart-view";
 import { ALL_POSITIONS, OUTFIELD_SPOT_CAPACITY } from "@/lib/positions";
 import { getChart, savePositions } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
-import { parseJson } from "../form-json";
+import { parseJson, parseJsonList } from "../form-json";
 
 function extractTeamId(formData: FormData): string {
   const teamId = String(formData.get("teamId")).trim();
@@ -50,6 +54,10 @@ const positionsSchema = z
   )
   .refine((board) => Object.keys(board).length <= ALL_POSITIONS.length);
 
+/// Entry ids taken out of the chart, and the set the page loaded. Bounded like
+/// `orderSchema` next door.
+const idListSchema = z.array(z.string().min(1).max(64)).max(50);
+
 /**
  * Persist the standing positions chart (#11).
  *
@@ -72,7 +80,18 @@ export async function savePositionsAction(formData: FormData) {
     const parsedBaseline = positionsSchema.safeParse(
       parseJson(formData.get("baseline")),
     );
-    if (!parsed.success || !parsedBaseline.success) {
+    const parsedNotPlaying = idListSchema.safeParse(
+      parseJsonList(formData.get("notPlaying")),
+    );
+    const parsedBaselineNotPlaying = idListSchema.safeParse(
+      parseJsonList(formData.get("baselineNotPlaying")),
+    );
+    if (
+      !parsed.success ||
+      !parsedBaseline.success ||
+      !parsedNotPlaying.success ||
+      !parsedBaselineNotPlaying.success
+    ) {
       redirect(`/t/${teamId}/chart/positions?error=invalid-positions`);
     }
 
@@ -88,6 +107,7 @@ export async function savePositionsAction(formData: FormData) {
       parsed.data,
       entries.map((entry) => entry.entryId),
       team.allPlay,
+      parsedNotPlaying.data,
     );
     if (!result.ok) {
       redirect(`/t/${teamId}/chart/positions?error=${result.reason}`);
@@ -115,11 +135,34 @@ export async function savePositionsAction(formData: FormData) {
     // needs row locks or serializable isolation — not worth it for a handful
     // of coaches. Deliberate, and the reason to reach for a version column if
     // this ever needs to be exact.
-    if (!samePositions(storedPositions(entries), parsedBaseline.data)) {
+    //
+    // The not-playing set is guarded alongside the board, for the same reason
+    // as in the batting action: this save replaces it wholesale.
+    if (
+      !samePositions(storedPositions(entries), parsedBaseline.data) ||
+      !sameIdSet(storedNotPlaying(entries), parsedBaselineNotPlaying.data)
+    ) {
       redirect(`/t/${teamId}/chart/positions?error=chart-changed`);
     }
 
-    await savePositions(teamId, result.assignments);
+    // Moving the not-playing set moves the batting order too, which this
+    // editor doesn't otherwise touch: a batter taken out leaves a gap to close,
+    // and on an allPlay team a kid brought back needs their slot back.
+    // Null when neither happened, which leaves that column alone.
+    //
+    // Sorted first because getChart has no orderBy, and returned kids join the
+    // order in roster order — the jersey-then-name order the batting editor
+    // seats a slotless allPlay kid in on load, so the two agree.
+    await savePositions(
+      teamId,
+      result.assignments,
+      result.notPlaying,
+      battingOrderAfterNotPlaying(
+        [...entries].sort(byJerseyThenName),
+        result.notPlaying,
+        team.allPlay,
+      ),
+    );
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {
