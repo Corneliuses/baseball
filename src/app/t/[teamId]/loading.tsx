@@ -9,11 +9,17 @@ import { LoadingInterstitial } from "@/components/LoadingInterstitial";
 /// it — which is why there is no PageContainer here: the layout already drew
 /// the header band, and a fallback that drew another would flash two.
 ///
-/// It does nothing for the first arrival at a team from elsewhere. The layout
-/// reads the database before this boundary exists, and Next blocks the
-/// navigation on a layout's uncached reads (file-conventions/loading.md,
-/// "Good to know"). src/app/loading.tsx, above the team segment, covers that
-/// leg.
+/// Arriving at a team from elsewhere, or switching teams, waits for the layout
+/// first. The layout reads the database before this boundary exists, and Next
+/// blocks a navigation on a layout's uncached reads (file-conventions/
+/// loading.md, "Good to know"), so the old page holds until the team header is
+/// ready and this fallback then shows under it. There is deliberately no root
+/// loading.tsx to cover that pause: see src/app/profile/loading.tsx for why.
+///
+/// A page's own notFound() or redirect() now runs after this fallback has been
+/// sent, so on a cold load it answers 200 and finishes in the browser. The
+/// membership check is unaffected, because it runs in the layout above the
+/// boundary and still returns a real 404.
 export default function TeamLoading() {
   return <LoadingInterstitial />;
 }

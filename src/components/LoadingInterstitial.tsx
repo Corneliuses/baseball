@@ -20,9 +20,10 @@ import { cn } from "@/lib/utils";
 /// banana per screen is spent nowhere here on purpose: an interstitial is
 /// not a screen with an accent, and the page that replaces it has its own.
 ///
-/// `role="status"` rather than a live announcement: the region mounts with
-/// its text already in place, which is what Suspense fallbacks do, and a
-/// screen reader that lands on it reads "Loading…" and nothing more.
+/// `role="status"` makes it a polite live region, never an interrupting
+/// alert. A Suspense fallback mounts with its text already in place, so most
+/// screen readers will not announce it on arrival. What it guarantees is that
+/// a reader browsing the page meets "Loading…" rather than an empty region.
 export const LOADING_LABEL = "Loading…";
 
 export function LoadingInterstitial({ className }: { className?: string }) {

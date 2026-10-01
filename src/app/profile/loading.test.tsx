@@ -1,21 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import RootLoading from "./loading";
+import ProfileLoading from "./loading";
 
-describe("root loading state", () => {
+describe("profile loading state", () => {
   it("shows the spinning ball", () => {
-    const html = renderToStaticMarkup(<RootLoading />);
+    const html = renderToStaticMarkup(<ProfileLoading />);
 
     expect(html).toContain("animate-spin-ball");
     expect(html).toContain('role="status"');
   });
 
-  it("keeps the app header on screen while the next page loads", () => {
+  it("keeps the app header on screen while the profile loads", () => {
     // The root layout paints no chrome — every page brings PageContainer
     // itself — so a bare fallback here would blank the header band for the
     // length of the navigation and bring it back with the page.
-    const html = renderToStaticMarkup(<RootLoading />);
+    const html = renderToStaticMarkup(<ProfileLoading />);
 
     expect(html).toContain("<header");
     expect(html).toContain("Youth Baseball Team Manager");
