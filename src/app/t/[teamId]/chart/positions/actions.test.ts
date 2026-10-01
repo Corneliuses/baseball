@@ -517,6 +517,45 @@ describe("savePositionsAction — not playing", () => {
     ]);
   });
 
+  it("gives a kid brought back on an allPlay team their batting slot back", async () => {
+    // b was out; dropping them back on the zone clears the flag, and on a
+    // team where everyone bats they must rejoin the order — at the end, after
+    // the batters already there.
+    getChart.mockResolvedValue([
+      { ...chartEntry("a"), battingOrder: 1 },
+      { ...chartEntry("b"), notPlaying: true },
+      { ...chartEntry("c"), battingOrder: 2 },
+    ]);
+
+    await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: "{}", baselineNotPlaying: '["b"]' }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith("team-1", [], [], [
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "c", battingOrder: 2 },
+      { entryId: "b", battingOrder: 3 },
+    ]);
+  });
+
+  it("leaves the batting order alone when a kid comes back on a selective team", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", allPlay: false, archivedAt: null });
+    getChart.mockResolvedValue([
+      { ...chartEntry("a"), battingOrder: 1 },
+      { ...chartEntry("b"), notPlaying: true },
+    ]);
+
+    await redirectUrlOf(
+      savePositionsAction(
+        form({ teamId: "team-1", positions: "{}", baselineNotPlaying: '["b"]' }),
+      ),
+    );
+
+    expect(savePositions).toHaveBeenCalledWith("team-1", [], [], null);
+  });
+
   it("refuses a kid who is both on a spot and not playing", async () => {
     const url = await redirectUrlOf(
       savePositionsAction(

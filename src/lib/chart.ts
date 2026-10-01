@@ -429,6 +429,49 @@ export function compactBattingOrder(
     .map((entry, index) => ({ entryId: entry.entryId, battingOrder: index + 1 }));
 }
 
+/**
+ * The batting order a positions save must write once the not-playing set moves,
+ * or null when it doesn't need rewriting at all.
+ *
+ * Two directions, and `compactBattingOrder` only covers the first. Taking a
+ * batter out leaves a gap to close. Bringing a kid **back** on an allPlay team
+ * leaves the opposite hole: their slot was cleared when they went out, the flag
+ * now clears too, and "everyone bats" is false until a coach happens to open
+ * the batting editor — /view meanwhile draws them in the field and nowhere in
+ * the order. So returned kids join the end of the order, in the order given,
+ * which is exactly where `buildBattingDraft` seats an allPlay kid with no slot
+ * on load (callers pass roster order, as they do there).
+ *
+ * On a selective team a returned kid is a substitute, which is what a null slot
+ * already says, so only removals matter there.
+ */
+export function battingOrderAfterNotPlaying(
+  entries: readonly BattingChartEntry[],
+  notPlayingIds: readonly string[],
+  allPlay: boolean,
+): BattingOrderAssignment[] | null {
+  const out = new Set(notPlayingIds);
+  const returned = allPlay
+    ? entries.filter((entry) => entry.notPlaying && !out.has(entry.entryId))
+    : [];
+  const compacted = compactBattingOrder(entries, notPlayingIds);
+  if (returned.length === 0) {
+    return compacted;
+  }
+
+  const returnedIds = new Set(returned.map((entry) => entry.entryId));
+  // A returned kid's slot is null by the `notPlaying` invariant; filtering them
+  // out of the survivors anyway means a stale one can never bat twice.
+  const survivors = (
+    compacted?.map((assignment) => assignment.entryId) ??
+    storedBattingOrder(entries)
+  ).filter((entryId) => !returnedIds.has(entryId));
+
+  return [...survivors, ...returned.map((entry) => entry.entryId)].map(
+    (entryId, index) => ({ entryId, battingOrder: index + 1 }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Positions diamond (#11)
 // ---------------------------------------------------------------------------

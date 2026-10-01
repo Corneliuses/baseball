@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Position } from "@/generated/prisma/enums";
 
 import {
+  battingOrderAfterNotPlaying,
   buildBattingDraft,
   buildPositionsDraft,
   chartWriteFailure,
@@ -1378,5 +1379,74 @@ describe("compactBattingOrder", () => {
 
   it("empties the order when every batter is removed", () => {
     expect(compactBattingOrder(order, ["a", "b", "c"])).toEqual([]);
+  });
+});
+
+describe("battingOrderAfterNotPlaying", () => {
+  const out = (entryId: string) => ({ entryId, battingOrder: null, notPlaying: true });
+
+  it("gives a kid brought back on an allPlay team their slot back, at the end", () => {
+    // b went out (slot cleared, order closed up to a=1, c=2) and is now back:
+    // without this, b fields but bats nowhere on a team where everyone bats.
+    expect(
+      battingOrderAfterNotPlaying(
+        [entry("a", 1), out("b"), entry("c", 2)],
+        [],
+        true,
+      ),
+    ).toEqual([
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "c", battingOrder: 2 },
+      { entryId: "b", battingOrder: 3 },
+    ]);
+  });
+
+  it("appends several returned kids in the order given — the caller's roster order", () => {
+    expect(
+      battingOrderAfterNotPlaying([out("y"), entry("a", 1), out("x")], [], true),
+    ).toEqual([
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "y", battingOrder: 2 },
+      { entryId: "x", battingOrder: 3 },
+    ]);
+  });
+
+  it("closes the gap and restores in one pass when one kid goes out as another comes back", () => {
+    expect(
+      battingOrderAfterNotPlaying(
+        [entry("a", 1), entry("b", 2), out("c")],
+        ["a"],
+        true,
+      ),
+    ).toEqual([
+      { entryId: "b", battingOrder: 1 },
+      { entryId: "c", battingOrder: 2 },
+    ]);
+  });
+
+  it("leaves a kid brought back on a selective team as a substitute", () => {
+    // A null slot already means "substitute" there, so nothing to rewrite.
+    expect(
+      battingOrderAfterNotPlaying([entry("a", 1), out("b")], [], false),
+    ).toBeNull();
+  });
+
+  it("is null when nobody still out came back and no batter left", () => {
+    expect(
+      battingOrderAfterNotPlaying([entry("a", 1), out("b")], ["b"], true),
+    ).toBeNull();
+  });
+
+  it("never seats a returned kid twice, even with a stale slot on their row", () => {
+    expect(
+      battingOrderAfterNotPlaying(
+        [entry("a", 1), { entryId: "b", battingOrder: 2, notPlaying: true }],
+        [],
+        true,
+      ),
+    ).toEqual([
+      { entryId: "a", battingOrder: 1 },
+      { entryId: "b", battingOrder: 2 },
+    ]);
   });
 });

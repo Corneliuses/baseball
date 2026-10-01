@@ -324,9 +324,9 @@ export async function saveBattingOrder(
  * `notPlayingIds` is the whole not-playing set, replacing the stored one — see
  * `saveBattingOrder`. Taking a kid out of the chart also takes them out of the
  * batting order, which this editor doesn't otherwise write, so `battingOrder`
- * is the optional last argument: the renumbered order (`compactBattingOrder`)
- * when a batter left, rewritten in the same two phases, and null to leave the
- * column alone.
+ * is the optional last argument: the renumbered order
+ * (`battingOrderAfterNotPlaying`) when a batter left or an allPlay kid came
+ * back, rewritten in the same two phases, and null to leave the column alone.
  */
 export async function savePositions(
   teamId: string,

@@ -6,13 +6,14 @@ import { z } from "zod";
 
 import {
   chartWriteFailure,
-  compactBattingOrder,
+  battingOrderAfterNotPlaying,
   sameIdSet,
   samePositions,
   storedNotPlaying,
   storedPositions,
   validatePositions,
 } from "@/lib/chart";
+import { byJerseyThenName } from "@/lib/chart-view";
 import { ALL_POSITIONS, OUTFIELD_SPOT_CAPACITY } from "@/lib/positions";
 import { getChart, savePositions } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -144,14 +145,23 @@ export async function savePositionsAction(formData: FormData) {
       redirect(`/t/${teamId}/chart/positions?error=chart-changed`);
     }
 
-    // Taking a batter out of the chart leaves a hole in the batting order this
-    // editor doesn't otherwise touch; `compactBattingOrder` is null when
-    // nobody who left was batting, which leaves that column alone.
+    // Moving the not-playing set moves the batting order too, which this
+    // editor doesn't otherwise touch: a batter taken out leaves a gap to close,
+    // and on an allPlay team a kid brought back needs their slot back.
+    // Null when neither happened, which leaves that column alone.
+    //
+    // Sorted first because getChart has no orderBy, and returned kids join the
+    // order in roster order — the jersey-then-name order the batting editor
+    // seats a slotless allPlay kid in on load, so the two agree.
     await savePositions(
       teamId,
       result.assignments,
       result.notPlaying,
-      compactBattingOrder(entries, result.notPlaying),
+      battingOrderAfterNotPlaying(
+        [...entries].sort(byJerseyThenName),
+        result.notPlaying,
+        team.allPlay,
+      ),
     );
   } catch (error) {
     unstable_rethrow(error);
