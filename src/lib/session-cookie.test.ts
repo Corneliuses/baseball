@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 
 import {
   SESSION_COOKIE_NAMES,
+  clearedSessionCookieOptions,
+  readSessionToken,
   sessionCookieName,
   sessionCookieOptions,
   usesSecureCookies,
@@ -77,5 +79,60 @@ describe("sessionCookieOptions", () => {
 
   it("drops the secure flag alongside the prefix", () => {
     expect(sessionCookieOptions(false, new Date()).secure).toBe(false);
+  });
+});
+
+describe("readSessionToken", () => {
+  const jar = (entries: Record<string, string>) => (name: string) =>
+    entries[name];
+
+  it("reads the __Secure- spelling on an HTTPS origin", () => {
+    expect(
+      readSessionToken(jar({ "__Secure-authjs.session-token": "tok" }), true),
+    ).toBe("tok");
+  });
+
+  it("reads the bare spelling on a plain-HTTP origin", () => {
+    expect(readSessionToken(jar({ "authjs.session-token": "tok" }), false)).toBe(
+      "tok",
+    );
+  });
+
+  // A bare cookie can be planted by a sibling subdomain or a plain-HTTP
+  // response; neither can set __Secure-. Reading it as a fallback would sign
+  // a signed-out visitor in as whoever planted it.
+  it("never trusts the bare spelling on an HTTPS origin", () => {
+    expect(
+      readSessionToken(jar({ "authjs.session-token": "planted" }), true),
+    ).toBeNull();
+    expect(
+      readSessionToken(
+        jar({
+          "__Secure-authjs.session-token": "real",
+          "authjs.session-token": "planted",
+        }),
+        true,
+      ),
+    ).toBe("real");
+  });
+
+  it("is null for an absent or empty cookie", () => {
+    expect(readSessionToken(jar({}), true)).toBeNull();
+    expect(
+      readSessionToken(jar({ "__Secure-authjs.session-token": "" }), true),
+    ).toBeNull();
+  });
+});
+
+describe("clearedSessionCookieOptions", () => {
+  it("matches the written attributes and expires the cookie at once", () => {
+    expect(clearedSessionCookieOptions(true)).toEqual({
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: true,
+      maxAge: 0,
+    });
+    expect(clearedSessionCookieOptions(false).secure).toBe(false);
   });
 });

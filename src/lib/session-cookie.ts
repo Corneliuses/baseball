@@ -1,14 +1,17 @@
-/// The session cookie: what it is called, and the attributes it is written
-/// with.
+/// The session cookie: what it is called, how it is read, and the attributes
+/// it is written with.
 ///
-/// Three places have to agree on this. Auth.js writes the cookie when a magic
-/// link is clicked, `/invite/[token]` writes it when a parent accepts an
-/// invitation, and `proxy.ts` reads it. `src/auth.ts` deliberately passes no
-/// `cookies` config, so what this module states is Auth.js's own default,
-/// restated once instead of guessed at three times: `@auth/core`'s
-/// `defaultCookies` names the cookie `${prefix}authjs.session-token` with
-/// `httpOnly`, `sameSite: "lax"` and `path: "/"`, and applies the `__Secure-`
-/// prefix exactly when it marks the cookie secure.
+/// Several places have to agree on this. Auth.js writes the cookie when a
+/// sign-in code is redeemed, `/invite/[token]` writes it when a parent accepts
+/// an invitation, `getCurrentUser` (`session.ts`) reads it, the profile page's
+/// sign-out clears it, and `proxy.ts` checks it is there. `src/auth.ts`
+/// deliberately passes no `cookies` config, so what this module states is
+/// Auth.js's own default, restated once instead of guessed at in each place:
+/// `@auth/core`'s `defaultCookies` names the cookie
+/// `${prefix}authjs.session-token` with `httpOnly`, `sameSite: "lax"` and
+/// `path: "/"`, and applies the `__Secure-` prefix exactly when it marks the
+/// cookie secure. The name outlives Auth.js on purpose: keeping it is what
+/// keeps every live session through the move to the auth service.
 ///
 /// Pure and dependency-free on purpose — `proxy.ts` imports it, and Proxy must
 /// not pull in Auth.js or the database.
@@ -23,6 +26,24 @@ export const SESSION_COOKIE_NAMES = [BASE_NAME, SECURE_NAME] as const;
 
 export function sessionCookieName(secure: boolean): string {
   return secure ? SECURE_NAME : BASE_NAME;
+}
+
+/**
+ * The session token this origin should trust, or null.
+ *
+ * Only the spelling this origin writes is read, exactly as Auth.js reads only
+ * the one it would write. Falling back to the bare name on an HTTPS origin
+ * would let anyone who can set a cookie for the host without `__Secure-` (a
+ * sibling subdomain, a plain-HTTP response) plant their own session token and
+ * have a signed-out visitor acting as them. `SESSION_COOKIE_NAMES` lists both
+ * for `proxy.ts`, whose check is only optimistic.
+ */
+export function readSessionToken(
+  read: (name: string) => string | undefined,
+  secure: boolean,
+): string | null {
+  const value = read(sessionCookieName(secure));
+  return value ? value : null;
 }
 
 export type SecureCookieInput = {
@@ -91,4 +112,17 @@ export function sessionCookieOptions(
     secure,
     expires,
   };
+}
+
+export type ClearedSessionCookieOptions = Omit<SessionCookieOptions, "expires"> & {
+  maxAge: 0;
+};
+
+/// The same name-matching attributes with `maxAge: 0`, so the browser drops
+/// the cookie. A `__Secure-` cookie is only replaced by one that is itself
+/// secure, which is why this takes the flag rather than assuming it.
+export function clearedSessionCookieOptions(
+  secure: boolean,
+): ClearedSessionCookieOptions {
+  return { httpOnly: true, sameSite: "lax", path: "/", secure, maxAge: 0 };
 }
