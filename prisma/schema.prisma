@@ -71,6 +71,15 @@ model User {
   phone         String?
   createdAt     DateTime  @default(now())
 
+  /// The auth service's `sub` claim (auth.corneliuses.com), set the first time
+  /// this person signs in through it. Null until then — every row predating
+  /// the service, and every row an invitation pre-created, starts without one.
+  /// The first service login links by verified email; after that `authSub`
+  /// wins and `email` is never rewritten from the claim, because invitations
+  /// match on `email` and a service-side address change must not move the app
+  /// identity. See src/lib/signin-callback.ts.
+  authSub String? @unique
+
   accounts          Account[]
   sessions          Session[]
   memberships       Membership[]
@@ -364,6 +373,13 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
+
+  /// The auth service's id token from the login that created this row, kept
+  /// only to pass as `id_token_hint` at sign-out so the service ends its own
+  /// session too. Never an API credential: no access or refresh token is
+  /// stored. Null on every row Auth.js or an invitation wrote, whose sign-out
+  /// is local-only.
+  idToken String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
