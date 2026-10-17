@@ -16,7 +16,12 @@ import { normalizeEmail } from "./email-address";
 /// readable or forgeable value would let anyone who can plant a cookie (a
 /// sibling subdomain, a plain-HTTP response) pair their own authorization code
 /// with the victim's browser — which is also why reading trusts only the
-/// spelling this origin writes (`readPendingLogin`). It is encrypted with `dir` + `A256GCM`, keyed by
+/// spelling this origin writes (`readPendingLogin`), and why that spelling is
+/// `__Host-`. Sealing stops a forged value, not a replayed one: an attacker can
+/// start a login of their own and copy out a genuinely sealed cookie. A
+/// `__Secure-` cookie may still carry `Domain=corneliuses.com`, so an HTTPS
+/// sibling subdomain could plant that copy here; `__Host-` forbids `Domain`
+/// and so only this exact host can set it. It is encrypted with `dir` + `A256GCM`, keyed by
 /// SHA-256 of `AUTH_SECRET`, and carries its own expiry, so a tampered, stale or
 /// foreign-key value opens to `null` exactly like a missing one.
 ///
@@ -24,7 +29,7 @@ import { normalizeEmail } from "./email-address";
 /// cookie getter for reading, so every case tests without a request.
 
 const BASE_NAME = "pending-login";
-const SECURE_NAME = `__Secure-${BASE_NAME}`;
+const SECURE_NAME = `__Host-${BASE_NAME}`;
 
 /// How long a login may sit at the service's login page before the callback
 /// stops recognizing it. Long enough to fetch an emailed code from another app
@@ -44,9 +49,10 @@ export function pendingLoginCookieName(secure: boolean): string {
 export type PendingLoginCookieOptions = {
   httpOnly: true;
   sameSite: "lax";
-  /// Scoped to the two route handlers that use it. The callback lives at
-  /// /api/auth/callback, which path-matching covers; nothing else receives it.
-  path: "/api/auth";
+  /// `/`, because `__Host-` requires it. That sends a small, short-lived
+  /// cookie with every request for ten minutes, which is a cheap price for
+  /// host isolation; only the callback ever reads it.
+  path: "/";
   secure: boolean;
   maxAge: number;
 };
@@ -64,7 +70,7 @@ export function pendingLoginCookieOptions(
   return {
     httpOnly: true,
     sameSite: "lax",
-    path: "/api/auth",
+    path: "/",
     secure,
     maxAge: PENDING_LOGIN_MAX_AGE_SECONDS,
   };
@@ -227,9 +233,10 @@ export async function openPendingLogin(
  * for *this browser*: anyone can start a login, keep the cookie they get back,
  * and plant it on a victim along with their own authorization code. The bare
  * name can be planted by a sibling subdomain or a plain-HTTP response, so on an
- * HTTPS origin only the `__Secure-` spelling — which only HTTPS on this host
- * can set — is trusted. That turns the remaining login-CSRF path into "control
- * this exact origin", which is game over anyway.
+ * HTTPS origin only the `__Host-` spelling is trusted: a browser accepts it
+ * only from HTTPS on this exact host, with no `Domain` (which `__Secure-`
+ * would still allow a sibling to set). That turns the remaining login-CSRF
+ * path into "control this exact origin", which is game over anyway.
  *
  * `secure` is the same `usesSecureCookies` answer the writer used. Callers pass
  * their own getter (`request.cookies.get(name)?.value` in a route handler) so

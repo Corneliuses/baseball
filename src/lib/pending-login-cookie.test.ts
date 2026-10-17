@@ -64,25 +64,26 @@ async function handSealed(
 }
 
 describe("pendingLoginCookieName", () => {
-  it("applies the __Secure- prefix exactly when secure", () => {
-    expect(pendingLoginCookieName(true)).toBe("__Secure-pending-login");
+  it("applies the __Host- prefix exactly when secure", () => {
+    expect(pendingLoginCookieName(true)).toBe("__Host-pending-login");
     expect(pendingLoginCookieName(false)).toBe("pending-login");
   });
 
   it("lists both spellings for clearing", () => {
     expect(PENDING_LOGIN_COOKIE_NAMES).toEqual([
-      "__Secure-pending-login",
+      "__Host-pending-login",
       "pending-login",
     ]);
   });
 });
 
 describe("pendingLoginCookieOptions", () => {
-  it("is httpOnly, lax, scoped to /api/auth, and lives ten minutes", () => {
+  it("is httpOnly, lax, host-only at path /, and lives ten minutes", () => {
     expect(pendingLoginCookieOptions(true)).toEqual({
       httpOnly: true,
       sameSite: "lax",
-      path: "/api/auth",
+      // __Host- requires path / (and no Domain, which these options never set).
+      path: "/",
       secure: true,
       maxAge: 600,
     });
@@ -258,9 +259,9 @@ describe("sealPendingLogin / openPendingLogin", () => {
 describe("readPendingLogin", () => {
   const options = { secret: SECRET, now: NOW };
 
-  it("reads the __Secure- spelling on an HTTPS origin", async () => {
+  it("reads the __Host- spelling on an HTTPS origin", async () => {
     const sealed = await sealPendingLogin(PENDING, SECRET, NOW);
-    const jar: Record<string, string> = { "__Secure-pending-login": sealed };
+    const jar: Record<string, string> = { "__Host-pending-login": sealed };
 
     await expect(
       readPendingLogin((name) => jar[name], { ...options, secure: true }),
@@ -279,7 +280,7 @@ describe("readPendingLogin", () => {
   it("never trusts a bare cookie on an HTTPS origin, however valid", async () => {
     // Login CSRF: an attacker starts their own login, keeps the sealed cookie
     // that comes back, and plants it under the bare name (a sibling subdomain
-    // or plain-HTTP response can; neither can set __Secure-). Its seal is
+    // or plain-HTTP response can; neither can set __Host-). Its seal is
     // genuine, so the only defence is not reading that spelling at all.
     const planted = await sealPendingLogin(
       { ...PENDING, state: "attacker-state" },
@@ -287,6 +288,22 @@ describe("readPendingLogin", () => {
       NOW,
     );
     const jar: Record<string, string> = { "pending-login": planted };
+
+    await expect(
+      readPendingLogin((name) => jar[name], { ...options, secure: true }),
+    ).resolves.toBeNull();
+  });
+
+  // __Secure- admits Domain=corneliuses.com, so an HTTPS sibling subdomain
+  // could plant a genuinely sealed copy under that name. __Host- cannot be
+  // set by anyone but this host; the __Secure- spelling is never read.
+  it("never trusts a __Secure- cookie a sibling subdomain could plant", async () => {
+    const planted = await sealPendingLogin(
+      { ...PENDING, state: "attacker-state" },
+      SECRET,
+      NOW,
+    );
+    const jar: Record<string, string> = { "__Secure-pending-login": planted };
 
     await expect(
       readPendingLogin((name) => jar[name], { ...options, secure: true }),
@@ -301,7 +318,7 @@ describe("readPendingLogin", () => {
       NOW,
     );
     const jar: Record<string, string> = {
-      "__Secure-pending-login": real,
+      "__Host-pending-login": real,
       "pending-login": planted,
     };
 
