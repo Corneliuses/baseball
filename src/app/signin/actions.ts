@@ -118,11 +118,19 @@ export async function submitSignInCode(
     return { status: "invalid", code: "invalid-code", value: typed };
   }
 
-  redirect(
-    `/api/auth/callback/resend?${new URLSearchParams({
+  // Returned for the browser to follow, never `redirect()`ed. A server
+  // action's redirect to a same-origin path is fetched by the *server* first
+  // (Next's action handler streams the target back to save a round trip), and
+  // that fetch follows Auth.js's 302 on to the landing page. Auth.js redeems
+  // the code and writes the session row inside that server-side fetch, so its
+  // Set-Cookie dies there: the person arrives signed out, with a live session
+  // row they will never hold, and the code already spent.
+  return {
+    status: "redeem",
+    url: `/api/auth/callback/resend?${new URLSearchParams({
       token: code,
       email: pending.email,
       callbackUrl: pending.callbackUrl,
     })}`,
-  );
+  };
 }

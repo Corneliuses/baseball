@@ -168,9 +168,13 @@ describe("submitSignInCode", () => {
   it("redeems a typed code against the Auth.js email callback", async () => {
     pendingCookie();
 
-    const destination = await redirectOf(submit("k3m7 qp2x"));
+    const state = await submit("k3m7 qp2x");
 
-    const url = new URL(destination, "https://app.example");
+    // Returned, not redirected: a server action's same-origin redirect is
+    // fetched server-side, which would redeem the code there and drop the
+    // session cookie on the floor.
+    expect(state.status).toBe("redeem");
+    const url = new URL(state.status === "redeem" ? state.url : "", "https://app.example");
     expect(url.pathname).toBe("/api/auth/callback/resend");
     expect(url.searchParams.get("token")).toBe("K3M7QP2X");
     expect(url.searchParams.get("email")).toBe("parent@example.com");
@@ -191,7 +195,8 @@ describe("submitSignInCode", () => {
           },
     );
 
-    const destination = await redirectOf(submit("K3M7QP2X"));
+    const state = await submit("K3M7QP2X");
+    const destination = state.status === "redeem" ? state.url : "";
 
     expect(destination).toContain("/api/auth/callback/resend");
     expect(new URL(destination, "https://app.example").searchParams.get("email")).toBe(

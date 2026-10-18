@@ -42,6 +42,16 @@ export function CodeEntryForm({
   );
 
   const rejected = state.status === "invalid" ? state : null;
+  const redeemUrl = state.status === "redeem" ? state.url : null;
+
+  // A full navigation, so Auth.js's callback runs in the browser and its
+  // session cookie lands there. `replace`, so Back does not return to a code
+  // that is already spent.
+  React.useEffect(() => {
+    if (redeemUrl) {
+      window.location.replace(redeemUrl);
+    }
+  }, [redeemUrl]);
   const [code, setCode] = React.useState(() => rejected?.value ?? "");
 
   const message = rejected
@@ -88,6 +98,17 @@ export function CodeEntryForm({
         <StatusBanner tone="error" id={errorId}>
           {message}
         </StatusBanner>
+      ) : null}
+
+      {redeemUrl ? (
+        // Seen only for the moment before the navigation starts, or when
+        // the effect above never runs.
+        <p className="text-sm text-muted-foreground" role="status">
+          Signing you in…{" "}
+          <a href={redeemUrl} className="font-medium text-foreground underline underline-offset-4">
+            Continue
+          </a>
+        </p>
       ) : null}
 
       {/* This screen's one banana (design-plan.md §2), matching the request
