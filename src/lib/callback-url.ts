@@ -13,9 +13,18 @@
  * "//evil.example" and "/\evil.example". URL parsers normalize a backslash to
  * a slash, so the second is the first wearing a hat — a check for "//" alone
  * lets it through.
+ *
+ * Also rejects any ASCII control character, anywhere. The WHATWG parser strips
+ * tab, CR and LF from a URL before reading it, so "/\t/evil.example" passes a
+ * second-character check and then resolves to https://evil.example/ — the
+ * same scheme-relative escape, hidden behind a character nobody types.
  */
 export function safeCallbackUrl(value: unknown): string {
   if (typeof value !== "string" || !value.startsWith("/")) {
+    return "/";
+  }
+
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
     return "/";
   }
 

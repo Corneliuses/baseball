@@ -34,6 +34,22 @@ describe("safeCallbackUrl", () => {
       expect(safeCallbackUrl("javascript:alert(1)")).toBe("/");
     });
 
+    it.each(["/\t/evil.example", "/\n/evil.example", "/\r\\evil.example"])(
+      "rejects %j, which the URL parser turns into a scheme-relative URL",
+      (value) => {
+        // Regression: the second character is a tab or newline, not a slash,
+        // so the "//" check passed it — and new URL() strips it.
+        expect(new URL(value, "https://baseball.example").host).toBe(
+          "evil.example",
+        );
+        expect(safeCallbackUrl(value)).toBe("/");
+      },
+    );
+
+    it("rejects a control character anywhere in the path", () => {
+      expect(safeCallbackUrl("/t/team-a\u0000")).toBe("/");
+    });
+
     it("rejects a relative path that does not start with a slash", () => {
       expect(safeCallbackUrl("t/team-a")).toBe("/");
     });
