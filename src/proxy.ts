@@ -10,8 +10,15 @@ import { SESSION_COOKIE_NAMES } from "@/lib/session-cookie";
 /// It does exactly one job: redirect to sign-in when no session cookie is
 /// present. It must stay that way.
 ///
+/// The redirect goes to `/signin`, never straight into `/api/auth/login`.
+/// Proxy runs on prefetches too, and a login start mints a pending-login
+/// cookie and sends the browser to another origin: wired here, hovering a
+/// link would begin a login, and a prefetch cannot follow a cross-origin
+/// redirect anyway. `/signin` is one tap, and it is a page the router can
+/// prefetch harmlessly.
+///
 /// Do not move the membership, role, or archived check in here, and do not
-/// import from `@/auth`. Proxy runs on every request including prefetches, so
+/// import the auth client or the database. Proxy runs on every request including prefetches, so
 /// anything that touches the database fires on link hover — and more
 /// fundamentally it cannot be the authorization boundary, because a server
 /// action POSTs to the current page URL. Proxy can see /t/team-A/roster but not

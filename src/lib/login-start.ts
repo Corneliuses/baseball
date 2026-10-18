@@ -12,7 +12,7 @@ import {
 /// `state` and `nonce`, seal them into the pending-login cookie, and build the
 /// authorize URL to send the browser to.
 ///
-/// Shared by `GET /api/auth/login` and, at cutover, invitation accept, so the
+/// Shared by `GET /api/auth/login` and invitation accept, so the
 /// two writers of the pending cookie cannot disagree on what goes in it. The
 /// caller sets the returned cookie on its own response (`response.cookies` in
 /// a route handler, `cookies()` in an action) and redirects.

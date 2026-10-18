@@ -35,7 +35,7 @@ function maskEmail(email: string): string {
 /// Unauthenticated by design — proxy.ts's matcher is "/t/:path*" and this
 /// route is deliberately outside it. The token is the credential, and this
 /// page only reads it: accepting is the POST in actions.ts, which is what
-/// grants the membership and writes the session. Rendering must stay
+/// grants the membership and starts the sign-in. Rendering must stay
 /// side-effect free, because mail scanners fetch this URL before the parent
 /// ever opens the message.
 export default async function InvitePage({
@@ -66,10 +66,19 @@ export default async function InvitePage({
       <PageContainer>
         <StatusCard
           title="Already accepted"
-          description="This invitation has already been used. Sign in from the regular sign-in page instead."
+          description="This invitation has already been used. Sign in with the address it was sent to, and you'll land on the team."
         >
+          {/* Carries the team as the destination: accepting grants the
+              membership before the sign-in, so a parent whose sign-in did not
+              finish arrives here and still needs to reach the team. */}
           <Button asChild variant="outline" className="w-full">
-            <Link href="/signin">Go to sign in</Link>
+            <Link
+              href={`/signin?${new URLSearchParams({
+                callbackUrl: `/t/${invitation.teamId}`,
+              })}`}
+            >
+              Go to sign in
+            </Link>
           </Button>
         </StatusCard>
       </PageContainer>
@@ -94,8 +103,8 @@ export default async function InvitePage({
           <CardHeader>
             <CardTitle>You&apos;re invited to join {invitation.teamName}</CardTitle>
             <CardDescription>
-              Accepting signs you in on this device — no password, and nothing
-              else to find in your inbox.
+              Accepting adds you to the team, then signs you in with an emailed
+              code or Google. No password to remember.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

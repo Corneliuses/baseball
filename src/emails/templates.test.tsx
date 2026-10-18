@@ -9,7 +9,6 @@ import { EventAnnouncementEmail } from "./EventAnnouncementEmail";
 import { EventReminderEmail } from "./EventReminderEmail";
 import { EventsAnnouncementEmail } from "./EventsAnnouncementEmail";
 import { InvitationEmail } from "./InvitationEmail";
-import { SignInCodeEmail } from "./SignInCodeEmail";
 import { TeamMessageEmail } from "./TeamMessageEmail";
 
 /**
@@ -17,7 +16,7 @@ import { TeamMessageEmail } from "./TeamMessageEmail";
  *
  * Nothing else in the suite renders these: the builders next door are pure and
  * well covered, and the markup they feed was previously simple enough to read.
- * It is not any more — the eight templates now share a shell, a palette and a
+ * It is not any more — the seven templates now share a shell, a palette and a
  * texture kit — and the failure mode of shared email markup is silent. A
  * template that stops rendering, loses its URL, or quietly spends a second
  * banana still returns a string, still sends, and is only ever seen by the
@@ -26,10 +25,10 @@ import { TeamMessageEmail } from "./TeamMessageEmail";
  * So this checks the four things that would otherwise be found in an inbox:
  *
  * 1. **Every template renders and still carries its facts** — the team name
- *    on the cap, the date, the code, the link.
+ *    on the cap, the date, the link.
  * 2. **The banana budget** (design-plan.md §2). At most one banana surface per
- *    email, counted by the `data-banana` marker the two permitted components
- *    carry, and none at all on the calm emails.
+ *    email, counted by the `data-banana` marker the one permitted component
+ *    carries, and none at all on the calm emails.
  * 3. **Every colour comes from the palette.** No hand-typed hex, no React
  *    Email default leaking through, and therefore no white anywhere — which is
  *    how "white on the banana" would arrive.
@@ -40,7 +39,7 @@ import { TeamMessageEmail } from "./TeamMessageEmail";
 const TEAM = "Cornelius 7/8 Baseball";
 const URL = "https://baseball.example.com";
 
-/// The eight templates with realistic props, including the awkward ones: a
+/// The seven templates with realistic props, including the awkward ones: a
 /// team name with a slash, an event with no location, and a family with two
 /// kids in different RSVP states.
 const TEMPLATES: {
@@ -50,8 +49,8 @@ const TEMPLATES: {
   /// ones (`false`) are a claim, not an oversight — see each template's own
   /// comment.
   banana: boolean;
-  /// The URL the template links to, if any — asserted to appear as text.
-  url: string | null;
+  /// The URL the template links to — asserted to appear as text.
+  url: string;
   /// Text that has to survive, whatever the styling does.
   contains: string[];
 }[] = [
@@ -75,16 +74,6 @@ const TEMPLATES: {
     banana: true,
     url: `${URL}/t/team-1`,
     contains: [TEAM],
-  },
-  {
-    name: "SignInCodeEmail",
-    element: <SignInCodeEmail formattedCode="K3M7-QP2X" expiresMinutes={10} />,
-    // The code panel is a scoreboard, and floodlight yellow on charcoal is the
-    // banana family after dark. There is no button, by design; the panel is
-    // the banana.
-    banana: true,
-    url: null,
-    contains: ["K3M7-QP2X", "expires in 10 minutes"],
   },
   {
     name: "EventAnnouncementEmail",
@@ -236,16 +225,9 @@ describe.each(TEMPLATES)("$name", ({ name, banana, url, contains }) => {
     expect(markup).toContain("Youth Baseball Team Manager");
   });
 
-  it("names the team on the cap, unless it is the pre-team sign-in code", () => {
-    const markup = markupOf(name);
-    const capCount = markup.split(TEAM).length - 1;
-
-    if (name === "SignInCodeEmail") {
-      expect(capCount).toBe(0);
-    } else {
-      // At least on the cap; most templates also say it in the body.
-      expect(capCount).toBeGreaterThanOrEqual(1);
-    }
+  it("names the team on the cap", () => {
+    // At least on the cap; most templates also say it in the body.
+    expect(markupOf(name).split(TEAM).length - 1).toBeGreaterThanOrEqual(1);
   });
 
   it("spends at most one banana, and none where the plan says none", () => {
@@ -271,12 +253,6 @@ describe.each(TEMPLATES)("$name", ({ name, banana, url, contains }) => {
   });
 
   it("repeats its URL as text for clients that strip links", () => {
-    if (url === null) {
-      // The sign-in code is deliberately link-free — see its docstring.
-      expect(markupOf(name)).not.toContain("href=");
-      return;
-    }
-
     // Once in the href, once in the body copy. Corporate gateways rewrite
     // links and some clients strip them outright; a parent who cannot tap
     // has to be able to copy.

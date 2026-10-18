@@ -18,8 +18,8 @@ import { completeSignIn } from "@/lib/signin-callback";
 import type { SigninError } from "@/app/signin/signin-messages";
 
 /// Where the auth service sends the browser back after a login. The second
-/// half of `GET /api/auth/login`, and once Auth.js is gone the only place a
-/// session is minted.
+/// half of `GET /api/auth/login` (or of accepting an invitation), and the only
+/// place a session is minted.
 ///
 /// In order, each step's failure ending on `/signin?error=<key>` (the keys are
 /// `SIGNIN_MESSAGES` in `src/app/signin/signin-messages.ts`):

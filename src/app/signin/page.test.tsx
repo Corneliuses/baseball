@@ -1,62 +1,70 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-
-// The real action pulls in Auth.js and the Prisma client; the page only needs
-// something form-shaped to point at.
-vi.mock("./actions", () => ({
-  requestSignInCode: vi.fn(),
-}));
-
-const cookieGet = vi.fn();
-
-vi.mock("next/headers", () => ({
-  cookies: async () => ({ get: (...args: unknown[]) => cookieGet(...args) }),
-}));
-
-// redirect() throws in Next; reproduce that so a "bounced" assertion cannot
-// pass by accident.
-vi.mock("next/navigation", () => ({
-  redirect: (url: string) => {
-    throw new Error(`NEXT_REDIRECT:${url}`);
-  },
-}));
 
 import SignInPage from "./page";
 import { SIGNIN_MESSAGES } from "./signin-messages";
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  cookieGet.mockReturnValue(undefined);
-});
-
-function pendingCookie() {
-  cookieGet.mockImplementation((name: string) =>
-    name === "__Secure-pending-signin"
-      ? { value: JSON.stringify({ email: "a@b.com", callbackUrl: "/" }) }
-      : undefined,
-  );
-}
-
 async function renderPage(
   searchParams: { error?: string; callbackUrl?: string } = {},
 ) {
-  render(await SignInPage({ searchParams: Promise.resolve(searchParams) }));
+  return render(await SignInPage({ searchParams: Promise.resolve(searchParams) }));
+}
+
+function hrefOf(name: RegExp): URL {
+  const href = screen.getByRole("link", { name }).getAttribute("href");
+  return new URL(href ?? "", "https://x.example");
 }
 
 describe("SignInPage", () => {
-  it("renders an email field and a submit button", async () => {
+  it("offers one way in: a link that starts an auth service login", async () => {
+    const { container } = await renderPage();
+
+    const url = hrefOf(/sign in with kernel id/i);
+    expect(url.pathname).toBe("/api/auth/login");
+    expect(url.searchParams.get("callbackUrl")).toBe("/");
+    expect(url.searchParams.has("prompt")).toBe(false);
+
+    // No form, no email field, no button: the service asks for the address.
+    expect(container.querySelector("form")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  // A plain anchor, never next/link: a prefetch would start a login on hover.
+  it("is a plain anchor carrying the banana", async () => {
     await renderPage();
 
-    expect(screen.getByLabelText("Email")).toHaveAttribute("type", "email");
+    const link = screen.getByRole("link", { name: /sign in with kernel id/i });
+    expect(link.tagName).toBe("A");
+    expect(link.className).toMatch(/\bbg-banana\b/);
+  });
+
+  it("carries callbackUrl so sign-in lands where the visitor was headed", async () => {
+    await renderPage({ callbackUrl: "/t/team-a/roster" });
+
     expect(
-      screen.getByRole("button", { name: /email me a sign-in code/i }),
-    ).toBeInTheDocument();
+      hrefOf(/sign in with kernel id/i).searchParams.get("callbackUrl"),
+    ).toBe("/t/team-a/roster");
+  });
+
+  it("reduces a foreign callbackUrl to the landing page", async () => {
+    await renderPage({ callbackUrl: "//evil.example" });
+
+    expect(
+      hrefOf(/sign in with kernel id/i).searchParams.get("callbackUrl"),
+    ).toBe("/");
   });
 
   it("says the app is invite-only", async () => {
     await renderPage();
 
     expect(screen.getByText(/invite-only/i)).toBeInTheDocument();
+  });
+
+  it("shows no error by default", async () => {
+    await renderPage();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   // The ?error= key is whatever the URL says. On a bare object literal these
@@ -66,9 +74,7 @@ describe("SignInPage", () => {
   // argument survives the trip.
   it("falls back to its own wording for an inherited key", async () => {
     for (const key of ["constructor", "__proto__", "toString"]) {
-      const { unmount } = render(
-        await SignInPage({ searchParams: Promise.resolve({ error: key }) }),
-      );
+      const { unmount } = await renderPage({ error: key });
 
       expect(screen.getByRole("alert")).toHaveTextContent(
         /something went wrong signing you in/i,
@@ -77,135 +83,24 @@ describe("SignInPage", () => {
     }
   });
 
-  it("shows no error by default", async () => {
-    await renderPage();
-
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("shows a field error for a malformed address", async () => {
-    await renderPage({ error: "invalid-email" });
-
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      /doesn't look like an email address/i,
-    );
-  });
-
-  // pages.error points here, so Auth.js's own error screen never renders and
-  // its copy has to be reproduced. A silent form is the bug these cover.
-  describe("Auth.js error codes", () => {
-    it("explains a wrong or expired code", async () => {
-      await renderPage({ error: "Verification" });
-
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        /didn't match or has expired/i,
-      );
-    });
-
-    it("explains a vanished pending cookie as an expired code", async () => {
-      // submitSignInCode's own key: the pending cookie and the code expire
-      // together, so no cookie means nothing left to redeem.
-      await renderPage({ error: "code-expired" });
-
-      expect(screen.getByRole("alert")).toHaveTextContent(/code has expired/i);
-    });
-
-    it("explains a denied code without naming the reason", async () => {
-      await renderPage({ error: "AccessDenied" });
-
-      const alert = screen.getByRole("alert");
-      expect(alert).toHaveTextContent(/no longer valid/i);
-      // Must not reveal whether an invitation exists for the address.
-      expect(alert).not.toHaveTextContent(/invit(ed|ation)\b.*(not|no)\b/i);
-    });
-
-    it("reports a server misconfiguration", async () => {
-      await renderPage({ error: "Configuration" });
-
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        /wrong on our end/i,
-      );
-    });
-
-    it("falls back to a generic message for an unrecognized code", async () => {
-      await renderPage({ error: "SomethingNew" });
+  // Auth.js's keys can still arrive from an old bookmark or a half-finished
+  // code sign-in that straddled the cutover. They read as the generic failure.
+  it("falls back to a generic message for an unrecognized key", async () => {
+    for (const key of ["Verification", "AccessDenied", "SomethingNew"]) {
+      const { unmount } = await renderPage({ error: key });
 
       expect(screen.getByRole("alert")).toHaveTextContent(
         /something went wrong signing you in/i,
       );
-    });
-
-    it("describes the email field with whichever error is showing", async () => {
-      const { container } = render(
-        await SignInPage({ searchParams: Promise.resolve({ error: "Verification" }) }),
-      );
-
-      expect(container.querySelector("#email")).toHaveAttribute(
-        "aria-describedby",
-        "email-error",
-      );
-    });
-  });
-
-  // A wrong-but-well-formed code fails inside Auth.js, which has only this
-  // page to fail to. While the pending cookie is alive the mailed code is
-  // too, so the parent is sent back to retype it rather than being told to
-  // ask for a second email.
-  describe("a failed redeem with a live pending sign-in", () => {
-    it("bounces back to the code form", async () => {
-      pendingCookie();
-
-      await expect(renderPage({ error: "Verification" })).rejects.toThrow(
-        "NEXT_REDIRECT:/signin/check-email?error=wrong-code",
-      );
-    });
-
-    it("stays here when there is no pending sign-in left", async () => {
-      await renderPage({ error: "Verification" });
-
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        /didn't match or has expired/i,
-      );
-    });
-
-    // The gate refused the address; retyping the code cannot change that.
-    it("does not bounce a denied address", async () => {
-      pendingCookie();
-
-      await renderPage({ error: "AccessDenied" });
-
-      expect(screen.getByRole("alert")).toHaveTextContent(/no longer valid/i);
-    });
-  });
-
-  it("carries callbackUrl through the form so sign-in lands where the visitor was headed", async () => {
-    const { container } = render(
-      await SignInPage({
-        searchParams: Promise.resolve({ callbackUrl: "/t/team-a/roster" }),
-      }),
-    );
-
-    const hidden = container.querySelector('input[name="callbackUrl"]');
-    expect(hidden).toHaveValue("/t/team-a/roster");
-  });
-
-  it("defaults callbackUrl to the landing page", async () => {
-    const { container } = render(
-      await SignInPage({ searchParams: Promise.resolve({}) }),
-    );
-
-    expect(container.querySelector('input[name="callbackUrl"]')).toHaveValue(
-      "/",
-    );
+      unmount();
+    }
   });
 
   // The auth service callback redirects here with these keys; each must read
   // as its own sentence, not the fallback.
   it("renders every auth service callback error", async () => {
     for (const [key, sentence] of Object.entries(SIGNIN_MESSAGES)) {
-      const { unmount } = render(
-        await SignInPage({ searchParams: Promise.resolve({ error: key }) }),
-      );
+      const { unmount } = await renderPage({ error: key });
 
       expect(screen.getByRole("alert")).toHaveTextContent(sentence as string);
       unmount();
@@ -222,14 +117,9 @@ describe("SignInPage", () => {
 
   it("offers a different account after a wrong-person login, forcing the service form", async () => {
     for (const error of ["account-mismatch", "not-invited"]) {
-      const { unmount } = render(
-        await SignInPage({
-          searchParams: Promise.resolve({ error, callbackUrl: "/t/team-a" }),
-        }),
-      );
+      const { unmount } = await renderPage({ error, callbackUrl: "/t/team-a" });
 
-      const link = screen.getByRole("link", { name: /use a different account/i });
-      const href = new URL(link.getAttribute("href") ?? "", "https://x.example");
+      const href = hrefOf(/use a different account/i);
       expect(href.pathname).toBe("/api/auth/login");
       expect(href.searchParams.get("prompt")).toBe("login");
       expect(href.searchParams.get("callbackUrl")).toBe("/t/team-a");
@@ -238,33 +128,18 @@ describe("SignInPage", () => {
   });
 
   it("sanitizes the different-account callbackUrl and hides the link otherwise", async () => {
-    const { unmount } = render(
-      await SignInPage({
-        searchParams: Promise.resolve({
-          error: "not-invited",
-          callbackUrl: "//evil.example",
-        }),
-      }),
-    );
-    const href = screen
-      .getByRole("link", { name: /use a different account/i })
-      .getAttribute("href");
-    expect(new URL(href ?? "", "https://x.example").searchParams.get("callbackUrl")).toBe("/");
+    const { unmount } = await renderPage({
+      error: "not-invited",
+      callbackUrl: "//evil.example",
+    });
+    expect(
+      hrefOf(/use a different account/i).searchParams.get("callbackUrl"),
+    ).toBe("/");
     unmount();
 
     await renderPage({ error: "login-state" });
-    expect(screen.queryByRole("link", { name: /use a different account/i })).toBeNull();
-  });
-
-  it("links the beta auth service sign-in, keeping the destination", async () => {
-    await renderPage({ callbackUrl: "/t/team-a" });
-
-    const href = screen
-      .getByRole("link", { name: /sign in with kernel id/i })
-      .getAttribute("href");
-    const url = new URL(href ?? "", "https://x.example");
-    expect(url.pathname).toBe("/api/auth/login");
-    expect(url.searchParams.get("callbackUrl")).toBe("/t/team-a");
-    expect(url.searchParams.has("prompt")).toBe(false);
+    expect(
+      screen.queryByRole("link", { name: /use a different account/i }),
+    ).toBeNull();
   });
 });

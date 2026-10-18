@@ -70,10 +70,6 @@ export const EMAIL_COLOR = {
   scoreboard: "#14181F",
   /// `--scoreboard-foreground` — chalk readout text.
   onScoreboard: "#EBE6D5",
-  /// `--scoreboard-accent` — the lit figures. Floodlight yellow, 12.4:1 on the
-  /// panel: this is the banana family after dark, and it is what the sign-in
-  /// code is set in.
-  floodlight: "#FFD24D",
 } as const;
 
 /// Font stacks, not families. Nothing is loaded, so each of these has to look
@@ -87,7 +83,7 @@ export const EMAIL_FONT = {
   /// Geist is not installable in mail, so body text is the recipient's own
   /// system sans — the face their inbox already reads in.
   body: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  /// Dates, times, jersey numbers and the sign-in code. Tabular by habit and
+  /// Dates, times and jersey numbers. Tabular by habit and
   /// unmistakably a readout.
   mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
 } as const;

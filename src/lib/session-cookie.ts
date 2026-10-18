@@ -1,20 +1,19 @@
 /// The session cookie: what it is called, how it is read, and the attributes
 /// it is written with.
 ///
-/// Several places have to agree on this. Auth.js writes the cookie when a
-/// sign-in code is redeemed, `/invite/[token]` writes it when a parent accepts
-/// an invitation, `getCurrentUser` (`session.ts`) reads it, the profile page's
-/// sign-out clears it, and `proxy.ts` checks it is there. `src/auth.ts`
-/// deliberately passes no `cookies` config, so what this module states is
-/// Auth.js's own default, restated once instead of guessed at in each place:
-/// `@auth/core`'s `defaultCookies` names the cookie
+/// Several places have to agree on this. The auth service's callback
+/// (`/api/auth/callback`) is the one writer, `getCurrentUser` (`session.ts`)
+/// reads it, the profile page's sign-out clears it, and `proxy.ts` checks it
+/// is there. What this module states is Auth.js's own default, because Auth.js
+/// wrote every session cookie before the cutover and those cookies are still
+/// live: `@auth/core`'s `defaultCookies` named the cookie
 /// `${prefix}authjs.session-token` with `httpOnly`, `sameSite: "lax"` and
-/// `path: "/"`, and applies the `__Secure-` prefix exactly when it marks the
+/// `path: "/"`, and applied the `__Secure-` prefix exactly when it marked the
 /// cookie secure. The name outlives Auth.js on purpose: keeping it is what
 /// keeps every live session through the move to the auth service.
 ///
 /// Pure and dependency-free on purpose — `proxy.ts` imports it, and Proxy must
-/// not pull in Auth.js or the database.
+/// not pull in the auth client or the database.
 
 const BASE_NAME = "authjs.session-token";
 const SECURE_NAME = `__Secure-${BASE_NAME}`;
@@ -31,7 +30,7 @@ export function sessionCookieName(secure: boolean): string {
 /**
  * The session token this origin should trust, or null.
  *
- * Only the spelling this origin writes is read, exactly as Auth.js reads only
+ * Only the spelling this origin writes is read, exactly as Auth.js read only
  * the one it would write. Falling back to the bare name on an HTTPS origin
  * would let anyone who can set a cookie for the host without `__Secure-` (a
  * sibling subdomain, a plain-HTTP response) plant their own session token and
@@ -47,7 +46,7 @@ export function readSessionToken(
 }
 
 export type SecureCookieInput = {
-  /// `AUTH_URL`, when set. It wins, exactly as it does in Auth.js.
+  /// `AUTH_URL`, when set. It wins, exactly as it did in Auth.js.
   authUrl?: string | null;
   /// The request's `x-forwarded-proto`, with or without a trailing colon.
   forwardedProto?: string | null;
@@ -56,15 +55,16 @@ export type SecureCookieInput = {
 /**
  * Whether cookies get the `secure` flag and the `__Secure-` prefix.
  *
- * Mirrors `createActionURL` in `@auth/core`: `AUTH_URL`'s protocol when that is
- * set, otherwise `x-forwarded-proto`, otherwise https. Disagreeing with Auth.js
- * here does not fail subtly — a `__Secure-` cookie sent over plain HTTP is
- * dropped by the browser outright, and writing the other spelling than Auth.js
- * reads would leave two sessions that never see each other.
+ * Mirrors `createActionURL` in `@auth/core`, which decided the spelling of
+ * every cookie Auth.js wrote: `AUTH_URL`'s protocol when that is set,
+ * otherwise `x-forwarded-proto`, otherwise https. Disagreeing with it would
+ * not fail subtly — a `__Secure-` cookie sent over plain HTTP is dropped by
+ * the browser outright, and reading the other spelling than an Auth.js-era
+ * cookie carries would sign that person out.
  *
  * An unparseable `AUTH_URL` falls through to the header rather than throwing.
  * Signing a parent in is not the place to discover a malformed env var, and
- * Auth.js will raise its own error on the next request either way.
+ * the auth client raises its own error when it builds a redirect URI from it.
  */
 export function usesSecureCookies({
   authUrl,
@@ -94,11 +94,12 @@ export type SessionCookieOptions = {
 };
 
 /**
- * The attributes Auth.js writes the session cookie with.
+ * The attributes the session cookie is written with — Auth.js's, restated.
  *
- * `sameSite: "lax"` is load-bearing, for the reason `src/auth.ts` gives: an
- * invitation link clicked in an email client is a cross-site top-level
- * navigation that "strict" would silently drop. `expires` matches the
+ * `sameSite: "lax"` is load-bearing: the auth service's redirect back to
+ * `/api/auth/callback` is a cross-site top-level navigation when the app and
+ * the service sit on different sites, and a link clicked in an email client
+ * always is one; "strict" would silently drop the cookie on both. `expires` matches the
  * `Session` row's own expiry, so the cookie and the row die together.
  */
 export function sessionCookieOptions(

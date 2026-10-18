@@ -2,8 +2,8 @@
 /// added-to-team notices. Nothing in the request context is available when an
 /// email is composed, so the base has to come from the environment.
 ///
-/// Precedence: `AUTH_URL` (already required for Auth.js, so it is the base
-/// this app already trusts) → Vercel's production URL → Vercel's per-deploy
+/// Precedence: `AUTH_URL` (already required for the auth service's redirect
+/// URIs, so it is the base this app already trusts) → Vercel's production URL → Vercel's per-deploy
 /// URL → localhost, for local development.
 
 export type AbsoluteUrlEnv = {

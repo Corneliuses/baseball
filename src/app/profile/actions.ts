@@ -70,8 +70,9 @@ export async function updateProfileAction(formData: FormData) {
  * A row created by the auth service's callback carries the id token it was
  * issued with; handing that back as `id_token_hint` lets the service end its
  * own single-sign-on session without a confirmation page, then return here. A
- * row with no id token — every session minted by a sign-in code or an
- * invitation — signs out locally only and lands on the signed-out home page.
+ * row with no id token — every session left over from the Auth.js era's
+ * sign-in codes and invitation accepts — signs out locally only and lands on
+ * the signed-out home page.
  *
  * A failed delete keeps the cookie and reports the failure. Clearing it
  * anyway would look signed out while leaving a live row behind for up to 90

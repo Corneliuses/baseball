@@ -50,9 +50,10 @@ Scoped to fit **6 weeks of evenings and weekends**.
 - **Auth & onboarding** — coach enters parent emails; each gets a one-time, expiring
   invitation link; opening it and accepting creates the account and signs the parent in on
   that device, in one trip. (Revised 2026-08-18: accepting used to *mail* a magic link,
-  making onboarding two emails; real parents stopped at the second one. The magic link
-  remains what `/signin` sends for everyone who is already a member.) No passwords. No
-  self-serve signup.
+  making onboarding two emails; real parents stopped at the second one. Revised again
+  2026-10: accepting now joins the team and then signs in through the Kernel ID auth
+  service, pre-filled with the invited address, with an emailed code or Google; `/signin`
+  is the same service for everyone already a member.) No passwords. No self-serve signup.
 - **Teams** — the owner creates a team per season and keeps past teams around. Every
   screen operates on exactly one **active team**, chosen from a team switcher. **Past
   teams are read-only** — they render completely but reject every mutation, so there's no
@@ -96,8 +97,8 @@ Scoped to fit **6 weeks of evenings and weekends**.
   (added 2026-08-18). #5 logged "a parent expects to edit their own phone" as an accepted
   risk on the assumption they could at least see the value; closing the directory to
   parents removed the last screen that showed it, so a coach's typo became undetectable
-  by the one person who knows it is wrong. Email is not editable — it is the magic-link
-  identity, so changing it is an account migration, not a profile edit.
+  by the one person who knows it is wrong. Email is not editable — invitations and
+  memberships key on it, so changing it is an account migration, not a profile edit.
 - **Schedule** — coach creates games and practices with location and time; parents see a
   month calendar view and a chronological list view.
 - **RSVP** — parent toggles attending / not attending per kid per event, **only for kids
@@ -183,7 +184,8 @@ app install. This app wins on exactly three things:
 2. **`allPlay` is a first-class team setting.** Recreational youth leagues where every kid
    bats and every kid fields are the norm, and the big products model them as an
    exception.
-3. **Parents never create an account.** They click a link in an email and they're in.
+3. **No passwords, no self-serve signup.** Parents accept an emailed invitation and sign
+   in with a code or Google; nobody gets in uninvited.
 
 None of that matters commercially — the audience is 25 people who already know the coach.
 It matters because it's the difference between parents using it and parents going back to

@@ -30,15 +30,17 @@ docs/design/       # The design plan and its SVG mockups — kept in step with t
 .claude/           # Agent config: workflow skills, agent defs, permissions (do not edit)
 ```
 
-`src/app/` now has real routes: `/` (auth-gated landing), `/signin` and
-`/signin/check-email` (ask for an emailed code, then type it — the second is a real form,
-not a confirmation screen), `/invite/[token]`
+`src/app/` now has real routes: `/` (auth-gated landing), `/signin` (one "Sign in with
+Kernel ID" button into the auth service, plus every sign-in failure's message),
+`/api/auth/login` and `/api/auth/callback` (the two halves of an OpenID Connect login with
+the auth service — the callback is where the invitation gate runs and the only place a
+session is minted), `/invite/[token]`
 (unauthenticated invitation accept page — deliberately outside proxy.ts's matcher),
 `/profile` (the signed-in person's own name and phone — global, not team-scoped, since
-those are `User` columns — and the app's only sign-out, a server action wrapping Auth.js
-`signOut`), and `/t/[teamId]/` (team home — the parent dashboard: a player card per kid
-(`MiniDiamondHero` field art, jersey dot, slab name plate, chart-line marquee) and the
-next three events, every one of them answerable in one tap — settings, roster,
+those are `User` columns — and the app's only sign-out, a server action that deletes the
+`Session` row and ends the auth service's own session too), and `/t/[teamId]/` (team
+home — the parent dashboard: a player card per kid (`MiniDiamondHero` field art, jersey
+dot, slab name plate, chart-line marquee) and the next three events, every one of them answerable in one tap — settings, roster,
 members, the owner-only returning-player picker at `roster/returning`, the coach-only
 bulk parent invite at `roster/invite`, the coach-only member directory, the coach-only
 roster entry detail at `roster/[entryId]`, the schedule at `schedule` /
@@ -67,8 +69,10 @@ fixes, what the team has on file for them.
 - **Framework**: Next.js 16.2 (App Router), React 19.2
 - **Database**: Neon Postgres (via Vercel Marketplace) — *not* Prisma Postgres
 - **ORM**: Prisma 7.9 with the `@prisma/adapter-pg` driver adapter
-- **Auth**: Auth.js v5 beta (`next-auth@5.0.0-beta.32`) + Prisma adapter, emailed
-  sign-in codes only (a typed code, not a tapped link — see the PWA gotcha below)
+- **Auth**: the auth service at auth.corneliuses.com ("Kernel ID") over OpenID Connect,
+  through `@corneliuses/auth-client`; it signs people in with an emailed code or Google.
+  The app keeps its own database sessions and decides who gets in (see the sign-in
+  gotcha below)
 - **Styling**: Tailwind CSS 4
 - **Drag & drop**: `@dnd-kit` (core, sortable, utilities)
 - **Animation**: `motion` v12 — import via `LazyMotion` + `m`, not the top-level `motion`
@@ -112,8 +116,8 @@ URL.
 ## Architecture
 
 Server Actions for mutations; Route Handlers only for things needing a real HTTP endpoint
-(the Auth.js email callback, the ICS feed, push subscription registration, the reminder cron
-target). No separate API layer.
+(the auth service's login and callback, the ICS feed, push subscription registration, the
+reminder cron target). No separate API layer.
 
 ### Team scoping
 
@@ -130,6 +134,10 @@ non-null) reject **every** write regardless of role, owner included.
 when no session cookie is present, matching `/t/:path*` and `/profile`. It must stay
 that way — matching another signed-in-only path is fine, reading the database there is
 not.
+
+It redirects to `/signin`, **never into `/api/auth/login`**. Proxy runs on prefetches, and
+starting a login mints a pending-login cookie and sends the browser to another origin —
+wired here, hovering a link would begin a login.
 
 Do **not** move the membership, role, or archived check into it. Proxy runs on every
 request including prefetches, so a database lookup there fires on link hover; the Next.js
@@ -230,8 +238,8 @@ failure exits non-zero *before* `next build` runs — a database problem fails t
 loudly instead of shipping an app that crashes on its first query.
 
 The cost is deliberate: **`pnpm build` now requires `DATABASE_URL`**, unlike
-`src/lib/db.ts` and `src/auth.ts`, which still defer their secrets to request time. A bare
-checkout with no `.env` cannot `pnpm build` — run `pnpm check` (lint → typecheck → test),
+`src/lib/db.ts` and `src/lib/auth-client.ts`, which still defer their secrets to request
+time. A bare checkout with no `.env` cannot `pnpm build` — run `pnpm check` (lint → typecheck → test),
 which needs no database, or use `pnpm exec next build` to skip the migration step.
 
 Because Preview and Production share one `DATABASE_URL`, **a preview deploy applies
@@ -399,52 +407,56 @@ production — the dev command can prompt, generate new migrations, and reset th
   the build passes and every page renders — and only an actual iPhone shows it, by putting
   a screenshot of the page on the home screen instead of the crest. `layout.test.tsx` pins
   the declaration and `manifest.test.ts` pins the file it points at.
-- **Sign-in is a typed code because an installed PWA and the email's browser can hold
-  separate cookie containers.** A tapped magic link is redeemed by whichever browser the
-  OS hands it to, and that is routinely not the container the person requested it from —
-  **confirmed in the field on Android** (sign-in from the installed app looped back to
-  the email form forever, the report behind #60's implementation) and the designed-for
-  case on iOS Home Screen apps, which iOS cannot route a link back into. So `/signin`
-  mails an 8-character code (Crockford base32, 10-minute expiry — `signin-code.ts`) that
-  the person types into `/signin/check-email`, whose action rebuilds the same
-  `/api/auth/callback/resend?token=&email=` URL the link used to carry; the gate,
-  `acceptInvitations`, and the session cookie are untouched. The pending address rides in
-  a short-lived httpOnly cookie (`pending-signin-cookie.ts`), never a query parameter.
-  Do not reintroduce a tappable link in the sign-in email, even alongside the code: both
-  would be the same token, so a mail scanner following the link would burn the typed code
-  too. The code's 40 bits and short expiry carry the security — there is no attempt
-  counter (that would need a migration), so neither may be weakened alone. The
-  invitation-accept link (`/invite/[token]`) is the one emailed link that signs someone
-  in, and it stays: it is a POST from a page, not a bare GET, and it establishes the
-  session in whichever container the parent opened it in.
+- **Sign-in is a redirect to the auth service, and the app still decides who gets in.**
+  `/signin` is one plain `<a>` to `/api/auth/login`, which seals a PKCE verifier, `state`
+  and `nonce` into the `__Host-pending-login` cookie (`pending-login-cookie.ts`, keyed from
+  `AUTH_SECRET`) and redirects to the service. The service mails a code or hands off to
+  Google, then sends the browser to `/api/auth/callback`, which exchanges the code, verifies
+  the id token, revokes the refresh token (the app calls no API, so it keeps only the id
+  token, for `id_token_hint` at sign-out), and runs `completeSignIn` (`signin-callback.ts`):
+  link or create the `User` row (by `authSub`, else by verified email), then the same
+  `decideSignIn` gate as before, on **every** login, so a removed member stops getting in.
+  The service's client is open (no allowlist); invite-only lives here. Every failure lands
+  on `/signin?error=<key>`, keyed by `SIGNIN_MESSAGES`.
 
-  **Three things hold that code up, and none of them is optional.** The 40 bits assume
-  *one* live code per address, which `VerificationToken` does not give for free — it is
-  unique on `(identifier, token)`, not on `identifier`, so every request would otherwise
-  add another live code and divide the guessing work. `withSingleLiveCode`
-  (`auth-adapter.ts`) wraps the Prisma adapter to delete the address's other codes before
-  minting one; length, expiry and that wrapper stand or fall together. Prune-then-create
-  is two statements, so *concurrent* requests for one address can still both survive —
-  knowingly left open in #81, where the atomic fix (a unique index on `identifier` plus an
-  upsert) needs a migration, and where the reason the obvious patch is worse is written
-  down. Second, the pending
-  cookie is read through `readPendingSignIn`, which takes the first name that **parses**
-  and tries `__Secure-` first: taking the first that merely *existed* let junk planted in
-  the bare `pending-signin` name shadow the real cookie and lock someone out of signing in
-  entirely. Third, `resend-provider.ts` imports the mail stack *inside* the send path —
-  `src/auth.ts` is in every page's graph, so a static `@/lib/email` import puts the Resend
-  SDK and React Email there too.
+  **Why this is PWA-safe where a tapped link was not.** An installed PWA and the email's
+  browser can hold separate cookie containers, which is what broke magic links (#60) and
+  why the Auth.js era used a typed code. Here the code is typed into the *service's* page,
+  inside the same browser that started the login, so the redirect back carries the
+  pending cookie in the container it was set in — verified on an installed iPhone and
+  Android app with both methods before the cutover. The failure signature, should a
+  platform ever break it, is `?error=login-state`.
 
-  **A wrong code goes back to the code form, not to the email form.** `pages.error` is
-  global, so Auth.js can only fail a redeem to `/signin`; that loader bounces
-  `?error=Verification` on to `/signin/check-email?error=wrong-code` when the pending
-  cookie is still alive, because the cookie and the mailed code expire together — a live
-  cookie means there is still a code worth retyping, and sending the parent back for a
-  second email throws away a working one. `AccessDenied` is deliberately not bounced: the
-  gate refused the address, and retyping cannot change that. The entry form itself is
-  `useActionState` (`CodeEntryForm` + `check-email-state.ts`), so a mistype keeps the
-  characters — the convention every typed-into form here follows, and the reason
-  `?error=invalid-code` no longer exists.
+  Rules that hold it together:
+  - **Plain `<a>`, never `next/link`**, for anything pointing at `/api/auth/login`: a
+    prefetch would start a login on hover, and the router fetches a `<Link>` target as RSC,
+    which a cross-origin redirect cannot satisfy.
+  - **No `next/headers` in the two route handlers.** They read `request.cookies` and write
+    `response.cookies`, so the whole flow tests with a `NextRequest`.
+  - **A server action cannot redirect to a same-origin route handler and expect its
+    cookies to land** (#100): Next fetches that target server-side and the `Set-Cookie`
+    stays on the server. A cross-origin redirect is a real browser navigation, which is why
+    invitation accept calls `beginLogin` itself and redirects straight to the service rather
+    than bouncing through `/api/auth/login`.
+  - **`login_hint` pins an invitation's login.** Accepting grants the memberships, then
+    starts a login with the invited address as `login_hint` and `prompt=login`; the callback
+    refuses a login that comes back as anyone else with `account-mismatch`, and `/signin`
+    then offers "Use a different account". `prompt=login` is not optional on accept: the
+    service only pre-fills the hint, so over a live SSO session (a shared family tablet) it
+    would sign in the session's owner instead. `not-invited` offers the same link.
+  - **Accepting spends the invitation before the sign-in finishes.** A parent who abandons
+    the service's page comes back to "Already accepted", whose sign-in link carries
+    `/t/<teamId>` as the destination; their Membership admits them. A login that cannot
+    start after the grant sends them to `/signin` with the same destination, never back to
+    a "try again" that can no longer work.
+  - **Only exactly registered redirect URIs work.** The service matches
+    `AUTH_URL + /api/auth/callback` exactly, so a per-deploy `*.vercel.app` URL can never
+    sign in; the preview alias registered with the service is the only preview that can.
+    `.github/workflows/preview-domain.yml` points `preview.baseball.corneliuses.com` at the
+    newest ready Preview deployment on every Vercel `deployment_status`, so the last PR
+    pushed is the one that can sign in (it needs the `VERCEL_TOKEN` repository secret).
+    Don't clear the domain's git branch in Vercel: a project domain with no branch is a
+    Production domain.
 - **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting`,
   `clients.claim`, and the `push` / `notificationclick` pair — no `fetch` handler, which is
   Decision 9 and the reason there is no Workbox build step. Adding a `fetch` handler is not
@@ -463,17 +475,16 @@ production — the dev command can prompt, generate new migrations, and reset th
   **Which shape a real write actually returns is unverified** — this repo has not yet run a
   write against live Postgres that trips one of these constraints. Confirm it before relying
   on this in production, and adjust the matching in `roster-rules.ts` if it differs.
-- **Two things write the session cookie, and Auth.js is only one of them.** Accepting an
-  invitation at `/invite/[token]` signs the parent in directly — Auth.js v5 has no
-  "sign this user in" API under the database strategy, so `src/lib/sessions.ts` inserts the
-  `Session` row the way `@auth/core` does (a `randomUUID()` token, `expires` at now + max
-  age) and the action sets the cookie itself. Name and attributes come from
-  `src/lib/session-cookie.ts`, which restates Auth.js's defaults once for all three
-  consumers — Auth.js, that action, and `proxy.ts`. If `src/auth.ts` ever grows a `cookies`
-  block or a `session.generateSessionToken`, that module has to move with it or a parent
-  accepting an invitation gets a cookie the app cannot read. Accepting is a **POST**, never
-  a GET: it consumes the invitation, and corporate mail scanners follow every link in a
-  message before the recipient sees it.
+- **One writer of the session cookie: the sign-in callback.** `/api/auth/callback` inserts
+  the `Session` row (`src/lib/sessions.ts`, the same shape `@auth/core` wrote: a
+  `randomUUID()` token, `expires` at now + 90 days) and sets the cookie. The name and
+  attributes come from `src/lib/session-cookie.ts`, which restates Auth.js's defaults —
+  **`authjs.session-token` is kept on purpose**, so every session Auth.js minted before the
+  cutover still reads, and nobody was signed out by it. Renaming it signs everyone out
+  unless it is done with a dual-read. Invitation accept no longer writes a session: it
+  grants memberships and starts a login. It is still a **POST**, never a GET: it consumes
+  the invitation, and corporate mail scanners follow every link in a message before the
+  recipient sees it.
 - **`docs/design/design-plan.md` is checked against the code by a test.**
   `src/design-plan-drift.test.ts` reads that document and asserts its colour-token values
   against `globals.css` and its ``FIELD_ART.key = n`` geometry claims against
@@ -604,7 +615,7 @@ production — the dev command can prompt, generate new migrations, and reset th
 - **Every email wears one shell, and its palette is frozen hex that a test re-derives.**
   `EmailLayout` (cream page, charcoal scoreboard cap carrying the team name, warm card,
   seam-red rule) plus `EmailKit`'s motifs — `FactPanel` is the ticket stub, `StitchRule`
-  the seam, `ScoreboardPanel` the readiness scoreboard, `EdgePanel` the state-edged row,
+  the seam, `EdgePanel` the state-edged row,
   `SlotDot` the jersey dot — are the email translation of design-plan.md §5, and no
   template styles its own `<Body>` any more. Colours come from `src/emails/brand.ts` and
   nowhere else: a mail client gives an email no cascade to resolve `hsl(var(--x))` from,
@@ -634,17 +645,14 @@ production — the dev command can prompt, generate new migrations, and reset th
   and left alone rather than paid for with MSO conditional comments in every template.
 
   §2's one-banana budget applies per email and `templates.test.tsx` enforces it by
-  counting the `data-banana` marker that only `BananaButton` and `ScoreboardPanel` may
-  carry: the invitation, the added-to-team notice, both announcements and the reminder
-  each spend theirs on the call to action; the sign-in code spends its own as
-  floodlight-on-charcoal in the scoreboard panel (there is nothing to tap, by design);
-  and the team message and the announcement receipt are §7 calm surfaces with **no**
+  counting the `data-banana` marker that only `BananaButton` may carry: the invitation,
+  the added-to-team notice, both announcements and the reminder each spend theirs on the
+  call to action; and the team message and the announcement receipt are §7 calm surfaces with **no**
   banana at all — a yellow button over somebody's typed message is the app talking over
-  the coach. Nothing else in `src/emails/` may reference `EMAIL_COLOR.banana` or
-  `EMAIL_COLOR.floodlight`. That suite also asserts every colour in the rendered markup is
+  the coach. Nothing else in `src/emails/` may reference `EMAIL_COLOR.banana`. (Sign-in
+  codes are the auth service's mail now, not this app's.) That suite also asserts every colour in the rendered markup is
   in the palette (so no hand-typed white can reach the banana), that every template names
-  the team on the cap except the pre-team sign-in code (`teamName` is required as
-  `string | null` for that reason), and that every template with a URL repeats it as plain
+  the team on the cap, and that every template with a URL repeats it as plain
   text — which `BananaButton` and `QuietLink` do themselves, so no template has to remember.
 
 - **`List-Unsubscribe` is set on two sends, and which two is a claim, not an oversight.**
@@ -779,6 +787,6 @@ production — the dev command can prompt, generate new migrations, and reset th
   stays. `VAPID_PUBLIC_KEY` is read at request time and passed to `PushOptInCard` as a
   prop rather than being a `NEXT_PUBLIC_` variable — the key is not a secret, but inlining
   it would make the build depend on the environment, which `src/lib/email.ts` and
-  `src/auth.ts` both avoid on purpose. `/api/push/subscription`'s `DELETE` matches on
+  `src/lib/auth-client.ts` both avoid on purpose. `/api/push/subscription`'s `DELETE` matches on
   endpoint **and** `userId`: the endpoint is unique table-wide, so without the user filter
   it would be a fine deletion key for anyone who learned one.
