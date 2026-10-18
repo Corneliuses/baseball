@@ -12,13 +12,12 @@ name: Preview domain
 # sends a deployment_status for every deployment it builds, and GitHub runs the
 # copy of this file at the deployed commit, so a branch that predates it does
 # not repoint the domain.
+#
+# The event only says "a preview finished". The job then aliases the newest
+# ready Preview of the project, not the deployment that sent the event, so an
+# older push that finishes building late cannot move the domain back.
 on:
   deployment_status:
-
-# Two deployments finishing together must not race; the later event wins.
-concurrency:
-  group: preview-domain
-  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -34,10 +33,15 @@ jobs:
       startsWith(github.event.deployment.environment, 'Preview') &&
       endsWith(github.event.deployment_status.environment_url, '-brcornelius-projects.vercel.app')
     runs-on: ubuntu-latest
+    # Job-level, so events the `if` skips never queue here and displace a
+    # pending run that would have aliased.
+    concurrency:
+      group: preview-domain
+      cancel-in-progress: false
     env:
       DOMAIN: preview.baseball.corneliuses.com
       TEAM_ID: team_FIGdad6vepcLwF2SoY16kp6I
-      DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url }}
+      PROJECT_ID: prj_31ziJAWdjYvtgyiadphxIroTrS7P
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Alias the deployment
@@ -46,8 +50,10 @@ jobs:
             echo "::error::The VERCEL_TOKEN repository secret is not set."
             exit 1
           fi
-          host="${DEPLOYMENT_URL#https://}"
-          host="${host%%/*}"
+          host=$(curl --fail-with-body -sS --retry 3 --retry-all-errors \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID&target=preview&state=READY&limit=1" \
+            | jq -er '.deployments[0].url')
           echo "Pointing $DOMAIN at $host"
           curl --fail-with-body -sS --retry 3 --retry-all-errors -X POST \
             -H "Authorization: Bearer $VERCEL_TOKEN" \
