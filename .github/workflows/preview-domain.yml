@@ -1,0 +1,55 @@
+name: Preview domain
+
+# Points preview.baseball.corneliuses.com at the newest ready Preview
+# deployment, so whichever PR was pushed last is the one that can sign in.
+#
+# Sign-in needs it: the auth service only redirects back to exactly registered
+# URIs, and Preview's AUTH_URL is this domain, so a per-deploy *.vercel.app URL
+# can never complete a login. Vercel itself can only tie a domain to one git
+# branch, which is why this repoints it per deployment instead.
+#
+# One domain, so the last push wins: two PRs open at once take turns. Vercel
+# sends a deployment_status for every deployment it builds; this workflow only
+# runs from the default branch's copy of this file.
+on:
+  deployment_status:
+
+# Two deployments finishing together must not race; the later event wins.
+concurrency:
+  group: preview-domain
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  alias:
+    name: Point the preview domain
+    # Preview deployments of this team's project only. The repository also
+    # deploys to a second Vercel project in another team, whose deployments
+    # this token cannot alias; its URLs end differently.
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      startsWith(github.event.deployment.environment, 'Preview') &&
+      endsWith(github.event.deployment_status.environment_url, '-brcornelius-projects.vercel.app')
+    runs-on: ubuntu-latest
+    env:
+      DOMAIN: preview.baseball.corneliuses.com
+      TEAM_ID: team_FIGdad6vepcLwF2SoY16kp6I
+      DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Alias the deployment
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::The VERCEL_TOKEN repository secret is not set."
+            exit 1
+          fi
+          host="${DEPLOYMENT_URL#https://}"
+          host="${host%%/*}"
+          echo "Pointing $DOMAIN at $host"
+          curl --fail-with-body -sS --retry 3 --retry-all-errors -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.vercel.com/v2/deployments/$host/aliases?teamId=$TEAM_ID" \
+            -d "{\"alias\":\"$DOMAIN\"}"
