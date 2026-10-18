@@ -60,8 +60,8 @@ enum Position {
 
 /// A person with an account, or who will have one. Rows are created when the
 /// owner enters an email, BEFORE that person ever signs in — which is what
-/// lets a not-yet-verified parent hold a Membership. Auth.js attaches the
-/// session on first magic-link click.
+/// lets a not-yet-verified parent hold a Membership. The sign-in callback links
+/// the row to the auth service on that person's first login (see `authSub`).
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -80,7 +80,6 @@ model User {
   /// identity. See src/lib/signin-callback.ts.
   authSub String? @unique
 
-  accounts          Account[]
   sessions          Session[]
   memberships       Membership[]
   guardianOf        GuardianPlayer[]
@@ -345,28 +344,8 @@ model ReminderReceipt {
 }
 
 // ---------------------------------------------------------------------------
-// Auth.js (NextAuth) adapter models
+// Sessions — the app's own, written only by the sign-in callback
 // ---------------------------------------------------------------------------
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-}
 
 model Session {
   id           String   @id @default(cuid())
@@ -384,12 +363,4 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
 }
