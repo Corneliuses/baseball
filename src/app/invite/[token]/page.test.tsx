@@ -62,7 +62,9 @@ describe("Invite page", () => {
     const markup = await render("tok-1");
 
     expect(markup).toContain("Already accepted");
-    expect(markup).toContain("/signin");
+    // The sign-in that follows an accept may not have finished; the link keeps
+    // the team as the destination.
+    expect(markup).toContain("/signin?callbackUrl=%2Ft%2Fteam-1");
   });
 
   it("shows an expired state for a token past its expiry", async () => {
@@ -98,9 +100,7 @@ describe("Invite page", () => {
     expect(markup).not.toContain("sam@example.com");
   });
 
-  // The whole point of the change: accepting must not send them back to an
-  // inbox for a second link.
-  it("does not offer to email a sign-in link", async () => {
+  it("says accepting joins the team and then signs in", async () => {
     getInvitationByToken.mockResolvedValue({
       teamId: "team-1",
       teamName: "Cubs",
@@ -112,8 +112,8 @@ describe("Invite page", () => {
 
     const markup = await render("tok-1");
 
+    expect(markup).toContain("adds you to the team, then signs you in");
     expect(markup).not.toContain("Send me a sign-in link");
-    expect(markup).not.toContain("Check your email");
   });
 
   it("keeps the accept form on screen alongside a failure message", async () => {

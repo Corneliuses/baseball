@@ -1,12 +1,14 @@
 import { isOwnerEmail } from "@/lib/owner";
 import { isLiveInvitation } from "@/lib/invitation-token";
 
-/// Who is allowed to obtain a sign-in code, and therefore an account.
+/// Who is allowed a session, and therefore an account.
 ///
 /// There is no self-serve signup path in this app: an address gets in only if it
 /// holds a live Invitation, already holds a Membership somewhere, or is the
-/// instance owner. This is the whole gate — Auth.js's signIn callback loads the
-/// facts and calls this function with them.
+/// instance owner. This is the whole gate — the auth service's sign-in callback
+/// (`signin-callback.ts`) loads the facts and calls this function with them on
+/// every login. The service proves who someone is; this decides whether they
+/// get in.
 ///
 /// Deliberately pure and DB-free so every row of the decision table is tested
 /// without a database, following the same split as team-access.ts.
@@ -38,14 +40,14 @@ export type SignInReason =
 
 export type SignInDecision = {
   allowed: boolean;
-  /// Why — for server-side logging only. It is never shown to the visitor: the
-  /// sign-in form answers identically either way so it cannot be used to test
-  /// which families are on a team.
+  /// Why — for server-side logging only. The visitor sees only `not-invited`,
+  /// and only after proving the mailbox at the auth service, so it cannot be
+  /// used to test which families are on a team.
   reason: SignInReason;
 };
 
 /**
- * Decide whether an address may receive a sign-in code.
+ * Decide whether a verified address may sign in.
  *
  * Note what is deliberately absent: any notion of archived teams or of role.
  * Signing in is not a write, and a role is meaningless until a team is in the

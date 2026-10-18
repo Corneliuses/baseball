@@ -62,7 +62,6 @@ const COPIED_FROM: Record<keyof typeof EMAIL_COLOR, string> = {
   stitch: "destructive",
   scoreboard: "scoreboard",
   onScoreboard: "scoreboard-foreground",
-  floodlight: "scoreboard-accent",
 };
 
 describe("the email palette", () => {
@@ -99,7 +98,6 @@ describe("email contrast", () => {
     ["seam red on card stock", EMAIL_COLOR.stitch, EMAIL_COLOR.card],
     ["the footer on the page", EMAIL_COLOR.quietInk, EMAIL_COLOR.page],
     ["chalk on the scoreboard", EMAIL_COLOR.onScoreboard, EMAIL_COLOR.scoreboard],
-    ["the sign-in code on the scoreboard", EMAIL_COLOR.floodlight, EMAIL_COLOR.scoreboard],
   ])("clears AA for %s", (_label, foreground, background) => {
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(4.5);
   });

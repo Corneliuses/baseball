@@ -7,11 +7,11 @@ import { normalizeEmail } from "./email-address";
 /// `GET /api/auth/login` to `GET /api/auth/callback` in a short-lived httpOnly
 /// cookie.
 ///
-/// Same shape as `pending-signin-cookie.ts`, which it replaces at cutover: the
-/// name and attributes live in one module so the writers (the login route and,
-/// later, invitation accept) and the one reader (the callback) cannot drift.
+/// The name and attributes live in one module so the writers (the login route
+/// and invitation accept, both through `beginLogin`) and the one reader (the
+/// callback) cannot drift.
 ///
-/// Unlike that cookie, this one is sealed. It holds the PKCE verifier, the
+/// The cookie is sealed. It holds the PKCE verifier, the
 /// `state` the callback compares and the `nonce` the id token must echo, so a
 /// readable or forgeable value would let anyone who can plant a cookie (a
 /// sibling subdomain, a plain-HTTP response) pair their own authorization code

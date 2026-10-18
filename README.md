@@ -12,7 +12,8 @@ parking lot fifteen minutes before first pitch.
 **Phase 10 complete — the batting order editor.** Phase 1 laid the data model, tooling, and
 domain guards. Phase 2 added sign-in — a typed, emailed code rather than a tapped magic link, since a
 link is redeemed by whichever browser the OS picks and that is not always the installed
-app the person is standing in (#60). Phase 3 added team scoping (`/t/[teamId]`,
+app the person is standing in (#60); in October 2026 sign-in moved to the Kernel ID auth
+service (emailed code or Google), with the invitation gate still in this app. Phase 3 added team scoping (`/t/[teamId]`,
 `requireTeamAccess`). Phase 4 added the roster itself: players, jersey numbers, guardian
 links, working invitations, and owner-only member/role management. Phase 5 added the
 returning-player picker — the owner-only global `Player` read that pulls a kid and their
@@ -42,11 +43,13 @@ What exists today:
   contract plus its team-scoped, guardian-guarded data wrapper, the view page's pure
   chart render model (`chart-view.ts`), and the batting order editor's pure draft/drop/
   validation logic (`chart.ts`) — all unit-tested
-- `src/auth.ts` — Auth.js v5 config: Prisma adapter (wrapped so one sign-in code is
-  live per address), Resend provider issuing typed codes, database sessions
-- `src/proxy.ts` — redirects signed-out visitors away from `/t/:path*`
-- `src/app/signin/` — the email form and the code-entry page it hands off to
-- `src/app/invite/[token]/` — the (unauthenticated) invitation accept page
+- `src/app/api/auth/login` and `src/app/api/auth/callback` — an OpenID Connect login with
+  the Kernel ID auth service; the callback runs the invitation gate and writes the app's
+  own database session
+- `src/proxy.ts` — redirects signed-out visitors away from `/t/:path*` and `/profile`
+- `src/app/signin/` — the "Sign in with Kernel ID" button and every sign-in error
+- `src/app/invite/[token]/` — the (unauthenticated) invitation accept page, which joins
+  the team and then starts a sign-in as the invited address
 - `src/app/t/[teamId]/` — team home, settings, roster (list + player detail with guardian
   linking and phone), owner-only member management, an owner-only returning-player picker
   (`roster/returning`), the member directory (`directory`), the schedule — a month
@@ -86,8 +89,8 @@ Other things worth knowing:
 
 - **`allPlay` is a team setting.** When on, every kid bats and fields — the norm in
   recreational youth leagues, and something the big products treat as an exception.
-- **Parents never create an account.** They click a link in an email and they're in.
-  There is no self-serve signup anywhere in the app.
+- **No passwords, no self-serve signup.** Parents accept the emailed invitation and sign
+  in with a code or Google; nobody gets in without an invitation.
 - **Multiple teams, one owner.** A team per season, with past seasons kept read-only.
   Players and guardians persist across seasons, so adding a returning kid to a new roster
   also brings their parents onto that team.
@@ -102,7 +105,7 @@ Requires **Node 22** and **pnpm 10**.
 
 ```bash
 pnpm install
-cp .env.example .env     # then fill in DATABASE_URL and AUTH_SECRET
+cp .env.example .env     # then fill in DATABASE_URL, AUTH_SECRET and the AUTH_* client
 pnpm db:generate         # required — the Prisma client is gitignored
 pnpm db:deploy           # applies the existing migrations; needs a live database
 pnpm dev
@@ -137,7 +140,7 @@ Run `pnpm check` before pushing — it chains lint, typecheck, and tests.
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Prisma 7 on Neon
-Postgres · Auth.js v5 emailed sign-in codes · `@dnd-kit` · Motion · Resend · `web-push` · Vitest ·
+Postgres · Kernel ID (OpenID Connect) sign-in · `@dnd-kit` · Motion · Resend · `web-push` · Vitest ·
 deployed on Vercel.
 
 Every one of those was chosen deliberately, with alternatives considered and rejected in

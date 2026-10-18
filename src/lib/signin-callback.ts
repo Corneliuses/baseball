@@ -9,8 +9,9 @@ import { decideSignIn, type GateInvitation } from "@/lib/signin-gate";
 /// The service proves identity; it does not decide entry. Its client is open
 /// (no allowlist), so anyone who can type an emailed code reaches this point,
 /// and the app's own gate — `decideSignIn`, the same function Auth.js's signIn
-/// callback ran — decides whether that person gets a session. It runs on every
-/// login, not just the first, so a removed member stops getting in.
+/// callback ran before the cutover — decides whether that person gets a
+/// session. It runs on every login, not just the first, so a removed member
+/// stops getting in.
 ///
 /// Split the way the rest of `src/lib/` is: `decideCallback` is the pure
 /// decision table, tested row by row; `completeSignIn` loads its inputs and
@@ -180,8 +181,7 @@ export type CompleteSignInResult =
  * Resolve a verified login to a `User` row, or refuse it.
  *
  * Fails closed: any error loading the gate's facts or writing the row is
- * `failed`, never a sign-in — a database outage must not open the gate, the
- * same rule `src/auth.ts` follows.
+ * `failed`, never a sign-in — a database outage must not open the gate.
  *
  * `acceptInvitations` runs after the row is settled and is logged and
  * swallowed, exactly as Auth.js's `events.signIn` did: the person is allowed

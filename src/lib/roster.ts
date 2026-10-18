@@ -46,9 +46,11 @@ export type RosterEntryGuardian = {
   /// not guaranteed once #5 can put a player on a second team, so it is read
   /// rather than assumed.
   isMember: boolean;
-  /// Has actually signed in at least once. `User.emailVerified` is set by the
-  /// Auth.js adapter on the first magic-link click, and a row exists well
-  /// before that (prisma/schema.prisma:61-64) — so this, NOT isMember, is what
+  /// Has proven the mailbox at least once. `User.emailVerified` is set by
+  /// accepting an invitation or by the auth service's sign-in callback (and
+  /// was set by the Auth.js adapter on a redeemed code before the cutover),
+  /// and a row exists well before either (prisma/schema.prisma) — so this,
+  /// NOT isMember, is what
   /// separates "invitation still outstanding" from "onboarded". Membership is
   /// created the moment a guardian is linked, so isMember would report every
   /// guardian as onboarded the instant they were added.

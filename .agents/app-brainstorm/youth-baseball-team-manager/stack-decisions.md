@@ -22,7 +22,7 @@ Written before any technology is named.
 |---|---|
 | **Client** | Installable to a phone home screen. Mobile-first. Touch drag-and-drop with an activation delay so page scrolling never triggers a drag. Must render a labeled baseball diamond with arbitrary drop targets, plus a reorderable vertical list. Realtime sync **not** required — a refresh is acceptable. Offline read of the current chart is desirable, not required, for MVP. |
 | **Data** | Strongly relational with referential integrity that matters: guardians ↔ players is many-to-many, and RSVPs for a single upcoming event are read against the team's standing chart to flag gaps. **Two tiers** — people (`User`, `Player`) persist across seasons and hold no team-specific attributes; participation (`Membership`, `RosterEntry`) is team-scoped, as is everything a team produces (`Event`, `Message`, `Invitation`, `Rsvp`). A player may be on two active teams at once, so jersey number, batting slot, and position are per-team by necessity, not merely by preference. The batting order and positions chart are **standing per team, not per game**, and live as columns on `RosterEntry` — see Decisions 15 and 16. Entities: `Team`, `Membership`, `Player`, `RosterEntry`, `GuardianPlayer`, `User`, `Invitation`, `Event`, `Rsvp`, `Message`, `PushSubscription`. Total data volume is measured in kilobytes — a season is ~40 events and ~600 RSVP rows, and a decade of archived seasons is still kilobytes. No full-text search. No analytics workload. |
-| **Auth** | Passwordless. Invitation-gated: no self-serve signup exists. Onboarding is one-time, expiring email links; recurring sign-in is a short-lived emailed code the person types (revised from a tapped link — see Decision 5). Three roles — owner, coach, parent — assigned **per team** and checked server-side on every mutation, against the team that owns the record being touched. Long-lived sessions so parents are not re-authenticating on a phone at a ballfield. |
+| **Auth** | Passwordless. Invitation-gated: no self-serve signup exists. Onboarding is one-time, expiring email links; recurring sign-in goes through the operator's own auth service with an emailed code or Google (revised twice — see Decision 5). Three roles — owner, coach, parent — assigned **per team** and checked server-side on every mutation, against the team that owns the record being touched. Long-lived sessions so parents are not re-authenticating on a phone at a ballfield. |
 | **Backgrounding** | Send transactional email — invitations, **added-to-team notices** (sent to existing accounts when a returning player pulls their guardians onto a new team; a heads-up and a link, *not* a magic link), coach broadcasts, and parent→coaches. Fan out web push to stored subscriptions. Optionally, a scheduled pre-game RSVP reminder. Fan-out size is ~25 recipients — no queue, no worker infrastructure justified. |
 | **Scale** | ~15 players, ~25 guardians, ~40 accounts *per team*, growing by one team a season. Peak concurrency is one coach and a handful of parents on a Saturday morning, all on the active team. Archived teams are cold data that must remain readable. Explicitly do not design for growth. |
 | **Integrations** | A transactional email provider and browser Web Push. No payments, no AI, no third-party sports data. |
@@ -133,6 +133,20 @@ signup path.
 > it. Everything below the credential — the Invitation gate, the Prisma adapter, database
 > sessions — is unchanged; the code redeems through the same Auth.js callback the link
 > did.
+
+> **Revised (2026-10):** sign-in moved to the operator's own OpenID Connect service,
+> auth.corneliuses.com ("Kernel ID"), and Auth.js was removed. The service signs a person
+> in with an emailed code or Google; the app redirects to it with PKCE and keeps
+> everything else: the `Invitation` gate (`decideSignIn`, run on every login in the
+> callback), its own database `Session` rows, and per-team roles. One identity service
+> now serves several of the operator's apps, which is what this buys: Google sign-in,
+> one place to maintain code delivery, and nothing auth-shaped left in this repo but the
+> gate. The typed code survives, now typed into the service's page inside the same
+> browser that started the login, so the redirect back stays in one cookie container;
+> verified on installed iOS and Android apps before the cutover. Invitation accept grants
+> memberships, then starts a login pinned to the invited address (`login_hint`, with
+> `prompt=login` so a shared device's existing session cannot answer for them). The
+> `authjs.session-token` cookie name was kept so no live session was ended.
 
 **Rationale:** Auth.js's Email provider *is* the mechanism the proposal describes — a
 one-time, expiring link — so it's a direct fit rather than something bent into shape. It
@@ -508,7 +522,7 @@ populated going forward. Noted in Revisit Triggers.
 | API | Server Actions + Route Handlers | Medium | — | No separate backend deploy |
 | Database | Neon Postgres (via Vercel) | Medium | $0–19 | Free tier is genuinely sufficient at this scale |
 | ORM | Prisma | Medium–High | $0 | Prisma Studio for roster seeding and debugging |
-| Auth | Auth.js v5, emailed sign-in code + Prisma adapter | Medium | $0 | Invitation-gated; no self-serve signup |
+| Auth | Own OIDC service (Kernel ID) via `@corneliuses/auth-client`; app-owned database sessions | Medium | $0 | Invitation-gated; no self-serve signup. Revised 2026-10 from Auth.js v5 |
 | Hosting | Vercel | High | $20 (already paid) | Preview deploys; cron available for later reminders |
 | Email | Resend + React Email | Medium | $0 | 3,000/mo free; **requires domain verification** |
 | Push *(later)* | `web-push` + VAPID | **Low** | $0 | iOS requires Home Screen install — see Decision 8 |

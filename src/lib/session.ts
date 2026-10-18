@@ -15,10 +15,10 @@ import { findLiveSession } from "@/lib/sessions";
 /// (checkTeamAccess, decideSignIn) take plain values instead of reading a
 /// request.
 ///
-/// The app reads its own `Session` table here rather than asking Auth.js. The
-/// row and cookie are the same ones Auth.js writes (see `session-cookie.ts`),
-/// so every session minted by a sign-in code, by an invitation, or later by the
-/// auth service's callback resolves the same way.
+/// The app reads its own `Session` table here. The row and cookie are the same
+/// shape Auth.js wrote (see `session-cookie.ts`), so a session left over from
+/// a sign-in code or an invitation resolves exactly as one minted by the auth
+/// service's callback.
 
 export type CurrentUser = {
   id: string;

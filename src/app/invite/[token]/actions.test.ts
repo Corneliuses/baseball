@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const getInvitationByToken = vi.fn();
 const resolveInvitedUser = vi.fn();
 const acceptInvitations = vi.fn();
-const createUserSession = vi.fn();
+const beginLogin = vi.fn();
 const cookieSet = vi.fn();
 const headerGet = vi.fn();
 
@@ -13,8 +13,8 @@ vi.mock("@/lib/invitations", () => ({
   acceptInvitations: (...args: unknown[]) => acceptInvitations(...args),
 }));
 
-vi.mock("@/lib/sessions", () => ({
-  createUserSession: (...args: unknown[]) => createUserSession(...args),
+vi.mock("@/lib/login-start", () => ({
+  beginLogin: (...args: unknown[]) => beginLogin(...args),
 }));
 
 vi.mock("next/headers", () => ({
@@ -40,7 +40,15 @@ vi.mock("next/navigation", () => ({
 import { acceptInvitationAction } from "./actions";
 
 const NOW = new Date("2026-04-01T12:00:00Z");
-const EXPIRES = new Date("2026-07-01T12:00:00Z");
+const AUTHORIZE_URL =
+  "https://auth.example.com/authorize?client_id=app&login_hint=sam%40example.com";
+const PENDING_OPTIONS = {
+  httpOnly: true,
+  sameSite: "lax",
+  path: "/",
+  secure: true,
+  maxAge: 600,
+};
 
 function liveInvitation() {
   return {
@@ -88,9 +96,13 @@ beforeEach(() => {
     email: "sam@example.com",
   });
   acceptInvitations.mockResolvedValue(1);
-  createUserSession.mockResolvedValue({
-    sessionToken: "session-token-1",
-    expires: EXPIRES,
+  beginLogin.mockResolvedValue({
+    authorizeUrl: AUTHORIZE_URL,
+    cookie: {
+      name: "__Host-pending-login",
+      value: "sealed",
+      options: PENDING_OPTIONS,
+    },
   });
   headerGet.mockReturnValue("https");
   delete process.env.AUTH_URL;
@@ -102,8 +114,8 @@ afterEach(() => {
 });
 
 describe("acceptInvitationAction", () => {
-  it("grants the membership, writes a session cookie, and lands on the team", async () => {
-    expect(await destinationOf(form("tok-1"))).toBe("/t/team-1");
+  it("grants the membership, then starts a login pinned to the invited address", async () => {
+    expect(await destinationOf(form("tok-1"))).toBe(AUTHORIZE_URL);
 
     // The address comes from the invitation row, never from the form.
     expect(resolveInvitedUser).toHaveBeenCalledWith("sam@example.com", NOW);
@@ -112,46 +124,61 @@ describe("acceptInvitationAction", () => {
       "sam@example.com",
       NOW,
     );
-    expect(createUserSession).toHaveBeenCalledWith("user-1", NOW);
+    expect(beginLogin).toHaveBeenCalledWith({
+      returnTo: "/t/team-1",
+      loginHint: "sam@example.com",
+      // The service only pre-fills the hint; without this a live SSO session
+      // for someone else on the device would answer for them.
+      prompt: "login",
+      secure: true,
+      now: NOW,
+    });
     expect(cookieSet).toHaveBeenCalledWith(
-      "__Secure-authjs.session-token",
-      "session-token-1",
-      {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: true,
-        expires: EXPIRES,
-      },
+      "__Host-pending-login",
+      "sealed",
+      PENDING_OPTIONS,
     );
   });
 
-  it("writes the unprefixed cookie name over plain HTTP", async () => {
+  // The callback is the only writer of the session cookie now.
+  it("writes no session cookie of its own", async () => {
+    await destinationOf(form("tok-1"));
+
+    expect(cookieSet).toHaveBeenCalledTimes(1);
+    expect(cookieSet).not.toHaveBeenCalledWith(
+      expect.stringContaining("session-token"),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("starts an insecure login over plain HTTP", async () => {
     headerGet.mockReturnValue("http");
 
     await destinationOf(form("tok-1"));
 
-    expect(cookieSet).toHaveBeenCalledWith(
-      "authjs.session-token",
-      "session-token-1",
+    expect(beginLogin).toHaveBeenCalledWith(
       expect.objectContaining({ secure: false }),
     );
   });
 
-  it("grants the membership before creating the session", async () => {
+  it("grants the membership before starting the login", async () => {
     const order: string[] = [];
     acceptInvitations.mockImplementation(async () => {
       order.push("accept");
       return 1;
     });
-    createUserSession.mockImplementation(async () => {
-      order.push("session");
-      return { sessionToken: "session-token-1", expires: EXPIRES };
+    beginLogin.mockImplementation(async () => {
+      order.push("login");
+      return {
+        authorizeUrl: AUTHORIZE_URL,
+        cookie: { name: "__Host-pending-login", value: "sealed", options: PENDING_OPTIONS },
+      };
     });
 
     await destinationOf(form("tok-1"));
 
-    expect(order).toEqual(["accept", "session"]);
+    expect(order).toEqual(["accept", "login"]);
   });
 
   // Regression: the action used to read the clock separately in each step, so
@@ -169,7 +196,7 @@ describe("acceptInvitationAction", () => {
       return { id: "user-1", email: "sam@example.com" };
     });
 
-    expect(await destinationOf(form("tok-1"))).toBe("/t/team-1");
+    expect(await destinationOf(form("tok-1"))).toBe(AUTHORIZE_URL);
 
     // Not merely "some Date" — the instant the liveness check passed at, which
     // is the only one the write is entitled to act on.
@@ -217,12 +244,20 @@ describe("acceptInvitationAction", () => {
     expect(cookieSet).not.toHaveBeenCalled();
   });
 
-  // The parent is a member by then, so /signin admits them — but they must not
-  // be sent to a team page they hold no session for.
-  it("shows an error when the session write fails after the grant succeeded", async () => {
-    createUserSession.mockRejectedValue(new Error("db down"));
+  // A missing auth service variable. The invitation is spent by then, so
+  // "try again" on the invite page would only show "Already accepted"; the
+  // parent is a member, so /signin is the way on, headed for the team.
+  it("sends a granted parent to /signin when the login cannot start", async () => {
+    beginLogin.mockRejectedValue(new Error("AUTH_ISSUER is not set"));
 
-    expect(await destinationOf(form("tok-1"))).toBe("/invite/tok-1?error=1");
+    const destination = new URL(
+      await destinationOf(form("tok-1")),
+      "https://x.example",
+    );
+    expect(destination.pathname).toBe("/signin");
+    expect(destination.searchParams.get("error")).toBe("signin-failed");
+    expect(destination.searchParams.get("callbackUrl")).toBe("/t/team-1");
+    expect(cookieSet).not.toHaveBeenCalled();
   });
 
   it("rejects a missing or placeholder token outright", async () => {

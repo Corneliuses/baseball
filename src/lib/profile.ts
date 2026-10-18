@@ -59,9 +59,9 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 /**
  * Update one person's own name and phone.
  *
- * `email` is deliberately absent: it is the magic-link identity Auth.js keys
- * sessions and invitations on, so changing it is an account migration rather
- * than a profile edit.
+ * `email` is deliberately absent: invitations, memberships and the first link
+ * to the auth service all key on it, so changing it is an account migration
+ * rather than a profile edit.
  *
  * Last write wins against a coach editing the same person's phone from a
  * roster entry page. That race is acceptable — both writers are entering the

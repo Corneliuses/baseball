@@ -25,8 +25,6 @@ import { EMAIL_COLOR, EMAIL_FONT } from "./brand";
 ///   - **Chalk box** → `NoteBlock`, for text a human typed (a coach's note) so
 ///     it reads as quoted rather than as app copy; and `EdgePanel`, the same
 ///     page-stock panel with a coloured edge carrying a state.
-///   - **Scoreboard** → `ScoreboardPanel`. Charcoal in both themes, floodlight
-///     mono figures. Used for the one number an email exists to deliver.
 ///   - **Jersey dot** → `SlotDot`, the batting-slot disc, spent here on the
 ///     index of each date in a repeat-weekly announcement.
 ///
@@ -39,11 +37,10 @@ import { EMAIL_COLOR, EMAIL_FONT } from "./brand";
 /// template to remember. **Every link repeats its URL as text** (`BananaButton`
 /// and `QuietLink` both print it underneath), because mail clients strip
 /// links, gateways rewrite them, and a forwarded message is text. And **the
-/// banana budget is a marker**: the two pieces allowed to spend design-plan.md
-/// §2's one yellow per email — `BananaButton` and `ScoreboardPanel` — each
-/// carry a `data-banana` attribute, which is what `templates.test.tsx` counts.
-/// Nothing else in this directory may reference `EMAIL_COLOR.banana` or
-/// `EMAIL_COLOR.floodlight`.
+/// banana budget is a marker**: the one piece allowed to spend design-plan.md
+/// §2's one yellow per email — `BananaButton` — carries a `data-banana`
+/// attribute, which is what `templates.test.tsx` counts. Nothing else in this
+/// directory may reference `EMAIL_COLOR.banana`.
 
 /// A page-level heading: a small monospaced eyebrow, then the slab headline,
 /// then one optional line of context.
@@ -183,28 +180,6 @@ export function EdgePanel({
       <Text style={{ ...bodyStyle, margin: 0, fontWeight: 600 }}>
         {children}
       </Text>
-    </Section>
-  );
-}
-
-/// The scoreboard: charcoal panel, chalk caption, floodlight figures.
-///
-/// Reserved for the single number a message exists to carry — today the sign-in
-/// code. Everything about it is the readout: the panel is dark in a cream email
-/// on purpose, so the eye lands there first and the code can be read at a
-/// glance and typed into another screen. Floodlight is the banana family after
-/// dark, so this **is** that email's banana, and it carries the marker.
-export function ScoreboardPanel({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <Section style={scoreboardStyle} data-banana="scoreboard">
-      <Text style={scoreboardLabelStyle}>{label}</Text>
-      <Text style={scoreboardValueStyle}>{children}</Text>
     </Section>
   );
 }
@@ -387,31 +362,6 @@ const edgePanelStyle: CSSProperties = {
   borderRadius: "0 10px 10px 0",
   padding: "12px 16px",
   margin: "0 0 8px",
-};
-
-const scoreboardStyle: CSSProperties = {
-  backgroundColor: EMAIL_COLOR.scoreboard,
-  borderRadius: "12px",
-  padding: "18px 20px",
-  margin: "0 0 20px",
-  textAlign: "center",
-};
-
-const scoreboardLabelStyle: CSSProperties = {
-  ...captionStyle,
-  letterSpacing: "2px",
-  color: EMAIL_COLOR.onScoreboard,
-  margin: "0 0 8px",
-};
-
-const scoreboardValueStyle: CSSProperties = {
-  fontFamily: EMAIL_FONT.mono,
-  fontSize: "34px",
-  lineHeight: "40px",
-  fontWeight: 700,
-  letterSpacing: "5px",
-  color: EMAIL_COLOR.floodlight,
-  margin: 0,
 };
 
 const bananaButtonStyle: CSSProperties = {

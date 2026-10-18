@@ -6,24 +6,22 @@ import { db } from "./db";
 ///
 /// The app owns its sessions outright. `getCurrentUser` reads them through
 /// `findLiveSession`, sign-out ends them through `deleteUserSession`, and
-/// `createUserSession` writes them for invitation acceptance today and for the
-/// auth service's callback once it lands. Auth.js still writes rows when a
-/// sign-in code is redeemed, in the same shape, until the cutover removes it.
+/// `createUserSession` writes them for the auth service's callback, the only
+/// place a session is minted.
 ///
-/// Rows are created exactly the way `@auth/core` creates them: a
+/// Rows are created exactly the way `@auth/core` created them in the Auth.js
+/// era, so the rows it left behind read the same way: a
 /// `crypto.randomUUID()` token and `expires` at now plus the session max age.
 /// The cookie carries that token verbatim — database sessions hand out an
 /// opaque row key rather than encrypting a payload the way JWT sessions do,
-/// which is what makes owning them outside Auth.js possible at all, and what
-/// lets the move to the auth service keep every live session.
+/// which is what made owning them outside Auth.js possible at all, and what
+/// let the move to the auth service keep every live session.
 
 /// Long enough that a parent at a ballfield is not re-authenticating on a
 /// phone. Database sessions make this safe: a 90-day window is revocable by
-/// deleting the row. Reads no longer slide it (Auth.js's renewal could not set
-/// the cookie from a Server Component anyway, so the row outlived the cookie);
-/// `SESSION_UPDATE_AGE_SECONDS` is Auth.js's own setting until the cutover.
+/// deleting the row. Reads do not slide it (Auth.js's renewal could not set
+/// the cookie from a Server Component anyway, so the row outlived the cookie).
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 90;
-export const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
 export type CreatedSession = {
   sessionToken: string;

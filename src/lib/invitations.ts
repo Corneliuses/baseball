@@ -98,12 +98,13 @@ export async function acceptInvitations(
  *
  * A parent linked to a player already has one — `linkGuardian` upserts it long
  * before they ever sign in — but a coach invited from the members page does
- * not: nothing writes a row for them until Auth.js does. Accepting an
+ * not: nothing writes a row for them until the sign-in callback does, and
+ * accepting has to grant their memberships before that. Accepting an
  * invitation has to work for both.
  *
  * `emailVerified` is stamped here because accepting proves the person holds the
- * mailbox the token was mailed to, which is the same thing a magic link proves.
- * `@auth/core` stamps it at exactly this point in its own email flow.
+ * mailbox the token was mailed to, which is the same thing an emailed code
+ * proves. The sign-in callback stamps it too, for anyone who reaches it first.
  *
  * The lookup is case-insensitive for the same reason `loadSignInContext`'s is:
  * a `User` row written before `normalizeEmail` existed can differ in case, and

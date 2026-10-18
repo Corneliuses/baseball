@@ -12,8 +12,9 @@ import { usesSecureCookies } from "@/lib/session-cookie";
 /// router fetches a `<Link>` target as RSC first, which a redirect to another
 /// origin cannot satisfy.
 ///
-/// Static segments win over `[...nextauth]`, so this coexists with Auth.js
-/// until the cutover deletes it.
+/// `/signin` links here, and so does nothing else: `proxy.ts` sends a
+/// signed-out visitor to `/signin`, never straight into a login, so a
+/// prefetched or crawled protected URL cannot mint a pending-login cookie.
 ///
 /// Query parameters, all optional and all attacker-choosable:
 /// - `callbackUrl`: where to land afterwards, reduced to a same-site path.

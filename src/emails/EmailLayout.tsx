@@ -37,22 +37,21 @@ import { StitchRule, captionStyle } from "./EmailKit";
 ///
 /// The header band carries the **team name**, not a logo. It is the fastest
 /// answer to the question a parent with kids on two teams actually has, and it
-/// works with images blocked. It is required, as `string | null`, so that a
-/// template cannot forget it: the receipt did exactly that in the first cut,
+/// works with images blocked. It is required so that a template cannot forget
+/// it: the receipt did exactly that in the first cut,
 /// and a coach running two teams got a receipt that named neither.
 
 export type EmailLayoutProps = {
   /// Inbox preview text — the line under the subject. Every template sets it
   /// to the fact a parent needs before opening.
   preview: string;
-  /// Shown on the scoreboard cap. `null` only for the sign-in code, which is
-  /// sent before we know which team the person is here for — every other
-  /// email has a team, and passing it is not optional.
-  teamName: string | null;
+  /// Shown on the scoreboard cap. Every email has a team, and passing it is
+  /// not optional.
+  teamName: string;
   /// The grey line under the seam: why this message arrived. One sentence
   /// per *reason*, shared where the reason is shared (`rosterFootnote` in
   /// `copy.ts` covers the four roster-triggered emails) and written here
-  /// where it is not — an invitation, a code someone asked for.
+  /// where it is not — an invitation.
   footnote?: ReactNode;
   children: ReactNode;
 };
@@ -75,7 +74,7 @@ export function EmailLayout({
           <Container style={containerStyle}>
             <Section style={bandStyle}>
               <Text style={bandProductStyle}>Team Manager</Text>
-              {teamName ? <Text style={bandTeamStyle}>{teamName}</Text> : null}
+              <Text style={bandTeamStyle}>{teamName}</Text>
             </Section>
 
             <Section style={cardStyle}>{children}</Section>

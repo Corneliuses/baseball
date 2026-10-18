@@ -216,18 +216,13 @@ All inside the existing viewBox — `DIAMOND_GEOMETRY.width = 400`,
 ## 7. Screen-by-screen pass
 
 **Sign-in** — first impression, currently a form. Cream page, pinstripe band, slab
-wordmark, one banana button ("Email me a sign-in code"), and a tiny flat field illustration
+wordmark, one banana button (since 2026-10, "Sign in with Kernel ID"), and a tiny flat field illustration
 (a cropped reuse of `FieldArt`). Empty-state copy: "The gate's open."
 
-**Enter your code (post-ship addition)** — the second half of sign-in since #60 replaced
-the tapped link with a typed code. Same cream card as the screen before it, and it spends
-its own banana on the one button ("Sign in"), which is the §2 budget rather than a second
-helping: it is a separate screen, reached by a full navigation. The code box is monospaced
-and letter-spaced because a code is *read off one screen and typed into another* — the
-shape of the characters is the whole job, so this is the one input in the app that does
-not use the shared field styling. A rejection keeps what was typed and puts the sentence
-in a `StatusBanner` under the box, never a redirect: eight characters retyped on a phone,
-mid-code, is where a parent gives up.
+**Kernel ID (2026-10)** — the code-entry screen is gone: the emailed code, and Google, are
+typed and tapped on the auth service's own pages, and `/signin` keeps the cream card with
+its one banana now spent on "Sign in with Kernel ID". A failed sign-in lands back on that
+card with its sentence above the button.
 
 **Team chrome (post-ship addition)** — every `/t/[teamId]` view now carries a persistent
 `TeamNav` in the team layout: pill tabs on the header band, the active section filled
@@ -340,10 +335,9 @@ and **no web font**: images are off by default in most inboxes and every remote 
 reports back when a family opened their mail, so the identity is carried by type, colour
 and rules, and `--font-display`'s Alfa Slab degrades to a bold system slab stack. And
 **§2's banana is budgeted per email** — the invitation, the added-to-team notice, both
-announcements and the day-of reminder spend theirs on the one call to action; the sign-in
-code spends its own as floodlight figures on the scoreboard panel, since a code is read
-off one screen and typed into another and there is deliberately nothing to tap; the team
-message and the announcement receipt are calm surfaces with none, because a yellow button
+announcements and the day-of reminder spend theirs on the one call to action (the sign-in
+code email that spent its own as floodlight figures left with the move to Kernel ID); the
+team message and the announcement receipt are calm surfaces with none, because a yellow button
 over somebody's typed message is the app talking over the coach.
 
 The call to action is the one place the email inverts the app's pairing on purpose: **navy
