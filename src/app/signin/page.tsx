@@ -152,6 +152,22 @@ export default async function SignInPage({
                 </a>
               </p>
             ) : null}
+
+            {/* Temporary, for testing the auth service sign-in from the
+                installed app before the B4 cutover replaces this form. A plain
+                <a>, never next/link, so nothing prefetches a login. */}
+            {differentAccountHref ? null : (
+              <p className="mt-4 text-center text-sm text-muted-foreground">
+                <a
+                  href={`/api/auth/login?${new URLSearchParams({
+                    callbackUrl: safeCallbackUrl(callbackUrl),
+                  })}`}
+                  className="underline underline-offset-4"
+                >
+                  Sign in with Kernel ID (beta)
+                </a>
+              </p>
+            )}
           </CardContent>
         </Card>
 
