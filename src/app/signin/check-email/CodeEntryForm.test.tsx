@@ -91,4 +91,35 @@ describe("CodeEntryForm", () => {
 
     expect(screen.getByLabelText("Sign-in code")).toHaveValue("K3M7QP2X");
   });
+
+  // The browser, not the server, has to follow the redeem URL: Auth.js sets
+  // the session cookie on that response, and a server action's redirect would
+  // have fetched it server-side and lost the cookie.
+  it("navigates the browser itself to redeem a well-formed code", async () => {
+    const replace = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...original, replace },
+    });
+    submitSignInCode.mockResolvedValue({
+      status: "redeem",
+      url: "/api/auth/callback/resend?token=K3M7QP2X",
+    });
+
+    try {
+      const user = userEvent.setup();
+      render(<CodeEntryForm />);
+      await user.type(screen.getByLabelText("Sign-in code"), "K3M7QP2X");
+      await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+      expect(await screen.findByRole("link", { name: /continue/i })).toHaveAttribute(
+        "href",
+        "/api/auth/callback/resend?token=K3M7QP2X",
+      );
+      expect(replace).toHaveBeenCalledWith("/api/auth/callback/resend?token=K3M7QP2X");
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: original });
+    }
+  });
 });

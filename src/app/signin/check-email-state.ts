@@ -18,6 +18,12 @@ export type CheckEmailState =
       /// state exists to prevent — and on a phone, mid-code, it is the point
       /// where people give up.
       value: string;
+    }
+  | {
+      /// A well-formed code, ready to redeem: the browser navigates here
+      /// itself. See `submitSignInCode` for why the action cannot redirect.
+      status: "redeem";
+      url: string;
     };
 
 export const CHECK_EMAIL_INITIAL_STATE: CheckEmailState = { status: "idle" };
