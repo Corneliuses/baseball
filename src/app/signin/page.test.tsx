@@ -255,4 +255,16 @@ describe("SignInPage", () => {
     await renderPage({ error: "login-state" });
     expect(screen.queryByRole("link", { name: /use a different account/i })).toBeNull();
   });
+
+  it("links the beta auth service sign-in, keeping the destination", async () => {
+    await renderPage({ callbackUrl: "/t/team-a" });
+
+    const href = screen
+      .getByRole("link", { name: /sign in with kernel id/i })
+      .getAttribute("href");
+    const url = new URL(href ?? "", "https://x.example");
+    expect(url.pathname).toBe("/api/auth/login");
+    expect(url.searchParams.get("callbackUrl")).toBe("/t/team-a");
+    expect(url.searchParams.has("prompt")).toBe(false);
+  });
 });
