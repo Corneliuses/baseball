@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import SignInPage from "./page";
+import { SIGNIN_MESSAGES } from "./signin-messages";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -196,5 +197,62 @@ describe("SignInPage", () => {
     expect(container.querySelector('input[name="callbackUrl"]')).toHaveValue(
       "/",
     );
+  });
+
+  // The auth service callback redirects here with these keys; each must read
+  // as its own sentence, not the fallback.
+  it("renders every auth service callback error", async () => {
+    for (const [key, sentence] of Object.entries(SIGNIN_MESSAGES)) {
+      const { unmount } = render(
+        await SignInPage({ searchParams: Promise.resolve({ error: key }) }),
+      );
+
+      expect(screen.getByRole("alert")).toHaveTextContent(sentence as string);
+      unmount();
+    }
+    expect(Object.keys(SIGNIN_MESSAGES).sort()).toEqual([
+      "access-denied",
+      "account-mismatch",
+      "login-required",
+      "login-state",
+      "not-invited",
+      "signin-failed",
+    ]);
+  });
+
+  it("offers a different account after a wrong-person login, forcing the service form", async () => {
+    for (const error of ["account-mismatch", "not-invited"]) {
+      const { unmount } = render(
+        await SignInPage({
+          searchParams: Promise.resolve({ error, callbackUrl: "/t/team-a" }),
+        }),
+      );
+
+      const link = screen.getByRole("link", { name: /use a different account/i });
+      const href = new URL(link.getAttribute("href") ?? "", "https://x.example");
+      expect(href.pathname).toBe("/api/auth/login");
+      expect(href.searchParams.get("prompt")).toBe("login");
+      expect(href.searchParams.get("callbackUrl")).toBe("/t/team-a");
+      unmount();
+    }
+  });
+
+  it("sanitizes the different-account callbackUrl and hides the link otherwise", async () => {
+    const { unmount } = render(
+      await SignInPage({
+        searchParams: Promise.resolve({
+          error: "not-invited",
+          callbackUrl: "//evil.example",
+        }),
+      }),
+    );
+    const href = screen
+      .getByRole("link", { name: /use a different account/i })
+      .getAttribute("href");
+    expect(new URL(href ?? "", "https://x.example").searchParams.get("callbackUrl")).toBe("/");
+    unmount();
+
+    await renderPage({ error: "login-state" });
+    expect(screen.queryByRole("link", { name: /use a different account/i })).toBeNull();
   });
 });
