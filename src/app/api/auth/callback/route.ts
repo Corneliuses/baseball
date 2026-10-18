@@ -78,7 +78,17 @@ export async function GET(request: NextRequest) {
     response.headers.set("Cache-Control", "no-store");
     return response;
   };
-  const fail = (key: SigninError) => finish(`/signin?error=${key}`);
+  // Once the pending login is known, failures carry its destination back to
+  // /signin as `callbackUrl`, so a retry or "Use a different account" lands
+  // where the login was headed rather than on the home page.
+  let returnTo = "/";
+  const fail = (key: SigninError) => {
+    const query = new URLSearchParams({ error: key });
+    if (returnTo !== "/") {
+      query.set("callbackUrl", returnTo);
+    }
+    return finish(`/signin?${query}`);
+  };
 
   let pending;
   try {
@@ -95,6 +105,7 @@ export async function GET(request: NextRequest) {
   if (!pending || params.get("state") !== pending.state) {
     return fail("login-state");
   }
+  returnTo = pending.returnTo;
 
   const serviceError = params.get("error");
   if (serviceError) {

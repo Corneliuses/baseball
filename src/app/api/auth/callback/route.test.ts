@@ -404,6 +404,33 @@ describe("GET /api/auth/callback", () => {
     expect(location(response).pathname).toBe("/");
   });
 
+  it("carries the pending destination back to /signin on a failure", async () => {
+    service.email = "other-parent@example.com";
+    const { state, cookies } = await startLogin(
+      "login_hint=sam%40example.com&callbackUrl=%2Ft%2Fteam-a%3Ftab%3Dchart",
+    );
+
+    const response = await callback(
+      get(`/api/auth/callback?code=c1&state=${state}`, cookies),
+    );
+
+    expectError(response, "account-mismatch");
+    expect(location(response).searchParams.get("callbackUrl")).toBe(
+      "/t/team-a?tab=chart",
+    );
+  });
+
+  it("omits callbackUrl when there is no pending login or it was headed home", async () => {
+    const noCookie = await callback(get("/api/auth/callback?code=c1&state=x"));
+    expect(location(noCookie).searchParams.has("callbackUrl")).toBe(false);
+
+    completeSignIn.mockResolvedValue({ status: "denied", reason: "no-invitation" });
+    const { state, cookies } = await startLogin("callbackUrl=%2F");
+    const home = await callback(get(`/api/auth/callback?code=c1&state=${state}`, cookies));
+    expectError(home, "not-invited");
+    expect(location(home).searchParams.has("callbackUrl")).toBe(false);
+  });
+
   it("sends a gate denial to not-invited, writing no session", async () => {
     completeSignIn.mockResolvedValue({ status: "denied", reason: "no-invitation" });
     const { state, cookies } = await startLogin();
