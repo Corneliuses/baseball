@@ -22,7 +22,7 @@ import { normalizeEmail } from "./email-address";
 /// `__Secure-` cookie may still carry `Domain=corneliuses.com`, so an HTTPS
 /// sibling subdomain could plant that copy here; `__Host-` forbids `Domain`
 /// and so only this exact host can set it. It is encrypted with `dir` + `A256GCM`, keyed by
-/// SHA-256 of `AUTH_SECRET`, and carries its own expiry, so a tampered, stale or
+/// HKDF of `AUTH_SECRET` with a purpose label, and carries its own expiry, so a tampered, stale or
 /// foreign-key value opens to `null` exactly like a missing one.
 ///
 /// DB-free and framework-free: callers pass the secret and the clock, and a

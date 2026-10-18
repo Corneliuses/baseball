@@ -12,8 +12,10 @@ import {
 } from "@/components/ui/card";
 
 import { requestSignInCode } from "./actions";
+import { safeCallbackUrl } from "@/lib/callback-url";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { readPendingSignIn } from "@/lib/pending-signin-cookie";
+import { SIGNIN_MESSAGES } from "./signin-messages";
 
 export const metadata = {
   title: "Sign in — Youth Baseball Team Manager",
@@ -43,6 +45,9 @@ const ERROR_MESSAGES = messageTable({
     "That sign-in code is no longer valid. Enter your email to try again, or ask your coach to send a new invite.",
   Configuration:
     "Something is wrong on our end, and it has been logged. Please try again in a few minutes.",
+  // The auth service callback's keys (`GET /api/auth/callback`), live ahead of
+  // the cutover so a login started from `/api/auth/login` reads properly.
+  ...SIGNIN_MESSAGES,
 });
 
 const FALLBACK_ERROR_MESSAGE =
@@ -74,6 +79,17 @@ export default async function SignInPage({
   }
 
   const errorMessage = messageFor(ERROR_MESSAGES, error, FALLBACK_ERROR_MESSAGE);
+
+  // After the auth service signed in the wrong person, a plain retry would
+  // reuse that same single-sign-on session; `prompt=login` makes the service
+  // ask again. A plain <a>, never next/link, so nothing prefetches a login.
+  const differentAccountHref =
+    error === "account-mismatch" || error === "not-invited"
+      ? `/api/auth/login?${new URLSearchParams({
+          prompt: "login",
+          callbackUrl: safeCallbackUrl(callbackUrl),
+        })}`
+      : null;
 
   return (
     <PageContainer>
@@ -125,6 +141,17 @@ export default async function SignInPage({
                 Email me a sign-in code
               </SubmitButton>
             </form>
+
+            {differentAccountHref ? (
+              <p className="mt-4 text-center text-sm">
+                <a
+                  href={differentAccountHref}
+                  className="font-medium text-foreground underline underline-offset-4"
+                >
+                  Use a different account
+                </a>
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
