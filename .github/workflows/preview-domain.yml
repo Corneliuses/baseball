@@ -9,8 +9,9 @@ name: Preview domain
 # branch, which is why this repoints it per deployment instead.
 #
 # One domain, so the last push wins: two PRs open at once take turns. Vercel
-# sends a deployment_status for every deployment it builds; this workflow only
-# runs from the default branch's copy of this file.
+# sends a deployment_status for every deployment it builds, and GitHub runs the
+# copy of this file at the deployed commit, so a branch that predates it does
+# not repoint the domain.
 on:
   deployment_status:
 
