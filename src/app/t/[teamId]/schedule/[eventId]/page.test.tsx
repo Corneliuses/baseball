@@ -139,6 +139,15 @@ describe("EventPage details", () => {
     expect(html).toContain("Bring water");
   });
 
+  it("promises only what is true for every sport about an RSVP", async () => {
+    const html = await render();
+
+    expect(html).toContain(
+      "RSVP is just for planning — every kid stays on the roster either way.",
+    );
+    expect(html).not.toContain("in the chart either way");
+  });
+
   it("names a practice without an opponent", async () => {
     getEvent.mockResolvedValue({
       ...game,
