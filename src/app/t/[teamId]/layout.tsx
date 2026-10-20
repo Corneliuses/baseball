@@ -96,7 +96,7 @@ export default async function TeamLayout({
           </div>
           <TeamSwitcher teams={switcherTeams} currentTeamId={teamId} />
         </div>
-        <TeamNav teamId={teamId} role={role} />
+        <TeamNav teamId={teamId} role={role} sport={team.sport} />
       </div>
       {children}
     </PageContainer>

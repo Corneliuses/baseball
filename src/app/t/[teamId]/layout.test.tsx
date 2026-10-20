@@ -67,6 +67,7 @@ beforeEach(() => {
     name: "Sluggers",
     season: "Fall 2026",
     allPlay: true,
+    sport: "BASEBALL",
     archivedAt: null,
   });
 });
@@ -110,6 +111,22 @@ describe("TeamLayout", () => {
     expect(getMemberTeams).not.toHaveBeenCalled();
     expect(html).toContain("<select");
     expect(linksTo(html, "/")[0]).toContain("All teams");
+  });
+
+  // The nav's lineup tabs follow the team's sport, which only the layout knows.
+  it("hands TeamNav the team's sport, so a basketball team has no Game Day tab", async () => {
+    expect(await render()).toContain('href="/t/team-1/view"');
+
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Hoopers",
+      season: "Winter 2026",
+      allPlay: true,
+      sport: "BASKETBALL",
+      archivedAt: null,
+    });
+
+    expect(await render()).not.toContain('href="/t/team-1/view"');
   });
 
   it("renders the team name linking to the team home", async () => {

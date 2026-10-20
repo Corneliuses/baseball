@@ -435,6 +435,34 @@ describe("TeamHomePage your players", () => {
     expect(noChartHtml).not.toContain("fill-grass");
   });
 
+  // Basketball has no chart yet: the card is the jersey and the name, with no
+  // chart line, no field and no banana, and never "No chart set yet", which
+  // would promise a chart that is not coming. RSVP is sport-neutral.
+  it("shows a basketball kid's name and jersey only, and keeps the RSVP buttons", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      sport: "BASKETBALL",
+      name: "Hoopers",
+      season: "Winter 2026",
+      allPlay: true,
+      groupMeUrl: null,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([{ ...REESE, position: "SHORTSTOP" }]);
+
+    const html = await render();
+
+    expect(html).toContain("Reese");
+    expect(html).toContain(">12<");
+    expect(html).not.toContain("Bats 3rd");
+    expect(html).not.toContain("No chart set yet");
+    expect(html).not.toContain("Substitute");
+    expect(html).not.toContain("fill-grass");
+    expect(html).not.toContain("bg-banana");
+    expect(html).toContain("Going");
+    expect(html).toContain("Not going");
+  });
+
   it("announces the cards with the staggered lineup rise", async () => {
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1", "player-3"]));
     getChart.mockResolvedValue([

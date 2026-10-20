@@ -4,7 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import type { Role } from "@/generated/prisma/enums";
+import type { Role, Sport } from "@/generated/prisma/enums";
+import { hasLineupChart } from "@/lib/sport";
 import { cn } from "@/lib/utils";
 import {
   CapIcon,
@@ -89,39 +90,56 @@ export function matchNavItem(
  * That also lets the Settings tab drop the `alsoMatch` that used to lend it
  * `/members`, so each section now lights its own tab.
  */
-function navItems(teamId: string, role: Role): TeamNavItem[] {
+///
+/// The three lineup tabs — Game Day, Readiness, Edit Lineup — exist only for a
+/// sport with a lineup chart (`hasLineupChart`). A team without one gets no tab
+/// to a page that would 404; each of those pages still gates itself, so
+/// hiding the tab is a courtesy, not the boundary.
+function navItems(teamId: string, role: Role, sport: Sport): TeamNavItem[] {
   const base = `/t/${teamId}`;
+  const chart = hasLineupChart(sport);
   const items: TeamNavItem[] = [
     { href: base, label: "Home", icon: PennantIcon, group: "team", exact: true },
     { href: `${base}/schedule`, label: "Schedule", icon: TicketIcon, group: "team" },
-    { href: `${base}/view`, label: "Game Day", icon: DiamondIcon, group: "team" },
+  ];
+  if (chart) {
+    items.push({
+      href: `${base}/view`,
+      label: "Game Day",
+      icon: DiamondIcon,
+      group: "team",
+    });
+  }
+  items.push(
     { href: `${base}/roster`, label: "Roster", icon: JerseyIcon, group: "team" },
     // Every role: coaches get the broadcast list, parents get the
     // compose-to-coaches form (the page itself redirects them there).
     { href: `${base}/messages`, label: "Messages", icon: MegaphoneIcon, group: "team" },
-  ];
+  );
 
   if (role !== "PARENT") {
-    items.push(
-      {
-        href: `${base}/readiness`,
-        label: "Readiness",
-        icon: ScoreboardIcon,
-        group: "coach",
-      },
-      {
-        href: `${base}/chart`,
-        label: "Edit Lineup",
-        icon: ClipboardIcon,
-        group: "coach",
-      },
-      {
-        href: `${base}/directory`,
-        label: "Directory",
-        icon: RolodexIcon,
-        group: "coach",
-      },
-    );
+    if (chart) {
+      items.push(
+        {
+          href: `${base}/readiness`,
+          label: "Readiness",
+          icon: ScoreboardIcon,
+          group: "coach",
+        },
+        {
+          href: `${base}/chart`,
+          label: "Edit Lineup",
+          icon: ClipboardIcon,
+          group: "coach",
+        },
+      );
+    }
+    items.push({
+      href: `${base}/directory`,
+      label: "Directory",
+      icon: RolodexIcon,
+      group: "coach",
+    });
   }
 
   if (role === "OWNER") {
@@ -155,9 +173,17 @@ function navItems(teamId: string, role: Role): TeamNavItem[] {
 ///
 /// A client component only for `usePathname` — the active tab has to follow
 /// client-side navigation, which the server layout never re-renders for.
-export function TeamNav({ teamId, role }: { teamId: string; role: Role }) {
+export function TeamNav({
+  teamId,
+  role,
+  sport,
+}: {
+  teamId: string;
+  role: Role;
+  sport: Sport;
+}) {
   const pathname = usePathname();
-  const items = navItems(teamId, role);
+  const items = navItems(teamId, role, sport);
   const firstCoachIndex = items.findIndex((item) => item.group === "coach");
 
   return (
