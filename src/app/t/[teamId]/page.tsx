@@ -34,7 +34,6 @@ import { nextEvents, type ScheduleEvent } from "@/lib/schedule";
 import { hasLineupChart, SPORT_LABELS } from "@/lib/sport";
 import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
-import { hasLineupChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
 
 import { BleacherChatterCard } from "./BleacherChatterCard";
@@ -279,7 +278,7 @@ export default async function TeamHomePage({
           <p className="text-muted-foreground">Season: {team.season}</p>
         )}
         <p className="text-muted-foreground">{SPORT_LABELS[team.sport]}</p>
-        {hasLineupChart(team.sport) && (
+        {sportHasChart && (
           <p className="text-muted-foreground">
             {team.allPlay ? "All players bat and field" : "Selective lineup"}
           </p>
