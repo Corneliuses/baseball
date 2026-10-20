@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
+import { APP_NAME } from "@/lib/app-name";
 import { messageFor } from "@/lib/error-messages";
 import { listTeamMembers } from "@/lib/memberships";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
@@ -18,7 +19,7 @@ import { ComposeForm } from "./ComposeForm";
 import { COMPOSE_ERROR_MESSAGES } from "./message-messages";
 
 export const metadata = {
-  title: "New message — Youth Baseball Team Manager",
+  title: `New message — ${APP_NAME}`,
 };
 
 /// The action loops over the audience, pacing sends 600ms apart to stay

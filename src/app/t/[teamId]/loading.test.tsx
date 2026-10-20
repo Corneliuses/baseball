@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { SportProvider } from "@/components/SportProvider";
 
 import TeamLoading from "./loading";
+import { APP_NAME } from "@/lib/app-name";
 
 describe("team loading state", () => {
   it("shows the spinning ball", () => {
@@ -19,7 +20,7 @@ describe("team loading state", () => {
     // them for the length of every navigation.
     const html = renderToStaticMarkup(<TeamLoading />);
 
-    expect(html).not.toContain("Youth Baseball Team Manager");
+    expect(html).not.toContain(APP_NAME);
     expect(html).not.toContain("<header");
   });
 

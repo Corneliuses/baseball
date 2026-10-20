@@ -3,6 +3,7 @@ import { LazyMotion, domAnimation } from "motion/react";
 import { Alfa_Slab_One, Geist, Geist_Mono } from "next/font/google";
 
 import { PwaRegistrar } from "./PwaRegistrar";
+import { APP_NAME } from "@/lib/app-name";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,9 +25,9 @@ const alfaSlab = Alfa_Slab_One({
 });
 
 export const metadata: Metadata = {
-  title: "Youth Baseball Team Manager",
+  title: APP_NAME,
   description:
-    "Manage your youth baseball team's roster, schedule, and lineup with ease.",
+    "Manage your team's roster, schedule, and lineup with ease.",
   /// **Declaring this block at all turns off file-convention icons.** Next
   /// gates the whole static-icon merge on `icons` being unset
   /// (`resolve-metadata.js`: `if (!resolvedMetadata.icons)`), so with this

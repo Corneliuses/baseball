@@ -17,6 +17,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 /// Set once the coach or parent taps Not now. A phone that has been told no
 /// should stay told: this app lives on someone's home screen or it doesn't, and
 /// the difference is not worth nagging about on every visit to the team page.
+///
+/// The `ybtm:` prefix on both keys is the app's old name and stays: renaming
+/// them would forget every "Not now" and nag each family again.
 const DISMISSED_KEY = "ybtm:install-prompt-dismissed";
 
 /// How many times the iOS tip has been put in front of this browser.

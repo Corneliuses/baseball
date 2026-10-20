@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { isOwnerEmail } from "@/lib/owner";
 import { getCurrentUser } from "@/lib/session";
@@ -15,7 +16,7 @@ import { getCurrentUser } from "@/lib/session";
 import { createTeamAction } from "./actions";
 
 export const metadata = {
-  title: "New team — Youth Baseball Team Manager",
+  title: `New team — ${APP_NAME}`,
 };
 
 const ERROR_MESSAGES = messageTable({

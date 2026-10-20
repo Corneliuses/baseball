@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { RSVP_STYLE } from "@/components/rsvp-style";
+import { APP_NAME } from "@/lib/app-name";
 import { formatEventDateTime } from "@/lib/calendar";
 import { chartRole } from "@/lib/chart-role";
 import { POSITION_LABELS } from "@/lib/positions";
@@ -28,7 +29,7 @@ import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
 export const metadata = {
-  title: "Next-game readiness — Youth Baseball Team Manager",
+  title: `Next-game readiness — ${APP_NAME}`,
 };
 
 /// The coach-facing readiness panel (#12) — the one place attendance meets the
