@@ -79,7 +79,10 @@ export async function getTeamById(teamId: string): Promise<Team | null> {
 export type CreateTeamInput = {
   name: string;
   season: string | null;
-  allPlay: boolean;
+  sport: Sport;
+  /// Baseball only. Left undefined for any other sport so the column keeps
+  /// its default rather than recording a setting the owner was never shown.
+  allPlay?: boolean;
 };
 
 /**
@@ -98,7 +101,8 @@ export async function createTeam(
     data: {
       name: input.name,
       season: input.season,
-      allPlay: input.allPlay,
+      sport: input.sport,
+      ...(input.allPlay === undefined ? {} : { allPlay: input.allPlay }),
       calendarToken: generateCalendarToken(),
       memberships: {
         create: { userId: ownerId, role: "OWNER" },
