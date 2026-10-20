@@ -178,8 +178,8 @@ export default async function EventPage({
         <CardHeader>
           <CardTitle className="text-lg">Attendance</CardTitle>
           <CardDescription>
-            RSVP is just for planning — every kid stays on the roster and in the
-            chart either way.
+            RSVP is just for planning — every kid stays on the roster either
+            way.
           </CardDescription>
         </CardHeader>
         <CardContent>

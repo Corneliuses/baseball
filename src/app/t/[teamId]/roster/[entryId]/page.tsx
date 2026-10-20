@@ -338,7 +338,7 @@ export default async function RosterEntryPage({
             <div className="space-y-3">
               <p role="alert" className="text-sm text-destructive">
                 Remove {entry.player.name} from this roster? Their jersey
-                number, batting slot, and position on this team go with them.
+                number and their place in the lineup on this team go with them.
               </p>
               <div className="flex gap-2">
                 <form action={removeRosterEntryAction}>

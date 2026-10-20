@@ -66,7 +66,12 @@ const TEMPLATES: {
     ),
     banana: true,
     url: `${URL}/invite/tok123`,
-    contains: [TEAM, "September 20, 2026", "See you Saturday."],
+    contains: [
+      TEAM,
+      "September 20, 2026",
+      "See you Saturday.",
+      "Schedule, RSVPs, and the lineup",
+    ],
   },
   {
     name: "AddedToTeamEmail",
