@@ -22,6 +22,7 @@ import { buildRsvpStateMap } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listEventRsvps } from "@/lib/rsvps";
 import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { hasLineupChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
 
 import { Diamond } from "./Diamond";
@@ -130,7 +131,15 @@ export default async function ViewPage({
   // Deliberately NOT wrapped in try/catch — nextGame's contract is that a
   // database outage propagates rather than rendering the same "no upcoming
   // game" header a healthy team would show on a bye week.
-  const game = await nextGame(teamId);
+  //
+  // The team is read alongside it, ahead of the chart, because a team whose
+  // sport has no lineup chart has no Game Day: a pasted URL 404s rather than
+  // drawing a diamond of baseball positions over a basketball roster. A null
+  // team (deleted since the access check) falls through to the defaults below.
+  const [game, team] = await Promise.all([nextGame(teamId), getTeamById(teamId)]);
+  if (team && !hasLineupChart(team.sport)) {
+    notFound();
+  }
 
   // The chart is standing, not per-game (AGENTS.md rule 2), so it renders
   // with or without a game on the schedule — a parent between seasons still
@@ -139,13 +148,7 @@ export default async function ViewPage({
   // the legend rather than stamping "No response" on the whole team.
   const showRsvp = game !== null;
 
-  const [team, chartEntries, rsvpRows, guardedPlayerIds] = await Promise.all([
-    // Needed for allPlay alone: it decides whether an unplaced player is in
-    // the outfield or on the bench, and the diamond has to say which. A null
-    // return means the team was deleted between requireTeamAccess and here,
-    // so the render falls back to the column's own default rather than
-    // 404ing a page that already passed its access check.
-    getTeamById(teamId),
+  const [chartEntries, rsvpRows, guardedPlayerIds] = await Promise.all([
     getChart(teamId),
     game ? listEventRsvps(teamId, game.id) : Promise.resolve([]),
     // Deliberately not caught, matching nextGame above: a swallowed outage
@@ -160,6 +163,11 @@ export default async function ViewPage({
     chartEntries.map((entry) => entry.playerId),
     rsvpRows,
   );
+  // `team` is needed for allPlay alone: it decides whether an unplaced player
+  // is in the outfield or on the bench, and the diamond has to say which. A
+  // null team was deleted between requireTeamAccess and here, so the render
+  // falls back to the column's own default rather than 404ing a page that
+  // already passed its access check.
   const allPlay = team?.allPlay ?? true;
   const chart = buildChartView(chartEntries, rsvpStates, allPlay);
 

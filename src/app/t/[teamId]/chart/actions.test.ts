@@ -80,7 +80,7 @@ async function redirectUrlOf(promise: Promise<unknown>): Promise<string> {
 beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
-  getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+  getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
   getChart.mockResolvedValue([chartEntry("a"), chartEntry("b"), chartEntry("c")]);
   saveBattingOrder.mockResolvedValue(undefined);
 });
@@ -119,6 +119,7 @@ describe("saveBattingOrderAction", () => {
   it("collapses empty slots when allPlay is false so the order stays contiguous", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -267,6 +268,26 @@ describe("saveBattingOrderAction", () => {
     );
 
     expect(url).toBe("/t/team-1/chart?error=missing-players");
+    expect(saveBattingOrder).not.toHaveBeenCalled();
+  });
+
+  // The page 404s for a sport without a lineup chart, so only a forged POST
+  // gets here, and it must not write baseball chart columns onto that roster.
+  it("refuses a basketball team as no access, writing nothing", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      sport: "BASKETBALL",
+      allPlay: true,
+      archivedAt: null,
+    });
+
+    const url = await redirectUrlOf(
+      saveBattingOrderAction(
+        form({ teamId: "team-1", order: '["c","a","b"]' }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart?error=access");
     expect(saveBattingOrder).not.toHaveBeenCalled();
   });
 

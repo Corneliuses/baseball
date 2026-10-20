@@ -16,6 +16,7 @@ import { getChart } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
 import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { hasLineupChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
 
 import { PositionsEditor } from "./PositionsEditor";
@@ -80,6 +81,11 @@ export default async function PositionsPage({
 
   const team = await getTeamById(teamId);
   if (!team) {
+    notFound();
+  }
+  // A team whose sport has no lineup chart has nothing to edit here, so a
+  // pasted URL behaves like a missing page. The save action refuses too.
+  if (!hasLineupChart(team.sport)) {
     notFound();
   }
 

@@ -8,11 +8,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { TeamNav } from "./TeamNav";
-import type { Role } from "@/generated/prisma/enums";
+import type { Role, Sport } from "@/generated/prisma/enums";
 
-function render(role: Role, pathname = "/t/team-1") {
+function render(role: Role, pathname = "/t/team-1", sport: Sport = "BASEBALL") {
   usePathname.mockReturnValue(pathname);
-  return renderToStaticMarkup(<TeamNav teamId="team-1" role={role} />);
+  return renderToStaticMarkup(
+    <TeamNav teamId="team-1" role={role} sport={sport} />,
+  );
 }
 
 /// Pulls the rendered anchor for one href so assertions about active state
@@ -160,6 +162,45 @@ describe("TeamNav focus styling", () => {
     expect(linkFor(html, "/t/team-1/schedule")).toContain(
       "focus-visible:ring-ring",
     );
+  });
+});
+
+// A team without a lineup chart gets no tab to a page that 404s for it. Every
+// other tab is the same as baseball's: the gate is the chart, not the sport.
+describe("TeamNav for a sport without a lineup chart", () => {
+  it("shows a basketball parent the shared links without Game Day", () => {
+    const html = render("PARENT", "/t/team-1", "BASKETBALL");
+
+    for (const href of [
+      "/t/team-1",
+      "/t/team-1/schedule",
+      "/t/team-1/roster",
+      "/t/team-1/messages",
+      "/profile",
+    ]) {
+      expect(html).toContain(`href="${href}"`);
+    }
+    expect(html).not.toContain('href="/t/team-1/view"');
+    expect(html).not.toContain("Game Day");
+  });
+
+  it("shows a basketball coach the staff rack without the lineup tools", () => {
+    const html = render("COACH", "/t/team-1", "BASKETBALL");
+
+    expect(html).toContain('href="/t/team-1/directory"');
+    expect(html).not.toContain('href="/t/team-1/view"');
+    expect(html).not.toContain('href="/t/team-1/readiness"');
+    expect(html).not.toContain('href="/t/team-1/chart"');
+    expect(html).not.toContain("Readiness");
+    expect(html).not.toContain("Edit Lineup");
+  });
+
+  it("still gives a basketball owner Members and Settings", () => {
+    const html = render("OWNER", "/t/team-1", "BASKETBALL");
+
+    expect(html).toContain('href="/t/team-1/members"');
+    expect(html).toContain('href="/t/team-1/settings"');
+    expect(html).not.toContain('href="/t/team-1/chart"');
   });
 });
 

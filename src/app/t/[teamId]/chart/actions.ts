@@ -14,6 +14,7 @@ import {
 } from "@/lib/chart";
 import { getChart, saveBattingOrder } from "@/lib/roster";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { hasLineupChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
 
 import { parseJson, parseJsonList } from "./form-json";
@@ -83,7 +84,10 @@ export async function saveBattingOrderAction(formData: FormData) {
       getTeamById(teamId),
       getChart(teamId),
     ]);
-    if (!team) {
+    // A sport with no lineup chart is refused like a lost access check. The
+    // page 404s for such a team, so only a forged POST reaches this line, and
+    // it must not write baseball chart columns onto that roster.
+    if (!team || !hasLineupChart(team.sport)) {
       redirect(`/t/${teamId}/chart?error=access`);
     }
 
