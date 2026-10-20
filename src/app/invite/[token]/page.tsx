@@ -11,13 +11,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { getInvitationByToken } from "@/lib/invitations";
 import { isLiveInvitation } from "@/lib/invitation-token";
 
 import { acceptInvitationAction } from "./actions";
 
 export const metadata = {
-  title: "You're invited — Youth Baseball Team Manager",
+  title: `You're invited — ${APP_NAME}`,
 };
 
 /// Masks all but the first character of the local part, so the page can

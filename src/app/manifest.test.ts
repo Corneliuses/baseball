@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { lightThemeHex } from "@/lib/light-theme";
 
 import manifest from "./manifest";
+import { APP_NAME } from "@/lib/app-name";
 
 /**
  * The manifest is the one file in the app whose mistakes are invisible in
@@ -36,7 +37,7 @@ describe("web app manifest", () => {
   const result = manifest();
 
   it("names the app for both a listing and a home-screen label", () => {
-    expect(result.name).toBe("Youth Baseball Team Manager");
+    expect(result.name).toBe(APP_NAME);
     // iOS truncates around a dozen characters; a longer short_name defeats the
     // point of having one.
     expect(result.short_name).toBeDefined();

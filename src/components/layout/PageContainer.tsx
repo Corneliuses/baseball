@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { APP_NAME } from "@/lib/app-name";
 
 function BaseballCornIcon() {
   return (
@@ -74,7 +75,7 @@ export function PageContainer({
           <div className="flex items-center">
             <BaseballCornIcon />
             <h1 className="font-display text-xl text-primary sm:text-2xl">
-              Youth Baseball Team Manager
+              {APP_NAME}
             </h1>
           </div>
         </div>

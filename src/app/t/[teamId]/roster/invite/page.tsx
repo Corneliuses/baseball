@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { StatusBanner } from "@/components/StatusBanner";
+import { APP_NAME } from "@/lib/app-name";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRosterWithGuardians } from "@/lib/roster";
@@ -18,7 +19,7 @@ import { sortRoster } from "@/lib/roster-rules";
 import { InviteForm } from "./InviteForm";
 
 export const metadata = {
-  title: "Invite parents — Youth Baseball Team Manager",
+  title: `Invite parents — ${APP_NAME}`,
 };
 
 /// Every other action in this app does one round trip; this one loops, and

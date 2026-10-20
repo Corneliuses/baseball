@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { APP_NAME, APP_SHORT_NAME } from "@/lib/app-name";
 
 /// The web app manifest, via Next 16's `app/manifest.ts` metadata convention —
 /// served at `/manifest.webmanifest`, and the reason a phone offers "Add to
@@ -30,12 +31,12 @@ export default function manifest(): MetadataRoute.Manifest {
     // change of landing page updates the installed app instead of installing a
     // second copy beside it.
     id: "/",
-    name: "Youth Baseball Team Manager",
-    // Home-screen labels truncate around a dozen characters on iOS; the full
-    // name would read as "Youth Baseb…".
-    short_name: "Team Manager",
+    name: APP_NAME,
+    // Home-screen labels truncate around a dozen characters on iOS; see
+    // app-name.ts.
+    short_name: APP_SHORT_NAME,
     description:
-      "Schedules, RSVPs, and the batting order for your youth baseball team.",
+      "Schedules, RSVPs, and the lineup for your team.",
     // The auth-gated landing page. Opened signed-out, an installed app lands on
     // /signin exactly as the browser does — installing grants no access.
     start_url: "/",

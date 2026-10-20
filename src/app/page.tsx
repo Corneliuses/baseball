@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { isOwnerEmail } from "@/lib/owner";
 import { getCurrentUser } from "@/lib/session";
 import { getAllTeams, getMemberTeams } from "@/lib/teams";
+import { APP_NAME } from "@/lib/app-name";
 
 /// Signed-out visitors see no team data at all — no query even runs. The
 /// previous version of this page (#1) called getPublicTeams() unconditionally,
@@ -21,7 +22,7 @@ export default async function Home() {
         <div className="space-y-6 py-12 text-center">
           <div>
             <h2 className="font-display text-3xl text-foreground mb-2">
-              Welcome to Youth Baseball Team Manager
+              Welcome to {APP_NAME}
             </h2>
             <p className="text-lg text-muted-foreground">
               Sign in to see your team&apos;s roster, schedule, and lineup.

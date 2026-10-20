@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import ProfileLoading from "./loading";
+import { APP_NAME } from "@/lib/app-name";
 
 describe("profile loading state", () => {
   it("shows the spinning ball", () => {
@@ -18,6 +19,6 @@ describe("profile loading state", () => {
     const html = renderToStaticMarkup(<ProfileLoading />);
 
     expect(html).toContain("<header");
-    expect(html).toContain("Youth Baseball Team Manager");
+    expect(html).toContain(APP_NAME);
   });
 });
