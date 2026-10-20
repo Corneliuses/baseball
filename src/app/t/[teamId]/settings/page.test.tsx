@@ -23,6 +23,7 @@ const ACTIVE_TEAM = {
   id: "team-1",
   name: "Sharks",
   season: "2026",
+  sport: "BASEBALL",
   allPlay: true,
   groupMeUrl: null,
   archivedAt: null,
