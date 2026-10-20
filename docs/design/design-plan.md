@@ -148,6 +148,11 @@ and then spent everywhere (see sketches):
 5. **Jersey dot** — navy circle, cream number, Geist Mono. Batting slot numbers, roster
    jersey numbers.
 
+The pending ball belongs to the same vocabulary and follows the team's sport: a baseball
+spinning on `animate-spin-ball`, or inside a basketball team a basketball dribbling on
+`animate-dribble` (`BasketballSpinner`). Both are drawn in `currentColor` and take the same
+props, so a caller swaps one for the other; see §8.
+
 ## 6. The diamond finally looks like a diamond ⚾
 
 The centerpiece, and the explicit second half of the brief. Full mockup, day and night:
@@ -397,6 +402,14 @@ Via the existing `LazyMotion`/`m` setup only:
   "Loading…" in words for the reduced-motion reader. Its seams are stitched in seam red,
   the one place the spinner gets a second colour, because at 56px a single-colour ball
   reads as a ring. No banana: it is not a screen, and the page replacing it has its own.
+- `animate-dribble`: the same two surfaces **inside a basketball team**. `SportProvider`
+  (a client context the team layout supplies, since a `loading.tsx` fallback has no data)
+  tells `SubmitButton` and `LoadingInterstitial` the sport, and they draw
+  `BasketballSpinner`, which bounces on a translate-only keyframe: no opacity and no
+  scale-for-a-squash, the same rule as `animate-rise`. Outside a team (`/profile`) the
+  context's default keeps the baseball. Legal for the same reason as the spin, bounded by
+  the submission or navigation it reports, and gated on reduced motion in its own
+  `@utility` block.
 - Micro: RSVP pop and pennant hover tilt (±2°). **Not built** — see the status note at the
   top.
 - Celebration: one confetti burst (green/yellow/cream, ~1.2s) on chart save success only.

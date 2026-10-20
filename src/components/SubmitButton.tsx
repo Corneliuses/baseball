@@ -5,6 +5,8 @@ import { useFormStatus } from "react-dom";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { BaseballSpinner } from "@/components/BaseballSpinner";
+import { BasketballSpinner } from "@/components/BasketballSpinner";
+import { useSport } from "@/components/SportProvider";
 
 /**
  * A submit button that knows its form is busy.
@@ -29,6 +31,10 @@ import { BaseballSpinner } from "@/components/BaseballSpinner";
  * `disabled` composes rather than overrides: the chart editors already disable
  * their save button on a clean draft, and that stays true while pending adds
  * its own reason.
+ *
+ * Inside a basketball team the pending ball dribbles rather than spins: the
+ * team layout supplies `SportProvider`, and outside a team its default keeps
+ * the baseball.
  */
 export interface SubmitButtonProps extends Omit<ButtonProps, "type" | "asChild"> {
   /// What the button says while the action is in flight. Present tense and
@@ -46,12 +52,14 @@ export function SubmitButton({
   ...props
 }: SubmitButtonProps) {
   const { pending } = useFormStatus();
+  const Spinner =
+    useSport() === "BASKETBALL" ? BasketballSpinner : BaseballSpinner;
 
   return (
     <Button type="submit" disabled={pending || disabled} {...props}>
       {pending ? (
         <>
-          <BaseballSpinner />
+          <Spinner />
           {pendingLabel}
         </>
       ) : (
