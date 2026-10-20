@@ -29,6 +29,7 @@ describe("TeamCard", () => {
     id: "team-1",
     name: "Test Team",
     season: "2026",
+    sport: "BASEBALL" as const,
     allPlay: true,
     isClickable: false,
   };
@@ -46,6 +47,21 @@ describe("TeamCard", () => {
 
     rerender(<TeamCard {...baseProps} allPlay={false} />);
     expect(screen.getByText("Selective lineup")).toBeInTheDocument();
+  });
+
+  it("should show the sport", () => {
+    const { rerender } = render(<TeamCard {...baseProps} />);
+    expect(screen.getByText("Baseball")).toBeInTheDocument();
+
+    rerender(<TeamCard {...baseProps} sport="BASKETBALL" />);
+    expect(screen.getByText("Basketball")).toBeInTheDocument();
+  });
+
+  it("should not describe a lineup for a sport without a chart", () => {
+    render(<TeamCard {...baseProps} sport="BASKETBALL" allPlay={true} />);
+
+    expect(screen.queryByText("All players bat and field")).not.toBeInTheDocument();
+    expect(screen.queryByText("Selective lineup")).not.toBeInTheDocument();
   });
 
   it("should handle missing season", () => {

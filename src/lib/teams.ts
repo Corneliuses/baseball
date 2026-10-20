@@ -111,7 +111,10 @@ export async function createTeam(
 export type UpdateTeamInput = {
   name: string;
   season: string | null;
-  allPlay: boolean;
+  /// Optional because only a sport with a lineup chart has the setting: a
+  /// basketball save leaves the stored column alone rather than writing a
+  /// `false` read off a checkbox that was never rendered.
+  allPlay?: boolean;
   groupMeUrl: string | null;
 };
 
@@ -124,7 +127,7 @@ export async function updateTeam(
     data: {
       name: input.name,
       season: input.season,
-      allPlay: input.allPlay,
+      ...(input.allPlay === undefined ? {} : { allPlay: input.allPlay }),
       groupMeUrl: input.groupMeUrl,
     },
     select: TEAM_SELECT,

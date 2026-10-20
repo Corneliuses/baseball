@@ -66,6 +66,23 @@ describe("Team settings page", () => {
     );
   });
 
+  it("describes lineup settings and offers all-play for baseball", async () => {
+    const html = await render();
+
+    expect(html).toContain("lineup settings");
+    expect(html).toContain('name="allPlay"');
+  });
+
+  it("shows a basketball team's sport and no lineup settings", async () => {
+    getTeamById.mockResolvedValue({ ...ACTIVE_TEAM, sport: "BASKETBALL" });
+
+    const html = await render();
+
+    expect(html).toContain("Basketball");
+    expect(html).not.toContain("lineup settings");
+    expect(html).not.toContain('name="allPlay"');
+  });
+
   it("leaves the GroupMe field empty when the team has no link", async () => {
     const html = await render();
 

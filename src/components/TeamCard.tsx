@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Sport } from "@/generated/prisma/enums";
+import { hasLineupChart, SPORT_LABELS } from "@/lib/sport";
 
 interface TeamCardProps {
   id: string;
   name: string;
   season: string | null;
+  sport: Sport;
   allPlay: boolean;
   isClickable: boolean;
   archivedAt?: Date | null;
@@ -38,6 +41,7 @@ export function TeamCard({
   id,
   name,
   season,
+  sport,
   allPlay,
   isClickable,
   archivedAt = null,
@@ -67,10 +71,14 @@ export function TeamCard({
       </CardHeader>
       <CardContent>
         <div className="space-y-2 text-sm">
+          <p className="text-muted-foreground">{SPORT_LABELS[sport]}</p>
           {season && <p className="text-muted-foreground">Season: {season}</p>}
-          <p className="text-muted-foreground">
-            {allPlay ? "All players bat and field" : "Selective lineup"}
-          </p>
+          {/* All-play describes the lineup chart, which only some sports have. */}
+          {hasLineupChart(sport) && (
+            <p className="text-muted-foreground">
+              {allPlay ? "All players bat and field" : "Selective lineup"}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
