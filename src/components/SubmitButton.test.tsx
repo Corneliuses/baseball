@@ -8,6 +8,7 @@ vi.mock("react-dom", async (importOriginal) => {
   return { ...actual, useFormStatus: () => useFormStatus() };
 });
 
+import { SportProvider } from "./SportProvider";
 import { SubmitButton } from "./SubmitButton";
 
 /// `useFormStatus` reports the enclosing form's state, and there is no form
@@ -101,5 +102,38 @@ describe("SubmitButton composing with a caller's own disabled state", () => {
 
     expect(html).toContain("w-full");
     expect(html).toContain("bg-destructive");
+  });
+});
+
+describe("SubmitButton and the team's sport", () => {
+  it("dribbles a basketball while pending inside a basketball team", () => {
+    const html = render(
+      true,
+      <SportProvider sport="BASKETBALL">
+        <SubmitButton pendingLabel="Saving…">Save</SubmitButton>
+      </SportProvider>,
+    );
+
+    expect(html).toContain("animate-dribble");
+    expect(html).not.toContain("animate-spin-ball");
+    expect(html).toContain("Saving…");
+  });
+
+  it("spins the baseball outside a team", () => {
+    const html = render(true, <SubmitButton>Save</SubmitButton>);
+
+    expect(html).toContain("animate-spin-ball");
+    expect(html).not.toContain("animate-dribble");
+  });
+
+  it("shows no ball at rest, whatever the sport", () => {
+    const html = render(
+      false,
+      <SportProvider sport="BASKETBALL">
+        <SubmitButton>Save</SubmitButton>
+      </SportProvider>,
+    );
+
+    expect(html).not.toContain("animate-dribble");
   });
 });
