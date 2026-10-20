@@ -40,7 +40,8 @@ export const EVENT_DURATION_MS: Record<EventType, number> = {
 /// when AUTH_URL moved would duplicate every event in subscribers' calendars.
 /// It is also deliberately NOT `APP_NAME`: the UID is each event's identity in
 /// every subscribed calendar, so it keeps the original app's name through the
-/// rename (#90) and the host move (#96). Only PRODID follows the name.
+/// rename (#90) and the host move (#96). Only PRODID follows the name;
+/// `ics.test.ts` pins the literal.
 const UID_DOMAIN = "youth-baseball-team-manager";
 
 /// Both hints say the same thing in the two spellings calendar apps read:
