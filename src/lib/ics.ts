@@ -37,6 +37,9 @@ export const EVENT_DURATION_MS: Record<EventType, number> = {
 
 /// UID domain is a fixed string, never the deploy host: a UID that changed
 /// when AUTH_URL moved would duplicate every event in subscribers' calendars.
+/// So it did not follow the move to coach.corneliuses.com (#96), and it does
+/// not follow the app's name either: an event's UID is its identity in every
+/// calendar already subscribed, and `ics.test.ts` pins the literal.
 const UID_DOMAIN = "youth-baseball-team-manager";
 
 /// Both hints say the same thing in the two spellings calendar apps read:

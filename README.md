@@ -146,6 +146,26 @@ deployed on Vercel.
 Every one of those was chosen deliberately, with alternatives considered and rejected in
 writing — see the stack decisions below.
 
+## Deployment
+
+Production is **https://coach.corneliuses.com**, a domain on the Vercel project. The
+previous host, `baseball.corneliuses.com`, stays on the project as a 308 redirect to it:
+invitation links already sitting in inboxes and every calendar subscribed to
+`/api/calendar/[token]` carry the old host, and the redirect keeps both working. Don't
+remove it. Preview deployments sign in at `preview.baseball.corneliuses.com` (see
+`.github/workflows/preview-domain.yml`).
+
+The host lives in configuration, not code. `AUTH_URL` in Vercel's Production environment
+is the single switch: the auth service's redirect URI is derived from it, and so is every
+emailed link and the calendar subscribe URL (`src/lib/absolute-url.ts`). The auth service
+matches the redirect URI exactly, so a new host must be registered there before
+`AUTH_URL` points at it. The calendar feed's event UIDs deliberately do not carry the host
+(`src/lib/ics.ts`), so a move never duplicates events in anyone's calendar.
+
+Moving hosts costs families three things, none of which carry across origins: an
+installed home-screen app keeps opening the old address until it is reinstalled, push
+notifications have to be turned on again on `/profile`, and everyone signs in once more.
+
 ## Documentation
 
 - **[`AGENTS.md`](AGENTS.md)** — conventions, commands, and the model rules that are easy
