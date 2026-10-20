@@ -54,6 +54,13 @@ enum Position {
   RIGHT_FIELD
 }
 
+/// The sport a team plays. Fixed when the team is created. Lineup-chart
+/// surfaces are gated per sport through hasLineupChart (src/lib/sport.ts).
+enum Sport {
+  BASEBALL
+  BASKETBALL
+}
+
 // ---------------------------------------------------------------------------
 // People — global, no team column, persist across seasons
 // ---------------------------------------------------------------------------
@@ -125,6 +132,13 @@ model Team {
   id     String  @id @default(cuid())
   name   String
   season String?
+
+  /// The sport this team plays. The chart columns on RosterEntry
+  /// (battingOrder, position, positionSlot, notPlaying) and Team.allPlay are
+  /// baseball-only. Basketball's playing-time model is deliberately
+  /// undecided — do not add basketball columns until the league's rules are
+  /// known.
+  sport Sport @default(BASEBALL)
 
   /// Team setting: every kid bats and fields.
   allPlay Boolean @default(true)

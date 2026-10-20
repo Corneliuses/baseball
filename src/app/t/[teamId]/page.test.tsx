@@ -118,6 +118,7 @@ beforeEach(() => {
     id: "team-1",
     name: "Sluggers",
     season: "Fall 2026",
+    sport: "BASEBALL",
     allPlay: true,
     groupMeUrl: null,
     archivedAt: null,
@@ -150,6 +151,7 @@ describe("TeamHomePage", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: true,
       groupMeUrl: null,
       archivedAt: new Date("2026-01-01T00:00:00Z"),
@@ -165,6 +167,7 @@ describe("TeamHomePage", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: true,
       groupMeUrl: "https://groupme.com/join_group/12345678/AbCdEfGh",
       archivedAt: null,
@@ -314,6 +317,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -348,6 +352,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -376,6 +381,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -392,6 +398,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -441,6 +448,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -465,6 +473,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: true,
       archivedAt: null,
     });
@@ -499,6 +508,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -531,6 +541,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -558,6 +569,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -713,6 +725,7 @@ describe("TeamHomePage one-tap RSVP", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: true,
       archivedAt: new Date("2026-01-01T00:00:00Z"),
     });

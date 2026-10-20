@@ -1,3 +1,4 @@
+import type { Sport } from "@/generated/prisma/enums";
 import { generateCalendarToken } from "./calendar-token";
 import { db } from "./db";
 
@@ -18,6 +19,7 @@ export interface Team {
   id: string;
   name: string;
   season: string | null;
+  sport: Sport;
   allPlay: boolean;
   groupMeUrl: string | null;
   archivedAt: Date | null;
@@ -28,6 +30,7 @@ const TEAM_SELECT = {
   id: true,
   name: true,
   season: true,
+  sport: true,
   allPlay: true,
   groupMeUrl: true,
   archivedAt: true,
