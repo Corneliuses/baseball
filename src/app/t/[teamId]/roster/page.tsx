@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
+import { APP_NAME } from "@/lib/app-name";
 import { messageFor } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRoster } from "@/lib/roster";
@@ -20,7 +21,7 @@ import { AddPlayerForm } from "./AddPlayerForm";
 import { ROSTER_ERROR_MESSAGES } from "./roster-messages";
 
 export const metadata = {
-  title: "Roster — Youth Baseball Team Manager",
+  title: `Roster — ${APP_NAME}`,
 };
 
 /// Calls requireTeamAccess itself, independent of the layout — every page

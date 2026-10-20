@@ -145,7 +145,7 @@ export function AddPlayerForm({ teamId }: { teamId: string }) {
           </p>
           <p className="mt-1 text-muted-foreground">
             {duplicate.match.kind === "rostered"
-              ? "Adding them again creates a second player with the same name — separate jersey, separate batting slot, separate guardians."
+              ? "Adding them again creates a second player with the same name — separate jersey, separate guardians, separate spot in the lineup."
               : "Adding them here creates a brand-new player. The returning-player picker reuses the existing one, and brings their guardians across."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">

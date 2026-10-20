@@ -1,8 +1,8 @@
-# Youth Baseball Team Manager
+# Cornelius Team Manager
 
-An invite-only PWA for coaching youth baseball. One person runs the team; parents RSVP
-their kids and see the batting order and field positions on their phone, at the field,
-often on one bar of signal.
+An invite-only PWA for coaching youth baseball and basketball teams. One person runs the
+team; parents RSVP their kids and see the schedule and lineup on their phone, at the field
+or the gym, often on one bar of signal.
 
 It replaces a group text, a league website nobody checks, and a lineup card written in the
 parking lot fifteen minutes before first pitch.

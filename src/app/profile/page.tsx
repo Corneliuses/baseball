@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { getProfile } from "@/lib/profile";
 import { getCurrentUser } from "@/lib/session";
@@ -19,7 +20,7 @@ import { getCurrentUser } from "@/lib/session";
 import { signOutAction, updateProfileAction } from "./actions";
 
 export const metadata = {
-  title: "Your profile — Youth Baseball Team Manager",
+  title: `Your profile — ${APP_NAME}`,
 };
 
 // messageTable, never a bare literal — see src/lib/error-messages.ts.

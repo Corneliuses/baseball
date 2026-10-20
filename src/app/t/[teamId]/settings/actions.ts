@@ -5,8 +5,14 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { isGroupMeUrl } from "@/lib/groupme";
+import { hasLineupChart } from "@/lib/sport";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
-import { archiveTeam, unarchiveTeam, updateTeam } from "@/lib/teams";
+import {
+  archiveTeam,
+  getTeamById,
+  unarchiveTeam,
+  updateTeam,
+} from "@/lib/teams";
 
 import type {
   TeamSettingsField,
@@ -75,7 +81,8 @@ function revalidateTeamPaths() {
   revalidatePath("/");
 }
 
-/// Name, season, all-play and the GroupMe link, saved together.
+/// Name, season, all-play and the GroupMe link, saved together. All-play is
+/// written only for a sport with a lineup chart (`hasLineupChart`).
 ///
 /// A `useActionState` action rather than a bare `<form action={...}>`: this is
 /// a form people *type* into, and AGENTS.md's rule for those is that a
@@ -110,7 +117,17 @@ export async function updateTeamAction(
 
   try {
     await requireTeamAccess(teamId, { intent: "write", minRole: "OWNER" });
-    await updateTeam(teamId, parsed.data);
+    // The checkbox trap: an absent checkbox reads as `false` above, and a
+    // team with no lineup chart never renders one — so passing `allPlay`
+    // through would silently clear it on every basketball save. Only a team
+    // whose sport has the chart gets the column written at all.
+    const team = await getTeamById(teamId);
+    if (!team) throw new Error("Team not found");
+    const { allPlay, ...rest } = parsed.data;
+    await updateTeam(
+      teamId,
+      hasLineupChart(team.sport) ? { ...rest, allPlay } : rest,
+    );
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof TeamAccessError) {

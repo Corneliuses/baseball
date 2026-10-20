@@ -9,12 +9,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { loadDeclinedEntryIds } from "@/lib/chart-declines";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { getChart } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
 import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { hasLineupChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
 
 import { BattingOrderEditor } from "./BattingOrderEditor";
@@ -22,7 +24,7 @@ import { ClearDraftStash, DraftStash } from "./DraftStash";
 import { EditorTabs } from "./EditorTabs";
 
 export const metadata = {
-  title: "Edit lineup: batting order — Youth Baseball Team Manager",
+  title: `Edit lineup: batting order — ${APP_NAME}`,
 };
 
 const ERROR_MESSAGES = messageTable({
@@ -75,6 +77,11 @@ export default async function ChartPage({
 
   const team = await getTeamById(teamId);
   if (!team) {
+    notFound();
+  }
+  // A team whose sport has no lineup chart has nothing to edit here, so a
+  // pasted URL behaves like a missing page. The save action refuses too.
+  if (!hasLineupChart(team.sport)) {
     notFound();
   }
 

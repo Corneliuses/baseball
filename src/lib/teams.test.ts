@@ -30,6 +30,7 @@ const TEAM_SELECT = {
   id: true,
   name: true,
   season: true,
+  sport: true,
   allPlay: true,
   groupMeUrl: true,
   archivedAt: true,
@@ -40,6 +41,7 @@ const SAMPLE_TEAM = {
   id: "team-1",
   name: "Sharks",
   season: "2026",
+  sport: "BASEBALL",
   allPlay: true,
   groupMeUrl: null,
   archivedAt: null,
@@ -151,6 +153,20 @@ describe("updateTeam", () => {
         allPlay: false,
         groupMeUrl: "https://groupme.com/join_group/1/x",
       },
+      select: TEAM_SELECT,
+    });
+  });
+
+  it("leaves allPlay unwritten when the input omits it", async () => {
+    await updateTeam("team-1", {
+      name: "Hoopers",
+      season: "2027",
+      groupMeUrl: null,
+    });
+
+    expect(updateTeamRow).toHaveBeenCalledWith({
+      where: { id: "team-1" },
+      data: { name: "Hoopers", season: "2027", groupMeUrl: null },
       select: TEAM_SELECT,
     });
   });

@@ -1,3 +1,4 @@
+import type { Sport } from "@/generated/prisma/enums";
 import { generateCalendarToken } from "./calendar-token";
 import { db } from "./db";
 
@@ -18,6 +19,7 @@ export interface Team {
   id: string;
   name: string;
   season: string | null;
+  sport: Sport;
   allPlay: boolean;
   groupMeUrl: string | null;
   archivedAt: Date | null;
@@ -28,6 +30,7 @@ const TEAM_SELECT = {
   id: true,
   name: true,
   season: true,
+  sport: true,
   allPlay: true,
   groupMeUrl: true,
   archivedAt: true,
@@ -108,7 +111,10 @@ export async function createTeam(
 export type UpdateTeamInput = {
   name: string;
   season: string | null;
-  allPlay: boolean;
+  /// Optional because only a sport with a lineup chart has the setting: a
+  /// basketball save leaves the stored column alone rather than writing a
+  /// `false` read off a checkbox that was never rendered.
+  allPlay?: boolean;
   groupMeUrl: string | null;
 };
 
@@ -121,7 +127,7 @@ export async function updateTeam(
     data: {
       name: input.name,
       season: input.season,
-      allPlay: input.allPlay,
+      ...(input.allPlay === undefined ? {} : { allPlay: input.allPlay }),
       groupMeUrl: input.groupMeUrl,
     },
     select: TEAM_SELECT,

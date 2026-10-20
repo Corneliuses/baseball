@@ -50,6 +50,7 @@ import { TeamAccessError } from "@/lib/team-access";
 
 const team = {
   id: "team-1",
+  sport: "BASEBALL",
   name: "Cubs",
   season: "Fall 2026",
   allPlay: true,
@@ -117,6 +118,15 @@ describe("PositionsPage access", () => {
     requireTeamAccess.mockRejectedValue(new Error("db down"));
 
     await expect(render()).rejects.toThrow("db down");
+  });
+});
+
+describe("PositionsPage for a sport without a lineup chart", () => {
+  it("calls notFound() for a basketball team", async () => {
+    getTeamById.mockResolvedValue({ ...team, sport: "BASKETBALL" });
+
+    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(getChart).not.toHaveBeenCalled();
   });
 });
 

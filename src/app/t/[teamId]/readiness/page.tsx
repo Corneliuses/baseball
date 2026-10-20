@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { RSVP_STYLE } from "@/components/rsvp-style";
+import { APP_NAME } from "@/lib/app-name";
 import { formatEventDateTime } from "@/lib/calendar";
 import { chartRole } from "@/lib/chart-role";
 import { POSITION_LABELS } from "@/lib/positions";
@@ -25,10 +26,11 @@ import { buildRsvpStateMap } from "@/lib/rsvp";
 import { listEventRsvps } from "@/lib/rsvps";
 import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
+import { hasLineupChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
 
 export const metadata = {
-  title: "Next-game readiness — Youth Baseball Team Manager",
+  title: `Next-game readiness — ${APP_NAME}`,
 };
 
 /// The coach-facing readiness panel (#12) — the one place attendance meets the
@@ -147,7 +149,15 @@ export default async function ReadinessPage({
   // argument covers getChart and listEventRsvps below: after this issue, "every
   // family is silent" is a calm, plausible-looking screen, so a swallowed
   // outage would quietly assert a clean bill of health.
-  const game = await nextGame(teamId);
+  //
+  // The team is read alongside it and checked before the no-game card, because
+  // a team whose sport has no lineup chart has no readiness to check: a pasted
+  // URL 404s whether or not a game is on the schedule. A null team (deleted
+  // since the access check) falls through to the defaults below.
+  const [game, team] = await Promise.all([nextGame(teamId), getTeamById(teamId)]);
+  if (team && !hasLineupChart(team.sport)) {
+    notFound();
+  }
 
   if (!game) {
     return (
@@ -170,12 +180,7 @@ export default async function ReadinessPage({
     );
   }
 
-  const [team, chartEntries, rsvpRows] = await Promise.all([
-    // Needed for allPlay alone: it decides which spots this team actually
-    // fields, and a stale row at one it doesn't must not be reported as an
-    // uncovered position. A null return means the team was deleted between
-    // requireTeamAccess and here, so fall back to the column's own default.
-    getTeamById(teamId),
+  const [chartEntries, rsvpRows] = await Promise.all([
     getChart(teamId),
     listEventRsvps(teamId, game.id),
   ]);
@@ -184,6 +189,10 @@ export default async function ReadinessPage({
     chartEntries.map((entry) => entry.playerId),
     rsvpRows,
   );
+  // `team` is needed for allPlay alone: it decides which spots this team
+  // actually fields, and a stale row at one it doesn't must not be reported as
+  // an uncovered position. A null team was deleted between requireTeamAccess
+  // and here, so fall back to the column's own default.
   const allPlay = team?.allPlay ?? true;
   const readiness: Readiness<ChartViewEntry> = computeReadiness(
     chartEntries,

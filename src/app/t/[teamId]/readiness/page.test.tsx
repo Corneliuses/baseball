@@ -80,7 +80,7 @@ beforeEach(() => {
   listEventRsvps.mockResolvedValue([]);
   // allPlay off by default so the fixture's named positions are all spots this
   // team really fields; the allPlay case sets it explicitly.
-  getTeamById.mockResolvedValue({ id: "team-1", allPlay: false, archivedAt: null });
+  getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: false, archivedAt: null });
 });
 
 describe("ReadinessPage access", () => {
@@ -104,6 +104,33 @@ describe("ReadinessPage access", () => {
     requireTeamAccess.mockRejectedValue(new Error("db down"));
 
     await expect(render()).rejects.toThrow("db down");
+  });
+});
+
+describe("ReadinessPage for a sport without a lineup chart", () => {
+  it("calls notFound() for a basketball team", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      sport: "BASKETBALL",
+      allPlay: true,
+      archivedAt: null,
+    });
+
+    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(getChart).not.toHaveBeenCalled();
+  });
+
+  // Asked before the no-game card, so the 404 does not depend on the schedule.
+  it("404s rather than showing the no-game card when nothing is scheduled", async () => {
+    nextGame.mockResolvedValue(null);
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      sport: "BASKETBALL",
+      allPlay: true,
+      archivedAt: null,
+    });
+
+    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });
 
@@ -184,7 +211,7 @@ describe("ReadinessPage with a decline", () => {
     // The league fields a catcher (revised 2026-09-17), so the view page and
     // the editor both seat this kid behind the plate; the line here has to
     // agree with them.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
         entryId: "entry-cal",
@@ -204,7 +231,7 @@ describe("ReadinessPage with a decline", () => {
   });
 
   it("labels a named outfield row as its spot — the placeable CF, not OF", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
         entryId: "entry-cal",
@@ -223,7 +250,7 @@ describe("ReadinessPage with a decline", () => {
   });
 
   it("labels an allPlay team's unplaced player as the outfield too", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
         entryId: "entry-cal",
@@ -250,7 +277,7 @@ describe("ReadinessPage with a decline", () => {
   });
 
   it("reports an allPlay team's catcher uncovered when they declined", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
         entryId: "entry-cal",
@@ -272,7 +299,7 @@ describe("ReadinessPage with a decline", () => {
   });
 
   it("reports a pinned outfield spot uncovered when its only kid declined", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
         entryId: "entry-cal",

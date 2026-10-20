@@ -10,6 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
+import { hasLineupChart } from "@/lib/sport";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -17,7 +19,7 @@ import { archiveTeamAction, unarchiveTeamAction } from "./actions";
 import { TeamDetailsForm } from "./TeamDetailsForm";
 
 export const metadata = {
-  title: "Team settings — Youth Baseball Team Manager",
+  title: `Team settings — ${APP_NAME}`,
 };
 
 /// Viewing this page requires OWNER, but the intent is "read" — an archived
@@ -59,7 +61,9 @@ export default async function TeamSettingsPage({
         <CardHeader>
           <CardTitle>Team settings</CardTitle>
           <CardDescription>
-            Name, season, team chat, and lineup settings.
+            {hasLineupChart(team.sport)
+              ? "Name, season, team chat, and lineup settings."
+              : "Name, season, and team chat."}
           </CardDescription>
         </CardHeader>
 
@@ -72,6 +76,7 @@ export default async function TeamSettingsPage({
             teamId={teamId}
             name={team.name}
             season={team.season ?? ""}
+            sport={team.sport}
             allPlay={team.allPlay}
             groupMeUrl={team.groupMeUrl ?? ""}
             saved={Boolean(saved)}

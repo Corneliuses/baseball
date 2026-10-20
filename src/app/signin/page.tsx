@@ -8,12 +8,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+import { APP_NAME } from "@/lib/app-name";
 import { safeCallbackUrl } from "@/lib/callback-url";
 import { messageFor } from "@/lib/error-messages";
 import { SIGNIN_MESSAGES } from "./signin-messages";
 
 export const metadata = {
-  title: "Sign in — Youth Baseball Team Manager",
+  title: `Sign in — ${APP_NAME}`,
 };
 
 const FALLBACK_ERROR_MESSAGE =

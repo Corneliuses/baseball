@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { listReturningCandidates } from "@/lib/roster";
@@ -21,7 +22,7 @@ import { getRoster } from "@/lib/roster";
 import { addReturningPlayerAction } from "./actions";
 
 export const metadata = {
-  title: "Add returning player — Youth Baseball Team Manager",
+  title: `Add returning player — ${APP_NAME}`,
 };
 
 const ERROR_MESSAGES = messageTable({

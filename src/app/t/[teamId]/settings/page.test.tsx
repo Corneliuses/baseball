@@ -23,6 +23,7 @@ const ACTIVE_TEAM = {
   id: "team-1",
   name: "Sharks",
   season: "2026",
+  sport: "BASEBALL",
   allPlay: true,
   groupMeUrl: null,
   archivedAt: null,
@@ -63,6 +64,23 @@ describe("Team settings page", () => {
     expect(html).toContain(
       'value="https://groupme.com/join_group/12345678/AbCdEfGh"',
     );
+  });
+
+  it("describes lineup settings and offers all-play for baseball", async () => {
+    const html = await render();
+
+    expect(html).toContain("lineup settings");
+    expect(html).toContain('name="allPlay"');
+  });
+
+  it("shows a basketball team's sport and no lineup settings", async () => {
+    getTeamById.mockResolvedValue({ ...ACTIVE_TEAM, sport: "BASKETBALL" });
+
+    const html = await render();
+
+    expect(html).toContain("Basketball");
+    expect(html).not.toContain("lineup settings");
+    expect(html).not.toContain('name="allPlay"');
   });
 
   it("leaves the GroupMe field empty when the team has no link", async () => {

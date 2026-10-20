@@ -12,6 +12,7 @@ vi.mock("next/font/google", () => {
 });
 
 import { metadata } from "./layout";
+import { APP_NAME } from "@/lib/app-name";
 
 /**
  * This app stores children's first and last names, their jersey numbers, and
@@ -32,7 +33,7 @@ describe("root metadata", () => {
   });
 
   it("still names the app", () => {
-    expect(metadata.title).toBe("Youth Baseball Team Manager");
+    expect(metadata.title).toBe(APP_NAME);
   });
 
   // Declaring `icons` at all makes Next skip the file-convention icon merge

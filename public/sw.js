@@ -66,7 +66,7 @@ self.addEventListener("push", (event) => {
     payload = {};
   }
 
-  const title = payload.title || "Youth Baseball Team Manager";
+  const title = payload.title || "Cornelius Team Manager";
   const options = {
     body: payload.body || "You have an update from your team.",
     icon: "/icon-192.png",

@@ -116,6 +116,12 @@ describe("Roster entry page", () => {
 
     expect(markup).toContain("Yes, remove them");
     expect(markup).toContain("Remove Ada from this roster?");
+    // Read by coaches of every sport, so it names the lineup, not a batting
+    // slot.
+    expect(markup).toContain(
+      "number and their place in the lineup on this team go with them.",
+    );
+    expect(markup).not.toContain("batting slot");
   });
 
   it("asks for per-guardian confirmation before unlinking", async () => {
