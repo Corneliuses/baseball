@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { APP_NAME } from "@/lib/app-name";
+import { hasLineupChart } from "@/lib/sport";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -60,7 +61,9 @@ export default async function TeamSettingsPage({
         <CardHeader>
           <CardTitle>Team settings</CardTitle>
           <CardDescription>
-            Name, season, team chat, and lineup settings.
+            {hasLineupChart(team.sport)
+              ? "Name, season, team chat, and lineup settings."
+              : "Name, season, and team chat."}
           </CardDescription>
         </CardHeader>
 
@@ -73,6 +76,7 @@ export default async function TeamSettingsPage({
             teamId={teamId}
             name={team.name}
             season={team.season ?? ""}
+            sport={team.sport}
             allPlay={team.allPlay}
             groupMeUrl={team.groupMeUrl ?? ""}
             saved={Boolean(saved)}

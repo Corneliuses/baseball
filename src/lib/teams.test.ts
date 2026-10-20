@@ -157,6 +157,20 @@ describe("updateTeam", () => {
     });
   });
 
+  it("leaves allPlay unwritten when the input omits it", async () => {
+    await updateTeam("team-1", {
+      name: "Hoopers",
+      season: "2027",
+      groupMeUrl: null,
+    });
+
+    expect(updateTeamRow).toHaveBeenCalledWith({
+      where: { id: "team-1" },
+      data: { name: "Hoopers", season: "2027", groupMeUrl: null },
+      select: TEAM_SELECT,
+    });
+  });
+
   it("lets a write failure propagate", async () => {
     updateTeamRow.mockRejectedValue(new Error("not found"));
 
