@@ -146,6 +146,24 @@ describe("TeamHomePage", () => {
     }
   });
 
+  it("names a basketball team's sport and says nothing about a lineup", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Hoopers",
+      season: "Fall 2026",
+      sport: "BASKETBALL",
+      allPlay: true,
+      groupMeUrl: null,
+      archivedAt: null,
+    });
+
+    const html = await render();
+
+    expect(html).toContain("Basketball");
+    expect(html).not.toContain("All players bat and field");
+    expect(html).not.toContain("Selective lineup");
+  });
+
   it("flags an archived team as read-only", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",

@@ -9,7 +9,10 @@
 /// Raw strings rather than parsed values: these go straight back into the
 /// inputs, and a link the checker rejected still has to be redisplayed as
 /// pasted or the owner cannot see what was wrong with it. `allPlay` is the
-/// checkbox's own state and is the one genuinely boolean field.
+/// checkbox's own state and is the one genuinely boolean field. A team with no
+/// lineup chart renders no checkbox, so its echoed `allPlay` is whatever the
+/// absent box read as; the form ignores it there and the action never writes
+/// it, leaving the stored value untouched.
 export interface TeamSettingsValues {
   name: string;
   season: string;

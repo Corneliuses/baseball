@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const requireTeamAccess = vi.fn();
 const updateTeam = vi.fn();
+const getTeamById = vi.fn();
 const archiveTeam = vi.fn();
 const unarchiveTeam = vi.fn();
 const revalidatePath = vi.fn();
@@ -13,6 +14,7 @@ vi.mock("@/lib/team-access", () => ({
 
 vi.mock("@/lib/teams", () => ({
   updateTeam: (...args: unknown[]) => updateTeam(...args),
+  getTeamById: (...args: unknown[]) => getTeamById(...args),
   archiveTeam: (...args: unknown[]) => archiveTeam(...args),
   unarchiveTeam: (...args: unknown[]) => unarchiveTeam(...args),
 }));
@@ -69,6 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "OWNER", userId: "user-1" });
   updateTeam.mockResolvedValue(undefined);
+  getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: false });
 });
 
 describe("updateTeamAction on a good submission", () => {
@@ -108,6 +111,49 @@ describe("updateTeamAction on a good submission", () => {
       "team-1",
       expect.objectContaining({ groupMeUrl: VALID_LINK }),
     );
+  });
+});
+
+// The checkbox trap: a basketball form renders no all-play box, and an absent
+// checkbox reads as `false`. Writing it would flip the stored column on every
+// save, so for a sport with no lineup chart the action leaves it out.
+describe("updateTeamAction and the sport's lineup chart", () => {
+  it("leaves allPlay out of a basketball save that has no checkbox", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASKETBALL", allPlay: true });
+
+    const url = await redirectUrlOf(save({ season: "2027", groupMeUrl: "" }));
+
+    expect(updateTeam).toHaveBeenCalledWith("team-1", {
+      name: "Sharks",
+      season: "2027",
+      groupMeUrl: null,
+    });
+    expect(url).toBe("/t/team-1/settings?saved=1");
+  });
+
+  it("ignores a forged allPlay on a basketball save", async () => {
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASKETBALL", allPlay: false });
+
+    await redirectUrlOf(save({ allPlay: "on", groupMeUrl: "" }));
+
+    expect(updateTeam.mock.calls[0][1]).not.toHaveProperty("allPlay");
+  });
+
+  it("still writes allPlay for baseball, unchecked included", async () => {
+    await redirectUrlOf(save({ groupMeUrl: "" }));
+
+    expect(updateTeam).toHaveBeenCalledWith(
+      "team-1",
+      expect.objectContaining({ allPlay: false }),
+    );
+  });
+
+  it("reads the sport only after the access check passes", async () => {
+    requireTeamAccess.mockRejectedValue(new TeamAccessError("archived", "archived"));
+
+    await redirectUrlOf(save({ groupMeUrl: "" }));
+
+    expect(getTeamById).not.toHaveBeenCalled();
   });
 });
 

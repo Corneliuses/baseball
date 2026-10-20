@@ -31,6 +31,7 @@ import { getChart } from "@/lib/roster";
 import { buildRsvpStateMapsByEvent } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listRsvpsForEvents } from "@/lib/rsvps";
 import { nextEvents, type ScheduleEvent } from "@/lib/schedule";
+import { hasLineupChart, SPORT_LABELS } from "@/lib/sport";
 import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { hasLineupChart } from "@/lib/sport";
@@ -277,9 +278,12 @@ export default async function TeamHomePage({
         {team.season && (
           <p className="text-muted-foreground">Season: {team.season}</p>
         )}
-        <p className="text-muted-foreground">
-          {team.allPlay ? "All players bat and field" : "Selective lineup"}
-        </p>
+        <p className="text-muted-foreground">{SPORT_LABELS[team.sport]}</p>
+        {hasLineupChart(team.sport) && (
+          <p className="text-muted-foreground">
+            {team.allPlay ? "All players bat and field" : "Selective lineup"}
+          </p>
+        )}
         {team.archivedAt && (
           <p className="font-medium text-destructive">
             This team is archived and read-only.
