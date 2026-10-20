@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { LOADING_LABEL, LoadingInterstitial } from "./LoadingInterstitial";
+import { SportProvider } from "./SportProvider";
 
 describe("LoadingInterstitial", () => {
   it("spins the same ball the submit buttons use", () => {
@@ -44,5 +45,35 @@ describe("LoadingInterstitial", () => {
     const html = renderToStaticMarkup(<LoadingInterstitial className="pt-2" />);
 
     expect(html).toContain("pt-2");
+  });
+
+  it("dribbles a basketball inside a basketball team", () => {
+    const html = renderToStaticMarkup(
+      <SportProvider sport="BASKETBALL">
+        <LoadingInterstitial />
+      </SportProvider>,
+    );
+
+    expect(html).toContain("animate-dribble");
+    expect(html).not.toContain("animate-spin-ball");
+    // Same size, seam colour, label and live region as the baseball.
+    expect(html).toContain("size-14");
+    expect(html).toContain("stroke-destructive");
+    expect(html).toContain('role="status"');
+    expect(html).toContain(LOADING_LABEL);
+  });
+
+  it("keeps the baseball under a baseball team and under no provider", () => {
+    const team = renderToStaticMarkup(
+      <SportProvider sport="BASEBALL">
+        <LoadingInterstitial />
+      </SportProvider>,
+    );
+    const none = renderToStaticMarkup(<LoadingInterstitial />);
+
+    for (const html of [team, none]) {
+      expect(html).toContain("animate-spin-ball");
+      expect(html).not.toContain("animate-dribble");
+    }
   });
 });

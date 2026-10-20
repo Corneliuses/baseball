@@ -250,6 +250,31 @@
   }
 }
 
+/* The pending indicator inside a basketball team (BasketballSpinner): the
+   ball drops, meets the floor and comes back up. Translate-only, like rise and
+   step-up — no squash via scale, so the keyframe stays one property. Bounded
+   by the submission or navigation it reports, the same justification the
+   spin-ball gate above gives, and held still under reduced motion. */
+@utility animate-dribble {
+  animation: dribble 0.7s infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes dribble {
+  0%,
+  100% {
+    transform: translateY(-22%);
+    animation-timing-function: ease-in;
+  }
+  50% {
+    transform: translateY(0);
+    animation-timing-function: ease-out;
+  }
+}
+
 /* The save-success tick: design-plan.md §8 specified it in the original
    redesign and it shipped unbuilt. StatusBanner draws CheckIcon's single
    polyline by sweeping the dash offset along it, so the tick is *written*

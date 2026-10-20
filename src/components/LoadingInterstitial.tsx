@@ -1,4 +1,8 @@
+"use client";
+
 import { BaseballSpinner } from "@/components/BaseballSpinner";
+import { BasketballSpinner } from "@/components/BasketballSpinner";
+import { useSport } from "@/components/SportProvider";
 import { cn } from "@/lib/utils";
 
 /// What every `loading.tsx` shows while the next page streams in: a baseball,
@@ -24,9 +28,18 @@ import { cn } from "@/lib/utils";
 /// alert. A Suspense fallback mounts with its text already in place, so most
 /// screen readers will not announce it on arrival. What it guarantees is that
 /// a reader browsing the page meets "Loading…" rather than an empty region.
+///
+/// Inside a basketball team the ball dribbles instead (`BasketballSpinner`).
+/// A `loading.tsx` fallback has no data, so the sport arrives through
+/// `SportProvider`, which the team layout supplies; anywhere else — `/profile`
+/// — the context's default keeps the baseball. That is the only reason this is
+/// a client component.
 export const LOADING_LABEL = "Loading…";
 
 export function LoadingInterstitial({ className }: { className?: string }) {
+  const Spinner =
+    useSport() === "BASKETBALL" ? BasketballSpinner : BaseballSpinner;
+
   return (
     <div
       role="status"
@@ -35,7 +48,7 @@ export function LoadingInterstitial({ className }: { className?: string }) {
         className,
       )}
     >
-      <BaseballSpinner
+      <Spinner
         className="size-14 text-foreground"
         seamClassName="stroke-destructive"
       />
