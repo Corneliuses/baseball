@@ -514,6 +514,50 @@ populated going forward. Noted in Revisit Triggers.
   instinct to "materialize the effective lineup" is the one to resist — that's how the
   per-game rows sneak back in.
 
+### Decision 17: Multi-sport — Sport on `Team`, Chart per Sport, Basketball Chart Deferred
+
+*Added 2026-10.* The coach now also runs youth basketball teams, and the same families have
+kids in both.
+
+**Options considered:**
+- **Fork the app** — a second copy, renamed and re-themed, with a basketball chart built in
+  from the start.
+- **Widen the model generically** — grow `Position` (or replace it with a free-text
+  position column) and reuse `RosterEntry`'s chart columns for whatever basketball needs.
+- **A sport column plus a chart module per sport** — `enum Sport { BASEBALL BASKETBALL }`
+  and `Team.sport` (default `BASEBALL`), with every chart surface behind one pure gate,
+  `hasLineupChart(sport)` in `src/lib/sport.ts`.
+
+**Decision:** **A sport column plus a chart module per sport.** Baseball keeps its chart
+exactly as Decision 16 left it. Basketball gets everything else and, for now, no chart:
+the chart tabs are hidden, the four chart routes 404, and both chart saves refuse. Sport is
+chosen at team creation and is not editable. The app is renamed **Cornelius Team Manager**
+(short name *Team Manager*, one `APP_NAME` constant) and moves to `coach.corneliuses.com`;
+the calendar `UID_DOMAIN` keeps its old value, because an event's UID is its identity in
+every subscribed calendar.
+
+**Rationale:** The sport-agnostic two-thirds of the app — invitations and the sign-in gate,
+global people and per-team participation, the schedule and its timezone rules, RSVPs,
+reminders, push, team email — is where nearly every hard-won gotcha lives, and none of it
+knows what sport it serves. A fork would copy all of that and then drift, and one coach
+with a day job cannot maintain two copies. One app also means a parent with a kid in both
+sports has one account, one sign-in and one home-screen icon, which is only possible
+because Decision 15 made people global. Widening the model generically was rejected because
+basketball's chart has no settled shape to widen *toward*: a generic position column would
+encode a guess, and baseball's columns (`battingOrder`, `position`, `positionSlot`,
+`notPlaying`, `Team.allPlay`) carry invariants that mean nothing on a court.
+
+**What is undecided, deliberately:** the basketball chart's shape. It is either **starters
+plus a bench** or a **rotation grid** of shifts, and which one depends on the league's
+playing-time rules, which are not yet known. No basketball column, position list or
+playing-time setting is added until they are. Decision 16 (a standing chart, no per-game
+rows) is expected to hold for either shape — a rotation can be standing just as a batting
+order is — but it has not yet been tested by one.
+
+**What it gives up:** a basketball team has no lineup surface at all in the meantime, and
+the brand (the crest, the baseball mark, baseball-flavoured copy) stays baseball's. Both
+are deferred, not rejected.
+
 ## Stack Summary
 
 | Layer | Choice | Team familiarity | Est. monthly cost | Notes |
@@ -561,6 +605,7 @@ Plus roughly $12/year for a domain.
 | `web-push` | iOS Home-Screen-install adoption among parents proves too low to be useful. The answer is probably to lean harder on email, not to switch push vendors — no vendor can fix this. |
 | Resend | Deliverability problems after domain verification, or volume passes 3,000/month. Postmark is the upgrade. |
 | `@dnd-kit` | Touch dragging tests badly with real coaches. Ship the tap-to-place mode as primary rather than replacing the library. |
+| Basketball chart | The league's playing-time rules are known. If equal-time shifts are mandated, the chart is a standing rotation grid and readiness asks "which shift is short"; if not, it is starters + bench. Either way it is a new module behind `hasLineupChart`, not columns on the baseball chart. |
 
 ## Next Steps
 
