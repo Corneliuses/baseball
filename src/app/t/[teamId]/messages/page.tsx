@@ -9,12 +9,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
+import { APP_NAME } from "@/lib/app-name";
 import { formatEventDateTime } from "@/lib/calendar";
 import { listMessages } from "@/lib/messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 
 export const metadata = {
-  title: "Messages — Youth Baseball Team Manager",
+  title: `Messages — ${APP_NAME}`,
 };
 
 /// Broadcast history — coach-and-above only, like /directory (owner decision,

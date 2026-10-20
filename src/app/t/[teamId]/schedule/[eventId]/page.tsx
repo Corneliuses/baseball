@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
+import { APP_NAME } from "@/lib/app-name";
 import { formatEventDateTime, instantToWallClock } from "@/lib/calendar";
 import { messageFor } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
@@ -34,7 +35,7 @@ import {
 } from "../schedule-context";
 
 export const metadata = {
-  title: "Event — Youth Baseball Team Manager",
+  title: `Event — ${APP_NAME}`,
 };
 
 const inputClass =

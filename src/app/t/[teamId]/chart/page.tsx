@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { loadDeclinedEntryIds } from "@/lib/chart-declines";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { getChart } from "@/lib/roster";
@@ -22,7 +23,7 @@ import { ClearDraftStash, DraftStash } from "./DraftStash";
 import { EditorTabs } from "./EditorTabs";
 
 export const metadata = {
-  title: "Edit lineup: batting order — Youth Baseball Team Manager",
+  title: `Edit lineup: batting order — ${APP_NAME}`,
 };
 
 const ERROR_MESSAGES = messageTable({

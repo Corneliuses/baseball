@@ -10,6 +10,9 @@ import { Card, CardTitle } from "@/components/ui/card";
 /// the Sharks must not silence the Sluggers' card. Local to this browser on
 /// purpose — GroupMe owns actual membership and never tells us, so the honest
 /// thing to remember is only "this phone tapped join here".
+///
+/// The `ybtm:` prefix is the app's old name and stays: renaming the key would
+/// forget every dismissal and re-prompt each family who already joined.
 function joinedKey(teamId: string): string {
   return `ybtm:groupme-joined:${teamId}`;
 }

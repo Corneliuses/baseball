@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
 
@@ -17,7 +18,7 @@ import { archiveTeamAction, unarchiveTeamAction } from "./actions";
 import { TeamDetailsForm } from "./TeamDetailsForm";
 
 export const metadata = {
-  title: "Team settings — Youth Baseball Team Manager",
+  title: `Team settings — ${APP_NAME}`,
 };
 
 /// Viewing this page requires OWNER, but the intent is "read" — an archived

@@ -6,13 +6,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { listDirectory } from "@/lib/memberships";
 import { sortDirectory } from "@/lib/directory-rules";
 
 export const metadata = {
-  title: "Directory — Youth Baseball Team Manager",
+  title: `Directory — ${APP_NAME}`,
 };
 
 /// Coach-and-above only. The directory is every family's contact details in

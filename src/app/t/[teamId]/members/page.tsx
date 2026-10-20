@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { StatusBanner } from "@/components/StatusBanner";
+import { APP_NAME } from "@/lib/app-name";
 import { formatEventDayLabel } from "@/lib/calendar";
 import { messageFor } from "@/lib/error-messages";
 import { ROLE_LABELS, roleLabel } from "@/lib/roles";
@@ -29,7 +30,7 @@ import { InviteMemberForm } from "./InviteMemberForm";
 import { MEMBER_ERROR_MESSAGES } from "./member-messages";
 
 export const metadata = {
-  title: "Members — Youth Baseball Team Manager",
+  title: `Members — ${APP_NAME}`,
 };
 
 const ROLE_OPTIONS = ["OWNER", "COACH", "PARENT"] as const;

@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { buildChartView, type ChartViewPlayer } from "@/lib/chart-view";
 import { formatEventDateTime } from "@/lib/calendar";
 import { mapsUrl } from "@/lib/maps";
@@ -27,7 +28,7 @@ import { Diamond } from "./Diamond";
 import { Reveal } from "./Reveal";
 
 export const metadata = {
-  title: "Game Day — Youth Baseball Team Manager",
+  title: `Game Day — ${APP_NAME}`,
 };
 
 /// One dugout roster row, shared by the batting order and the bench so the two

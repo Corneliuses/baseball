@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import type { Role } from "@/generated/prisma/enums";
 import { absoluteUrl } from "@/lib/absolute-url";
+import { APP_NAME } from "@/lib/app-name";
 import { getCalendarToken } from "@/lib/calendar-feed";
 import {
   adjacentMonth,
@@ -61,7 +62,7 @@ import { EMPTY_EVENT_VALUES, type EventFormValues } from "./event-form-state";
 export const maxDuration = 300;
 
 export const metadata = {
-  title: "Schedule — Youth Baseball Team Manager",
+  title: `Schedule — ${APP_NAME}`,
 };
 
 function eventTitle(event: ScheduleEvent): string {
