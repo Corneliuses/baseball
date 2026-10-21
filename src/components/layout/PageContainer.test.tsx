@@ -26,6 +26,9 @@ describe("PageContainer", () => {
     const band = header("BASEBALL");
     expect(band.querySelector('[data-crest="baseball"]')).not.toBeNull();
     expect(band.className).toContain("bg-pinstripe");
+    // The stripes are a background-image over the card colour, not instead
+    // of it: twMerge would drop bg-card here, leaving a transparent band.
+    expect(band.className).toContain("bg-card");
   });
 
   it("does not lend baseball's branding to another sport", () => {

@@ -107,11 +107,10 @@ export function PageContainer({
       {/* Pinstripes are a baseball jersey's, so only a baseball team's band
           wears them — and per design-plan.md §5 they live on header surfaces
           only, never behind body text. */}
+      {/* Joined by hand, not cn(): twMerge reads the custom bg-pinstripe as a
+          background colour and drops bg-card, though it only sets an image. */}
       <header
-        className={cn(
-          "border-b-2 border-primary/30 bg-card",
-          baseball && "bg-pinstripe",
-        )}
+        className={`border-b-2 border-primary/30 bg-card${baseball ? " bg-pinstripe" : ""}`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center">
