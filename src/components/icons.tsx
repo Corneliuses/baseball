@@ -152,6 +152,18 @@ export function CapIcon({ className }: IconProps) {
   );
 }
 
+/// A basketball team's mark beside its name in the team header — the ball's
+/// outline and its four seams, the static twin of `BasketballSpinner`.
+export function BasketballIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5v17M3.5 12h17" />
+      <path d="M6.2 5.8a9 9 0 010 12.4M17.8 5.8a9 9 0 000 12.4" />
+    </Icon>
+  );
+}
+
 /// The person's own profile — the one nav item that is not about the team.
 /// A plain figure rather than a cap or a jersey, because whoever is reading
 /// may be a coach on one team and a parent on the next.

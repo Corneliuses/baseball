@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Sport } from "@/generated/prisma/enums";
-import { hasLineupChart, SPORT_LABELS } from "@/lib/sport";
+import { hasLineupChart, SPORT_LABELS, sportTheme } from "@/lib/sport";
 
 interface TeamCardProps {
   id: string;
@@ -48,6 +48,9 @@ export function TeamCard({
 }: TeamCardProps) {
   const content = (
     <Card
+      // A basketball team's card wears its own palette on the team list, the
+      // same one its pages do.
+      data-sport={sportTheme(sport)}
       className={`${
         isClickable ? "cursor-pointer transition-shadow hover:shadow-md" : ""
       } ${

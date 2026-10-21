@@ -56,9 +56,13 @@ describe("LoadingInterstitial", () => {
 
     expect(html).toContain("animate-dribble");
     expect(html).not.toContain("animate-spin-ball");
-    // Same size, seam colour, label and live region as the baseball.
+    // Same size, label and live region as the baseball, but an orange ball
+    // with dark seams rather than red stitches.
     expect(html).toContain("size-14");
-    expect(html).toContain("stroke-destructive");
+    expect(html).toContain("fill-banana");
+    // Seams in the colour made for the orange, so they stay dark at night.
+    expect(html).toContain("text-banana-foreground");
+    expect(html).not.toContain("stroke-destructive");
     expect(html).toContain('role="status"');
     expect(html).toContain(LOADING_LABEL);
   });

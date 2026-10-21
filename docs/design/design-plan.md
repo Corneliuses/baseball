@@ -116,6 +116,36 @@ Contrast spot-checks (must re-verify in review): navy on cream 11.9:1 ✓ · Fie
 cream 5.6:1 ✓ · navy on Banana Yellow 7.5:1 ✓ · white on Field Green 5.9:1 ✓. Banana
 Yellow never carries white text, ever.
 
+### 3a. Hardwood — the basketball team's palette
+
+A basketball team is not a baseball team in a different shirt. Every page inside one (and
+its card on the team list) sits under `data-sport="basketball"`, which re-points the
+tokens above to a gym floor: maple-cream ground, burnt orange where baseball has Field
+Green, and **ball orange as the one loud accent** where baseball has Banana Yellow. §2's
+budget is unchanged — one per screen, the utility is still `bg-banana` — only the fruit
+changes. Header and hero bands swap their pinstripes for floorboard seams (the same
+`bg-pinstripe` utility, re-drawn under the attribute), the team header carries a ball
+beside the team name, and the loading interstitial dribbles an orange ball with dark
+seams. The field, scoreboard and destructive tokens are not overridden: the scoreboard is
+charcoal for every sport, and stitch red is the warning colour for every sport.
+
+| Token (under the attribute) | Light ("open gym") | Dark ("house lights down") | Notes |
+|---|---|---|---|
+| `--background` (hardwood) | `36 60% 92%` Maple Cream | `20 16% 9%` Arena Dark | |
+| `--foreground` (hardwood) | `224 42% 20%` Midnight Navy | `36 40% 90%` | Navy stays — the one colour both sports share |
+| `--primary` (hardwood) | `20 85% 36%` Burnt Orange | `25 95% 60%` | Buttons, links, active nav, the ball in the header |
+| `--secondary` (hardwood) | `30 55% 85%` wood tint | `20 14% 19%` | |
+| `--accent` (hardwood) | `25 90% 88%` soft orange tint | `24 45% 22%` | Hover/ghost surfaces only |
+| `--banana` (hardwood) | `24 95% 55%` Ball Orange | `28 100% 62%` | The one-per-screen wow, navy text on it in light |
+| `--muted-foreground` (hardwood) | `26 22% 34%` | `32 18% 68%` | |
+| `--card` (hardwood) | `38 70% 97%` | `20 14% 14%` | |
+| `--border` (hardwood) | `30 40% 76%` | `20 12% 24%` | |
+| `--ring` (hardwood) | `20 85% 36%` | `28 100% 62%` | |
+
+Contrast spot-checks: navy on Maple Cream 12.4:1 ✓ · Burnt Orange on Maple Cream 5.2:1 ✓ ·
+cream on Burnt Orange 5.6:1 ✓ · navy on Ball Orange 5.2:1 ✓ · dark orange on Arena Dark
+7.4:1 ✓. As with banana, Ball Orange never carries white text.
+
 ## 4. Typography
 
 | Role | Face | How |

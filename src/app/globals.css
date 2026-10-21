@@ -108,6 +108,81 @@
   }
 }
 
+/* "Hardwood" — the basketball team's palette (design-plan.md §3a). Everything
+   inside a basketball team is wrapped in `data-sport="basketball"`
+   (PageContainer, TeamCard), and this block re-points the shadcn tokens under
+   it: maple-floor cream instead of vintage cream, burnt orange where baseball
+   has Field Green, and ball orange as the one loud accent where baseball has
+   Banana Yellow. The budget rule is the same (§2: one per screen); only the
+   fruit changes. Field, scoreboard and destructive tokens are left alone — the
+   scoreboard is charcoal for every sport, and stitch red is the warning colour
+   for every sport.
+
+   Scoped on an attribute rather than :root, so nothing that reads the :root
+   block — the manifest, the email palette, the drift test — sees these. */
+[data-sport="basketball"] {
+  --background: 36 60% 92%;
+  --foreground: 224 42% 20%;
+
+  --primary: 20 85% 36%;
+  --primary-foreground: 36 70% 96%;
+
+  --secondary: 30 55% 85%;
+  --secondary-foreground: 20 60% 24%;
+
+  --muted: 33 38% 84%;
+  --muted-foreground: 26 22% 34%;
+
+  --accent: 25 90% 88%;
+  --accent-foreground: 224 42% 20%;
+
+  --banana: 24 95% 55%;
+  --banana-foreground: 224 42% 20%;
+
+  --popover: 38 70% 97%;
+  --popover-foreground: 224 42% 20%;
+
+  --card: 38 70% 97%;
+  --card-foreground: 224 42% 20%;
+
+  --border: 30 40% 76%;
+  --input: 30 40% 76%;
+  --ring: 20 85% 36%;
+}
+
+/* The arena with the house lights down: dark stained floor, the orange glows. */
+@media (prefers-color-scheme: dark) {
+  [data-sport="basketball"] {
+    --background: 20 16% 9%;
+    --foreground: 36 40% 90%;
+
+    --primary: 25 95% 60%;
+    --primary-foreground: 20 16% 9%;
+
+    --secondary: 20 14% 19%;
+    --secondary-foreground: 36 40% 90%;
+
+    --muted: 20 12% 20%;
+    --muted-foreground: 32 18% 68%;
+
+    --accent: 24 45% 22%;
+    --accent-foreground: 36 40% 90%;
+
+    --banana: 28 100% 62%;
+    --banana-foreground: 20 16% 9%;
+
+    --popover: 20 14% 14%;
+    --popover-foreground: 36 40% 90%;
+
+    --card: 20 14% 14%;
+    --card-foreground: 36 40% 90%;
+
+    --border: 20 12% 24%;
+    --input: 20 12% 24%;
+    --ring: 28 100% 62%;
+  }
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -160,6 +235,26 @@
     transparent 1px,
     transparent 24px
   );
+}
+
+/* Inside a basketball team the same header bands are laid in floorboards
+   instead: horizontal board seams every 14px over a faint orange wash. Same
+   rules as the pinstripe — header and hero surfaces only, foreground-derived
+   so it survives both themes. A scoped rule in the utilities layer rather than
+   a second utility, so every band in the app follows the team's sport without
+   any caller asking which sport it is in. */
+@layer utilities {
+  [data-sport="basketball"] .bg-pinstripe {
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        hsl(var(--foreground) / 0.07) 0,
+        hsl(var(--foreground) / 0.07) 1px,
+        transparent 1px,
+        transparent 14px
+      ),
+      linear-gradient(hsl(var(--primary) / 0.08), hsl(var(--primary) / 0.08));
+  }
 }
 
 /* Halo for SVG <text> sitting on the field art: paints the stroke *behind*

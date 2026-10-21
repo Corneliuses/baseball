@@ -13,12 +13,17 @@
 ///
 /// `seamClassName` colours the four seams on their own, the way the
 /// navigation interstitial stitches the baseball's in seam red.
+/// `ballClassName` fills the ball itself — the interstitial paints it orange;
+/// inside a button it stays an outline, since a filled disc beside a label
+/// would be the loudest thing on the control.
 export function BasketballSpinner({
   className = "",
   seamClassName,
+  ballClassName,
 }: {
   className?: string;
   seamClassName?: string;
+  ballClassName?: string;
 }) {
   return (
     <svg
@@ -30,7 +35,13 @@ export function BasketballSpinner({
       strokeLinecap="round"
       className={`animate-dribble ${className}`}
     >
-      <circle cx="12" cy="12" r="8.5" strokeWidth={1.75} />
+      <circle
+        cx="12"
+        cy="12"
+        r="8.5"
+        strokeWidth={1.75}
+        className={ballClassName}
+      />
       {/* The vertical and horizontal seams, then the two curved side seams
           bowing toward the middle. */}
       <path d="M12 3.5v17" strokeWidth={1.5} className={seamClassName} />
