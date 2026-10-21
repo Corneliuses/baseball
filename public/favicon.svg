@@ -1,57 +1,98 @@
 <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <!-- Team crest, but corny: two corn cobs crossed like bats behind the baseball.
-       Colors are the app palette: field green, banana yellow, chalk, navy, stitch red. -->
+  <!-- The app's crest: one ear of corn on the field-green disc. Still corny (it is
+       the Cornelius app), but it belongs to every team the app runs, whatever the
+       sport, so it carries no ball, bat, hoop or court.
+       Colors are the app palette: field green, banana yellow, chalk, navy. -->
 
   <!-- Field-green circle background -->
   <circle cx="32" cy="32" r="30" fill="#2F6B37" stroke="#1E2948" stroke-width="2.5"/>
 
+  <!-- Chalk ring just inside the rim -->
+  <circle cx="32" cy="32" r="25.6" fill="none" stroke="#FFFDF4" stroke-width="1.5"/>
+
   <defs>
-    <!-- Vertical cob outline, reused as the kernel clip in each cob's local space -->
     <clipPath id="cob-clip">
-      <path d="M 32 6.5 C 35.2 6.9 36.9 9.5 37.4 15.5 C 37.7 19 37.75 22.5 37.75 26.5 L 37.75 45 C 37.75 53.5 36.3 57 32 57.5 C 27.7 57 26.25 53.5 26.25 45 L 26.25 26.5 C 26.25 22.5 26.3 19 26.6 15.5 C 27.1 9.5 28.8 6.9 32 6.5 Z"/>
+      <path d="M 32 9.5 C 38.5 9.5 41.5 17 41.5 27 L 40.5 46 C 40 50 24 50 23.5 46 L 22.5 27 C 22.5 17 25.5 9.5 32 9.5 Z"/>
     </clipPath>
-    <!-- One cob-bat, drawn vertical, husk end down like a bat knob -->
-    <g id="cob">
-      <path d="M 32 6.5 C 35.2 6.9 36.9 9.5 37.4 15.5 C 37.7 19 37.75 22.5 37.75 26.5 L 37.75 45 C 37.75 53.5 36.3 57 32 57.5 C 27.7 57 26.25 53.5 26.25 45 L 26.25 26.5 C 26.25 22.5 26.3 19 26.6 15.5 C 27.1 9.5 28.8 6.9 32 6.5 Z"
-            fill="#FFC72E" stroke="#1E2948" stroke-width="2.4" stroke-linejoin="round"/>
-      <g clip-path="url(#cob-clip)" stroke="#DD9A10" stroke-width="1.5" fill="none" stroke-linecap="round">
-        <path d="M 29.4 7.5 C 28.6 14 28.6 50 29.4 56.5"/>
-        <path d="M 34.6 7.5 C 35.4 14 35.4 50 34.6 56.5"/>
-        <path d="M 26.25 11.5 Q 32 12.9 37.75 11.5"/>
-        <path d="M 26.25 17 Q 32 18.4 37.75 17"/>
-        <path d="M 26.25 22.5 Q 32 23.9 37.75 22.5"/>
-        <path d="M 26.25 28 Q 32 29.4 37.75 28"/>
-        <path d="M 26.25 33.5 Q 32 34.9 37.75 33.5"/>
-        <path d="M 26.25 39 Q 32 40.4 37.75 39"/>
-        <path d="M 26.25 44.5 Q 32 45.9 37.75 44.5"/>
-        <path d="M 26.25 50 Q 32 51.4 37.75 50"/>
-      </g>
-      <g stroke="#1E2948" stroke-width="2.2" stroke-linejoin="round">
-        <path d="M 27.5 47.5 C 23.5 50 22 54.5 25 58 C 27.5 54.5 28.5 51.5 30 49.5 Z" fill="#7FB763"/>
-        <path d="M 36.5 47.5 C 40.5 50 42 54.5 39 58 C 36.5 54.5 35.5 51.5 34 49.5 Z" fill="#7FB763"/>
-        <path d="M 28.5 48.5 C 28 53 30 56.5 32 58.5 C 34 56.5 36 53 35.5 48.5 C 34 50.5 30 50.5 28.5 48.5 Z" fill="#9BCC7E"/>
-      </g>
-    </g>
   </defs>
 
-  <!-- Crossed cob-bats -->
-  <use href="#cob" transform="rotate(45 32 32)"/>
-  <use href="#cob" transform="rotate(-45 32 32)"/>
-
-  <!-- The baseball, front and center -->
-  <g>
-    <circle cx="32" cy="32" r="12" fill="#FFFDF4" stroke="#1E2948" stroke-width="2.6"/>
-    <g stroke="#C6102E" fill="none" stroke-linecap="round">
-      <path d="M 25.3 25 C 22.6 29.5 22.6 34.5 25.3 39" stroke-width="1.9"/>
-      <path d="M 38.7 25 C 41.4 29.5 41.4 34.5 38.7 39" stroke-width="1.9"/>
-      <g stroke-width="1.3">
-        <path d="M 22.2 27.7 L 24.9 28.3"/>
-        <path d="M 21.9 32 L 24.6 32"/>
-        <path d="M 22.2 36.3 L 24.9 35.7"/>
-        <path d="M 41.8 27.7 L 39.1 28.3"/>
-        <path d="M 42.1 32 L 39.4 32"/>
-        <path d="M 41.8 36.3 L 39.1 35.7"/>
-      </g>
+  <g transform="rotate(-14 32 32)">
+    <!-- The cob -->
+    <path d="M 32 9.5 C 38.5 9.5 41.5 17 41.5 27 L 40.5 46 C 40 50 24 50 23.5 46 L 22.5 27 C 22.5 17 25.5 9.5 32 9.5 Z" fill="#FFC72E"/>
+    <!-- Kernels, in offset rows -->
+    <g clip-path="url(#cob-clip)" fill="#DD9A10">
+        <rect x="20.6" y="11.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="24.2" y="11.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="27.8" y="11.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="31.4" y="11.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="35.0" y="11.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="38.6" y="11.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="22.4" y="14.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="26.0" y="14.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="29.6" y="14.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="33.2" y="14.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="36.8" y="14.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="40.4" y="14.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="20.6" y="18.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="24.2" y="18.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="27.8" y="18.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="31.4" y="18.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="35.0" y="18.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="38.6" y="18.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="22.4" y="21.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="26.0" y="21.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="29.6" y="21.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="33.2" y="21.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="36.8" y="21.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="40.4" y="21.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="20.6" y="24.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="24.2" y="24.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="27.8" y="24.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="31.4" y="24.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="35.0" y="24.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="38.6" y="24.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="22.4" y="27.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="26.0" y="27.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="29.6" y="27.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="33.2" y="27.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="36.8" y="27.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="40.4" y="27.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="20.6" y="30.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="24.2" y="30.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="27.8" y="30.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="31.4" y="30.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="35.0" y="30.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="38.6" y="30.9" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="22.4" y="34.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="26.0" y="34.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="29.6" y="34.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="33.2" y="34.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="36.8" y="34.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="40.4" y="34.1" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="20.6" y="37.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="24.2" y="37.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="27.8" y="37.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="31.4" y="37.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="35.0" y="37.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="38.6" y="37.3" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="22.4" y="40.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="26.0" y="40.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="29.6" y="40.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="33.2" y="40.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="36.8" y="40.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="40.4" y="40.5" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="20.6" y="43.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="24.2" y="43.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="27.8" y="43.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="31.4" y="43.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="35.0" y="43.7" width="2.8" height="2.6" rx="1.1"/>
+        <rect x="38.6" y="43.7" width="2.8" height="2.6" rx="1.1"/>
+    </g>
+    <path d="M 32 9.5 C 38.5 9.5 41.5 17 41.5 27 L 40.5 46 C 40 50 24 50 23.5 46 L 22.5 27 C 22.5 17 25.5 9.5 32 9.5 Z" fill="none" stroke="#1E2948" stroke-width="2.4" stroke-linejoin="round"/>
+    <!-- Husk: two leaves cupping the base of the cob, peeled back -->
+    <g stroke="#1E2948" stroke-width="2.2" stroke-linejoin="round">
+      <path d="M 33 55.5 C 25 54 20 45 21 33 C 25 38 29 43 34.5 46 C 34 50 33.5 53 33 55.5 Z" fill="#7FB763"/>
+      <path d="M 31 55.5 C 39 54 44 45 43 33 C 39 38 35 43 29.5 46 C 30 50 30.5 53 31 55.5 Z" fill="#9BCC7E"/>
     </g>
   </g>
 </svg>
