@@ -178,8 +178,9 @@ These are structural, not stylistic. Read the comments in `prisma/schema.prisma`
    revision of 2026-10-21) and are never written for baseball. `hasLineupChart` and
    `hasDepthChart` (`src/lib/sport.ts`) are the gates, never true for the same sport, and
    everything that assumes a chart asks the one it draws: the nav (Game Day and Edit
-   Lineup follow `hasAnyChart`; Readiness is baseball-only), the chart routes (`/view`
-   draws the diamond or the court; `/chart/depth` is basketball's editor), every chart
+   Lineup and Readiness follow `hasAnyChart`), the chart routes (`/view` draws the
+   diamond or the court; `/readiness` checks either chart; `/chart/depth` is basketball's
+   editor), every chart
    save (the real boundary — a forged POST must not write one sport's columns onto the
    other's roster), and team home's role line and `MiniDiamondHero`. Do not widen
    `Position` or reuse baseball's columns for the court — `CourtPosition` is its own enum
@@ -203,6 +204,14 @@ doesn't bat empties a position without changing an at-bat). The forbidden thing 
 be added.
 
 Practices have RSVPs but no chart. Later games are ignored.
+
+**Basketball has its own check, `src/lib/depth-readiness.ts`**, rendered by the same
+`/readiness` route through `DepthReadiness`. Same contract — read-only, silence is not
+absence, `effectiveBench` derived and never stored — with two differences that follow
+from the chart. Every rostered kid is in the rotation (`buildDepthDraft` puts the unplaced
+at the bottom of the bench), so a decline anywhere on the roster counts; and five have to
+take the floor, so fewer than `PLAYERS_ON_COURT` available is `shortHanded` and alarms
+like a decline. Do not stretch `computeReadiness` over the court (rule 4).
 
 ## Coding Conventions
 

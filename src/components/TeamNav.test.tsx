@@ -166,8 +166,8 @@ describe("TeamNav focus styling", () => {
 });
 
 // Basketball has the depth chart rather than baseball's lineup chart: Game Day
-// and Edit Lineup point at the court, and Readiness — baseball's alone — is
-// absent. Every other tab is the same as baseball's.
+// and Edit Lineup point at the court, and Readiness checks that chart instead.
+// Every other tab is the same as baseball's.
 describe("TeamNav for a basketball team", () => {
   it("shows a basketball parent Game Day, drawn as a court", () => {
     const html = render("PARENT", "/t/team-1", "BASKETBALL");
@@ -185,16 +185,21 @@ describe("TeamNav for a basketball team", () => {
     expect(html).toContain("Game Day");
   });
 
-  it("gives a basketball coach the depth chart editor but no Readiness", () => {
+  it("gives a basketball coach the depth chart editor and Readiness", () => {
     const html = render("COACH", "/t/team-1", "BASKETBALL");
 
     expect(html).toContain('href="/t/team-1/directory"');
     expect(html).toContain('href="/t/team-1/view"');
     expect(html).toContain('href="/t/team-1/chart/depth"');
     expect(html).toContain("Edit Lineup");
-    expect(html).not.toContain('href="/t/team-1/readiness"');
+    expect(html).toContain('href="/t/team-1/readiness"');
     expect(html).not.toContain('href="/t/team-1/chart"');
-    expect(html).not.toContain("Readiness");
+  });
+
+  it("keeps Readiness off a basketball parent's nav", () => {
+    const html = render("PARENT", "/t/team-1", "BASKETBALL");
+
+    expect(html).not.toContain('href="/t/team-1/readiness"');
   });
 
   it("still gives a basketball owner Members and Settings", () => {

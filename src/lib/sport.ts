@@ -26,8 +26,8 @@ export function hasDepthChart(sport: Sport): boolean {
   return sport === "BASKETBALL";
 }
 
-/// Whether the team has any standing chart at all, which is what the Game Day
-/// and Edit Lineup tabs need. Readiness is still baseball's alone.
+/// Whether the team has any standing chart at all, which is what the Game Day,
+/// Readiness and Edit Lineup tabs need.
 export function hasAnyChart(sport: Sport): boolean {
   return hasLineupChart(sport) || hasDepthChart(sport);
 }

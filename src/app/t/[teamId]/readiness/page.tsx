@@ -16,8 +16,11 @@ import { formatEventDateTime } from "@/lib/calendar";
 import { chartRole } from "@/lib/chart-role";
 import { POSITION_LABELS } from "@/lib/positions";
 import { computeReadiness, type Readiness } from "@/lib/readiness";
-import { getChart } from "@/lib/roster";
+import { computeDepthReadiness } from "@/lib/depth-readiness";
+import { hasDepthChartSet } from "@/lib/depth-chart";
+import { getChart, getDepthChart } from "@/lib/roster";
 import {
+  byJerseyThenName,
   hasChartSet,
   seatedEntryIds,
   type ChartViewEntry,
@@ -26,8 +29,10 @@ import { buildRsvpStateMap } from "@/lib/rsvp";
 import { listEventRsvps } from "@/lib/rsvps";
 import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
-import { hasLineupChart } from "@/lib/sport";
+import { hasAnyChart, hasDepthChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
+
+import { DepthReadiness } from "./DepthReadiness";
 
 export const metadata = {
   title: `Next-game readiness — ${APP_NAME}`,
@@ -42,6 +47,12 @@ export const metadata = {
 /// permanent, exactly like any other — this page must never grow its own
 /// special-cased "fix it for this game" action, which is how per-game lineup
 /// rows creep back in (Decision 16).
+///
+/// Both sports with a chart get one. Basketball's body is `DepthReadiness`,
+/// checking the depth chart through `computeDepthReadiness` — its own pure
+/// module, never readiness.ts stretched over the court (AGENTS.md rule 4).
+/// Everything above the body — the access check, the game card, the empty
+/// state for no game — is shared.
 ///
 /// Coach-only, matching both chart editors: parents keep /t/[teamId]/view, and
 /// nothing here is a parent's decision to make. Intent is "read", so a coach on
@@ -151,11 +162,11 @@ export default async function ReadinessPage({
   // outage would quietly assert a clean bill of health.
   //
   // The team is read alongside it and checked before the no-game card, because
-  // a team whose sport has no lineup chart has no readiness to check: a pasted
-  // URL 404s whether or not a game is on the schedule. A null team (deleted
-  // since the access check) falls through to the defaults below.
+  // a team whose sport has no chart has no readiness to check: a pasted URL
+  // 404s whether or not a game is on the schedule. A null team (deleted since
+  // the access check) falls through to the baseball defaults below.
   const [game, team] = await Promise.all([nextGame(teamId), getTeamById(teamId)]);
-  if (team && !hasLineupChart(team.sport)) {
+  if (team && !hasAnyChart(team.sport)) {
     notFound();
   }
 
@@ -176,6 +187,57 @@ export default async function ReadinessPage({
             </Button>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  const heading = game.opponent ? `Next game vs ${game.opponent}` : "Next game";
+
+  const gameHeader = (
+    <>
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-xl font-semibold text-foreground">Readiness</h3>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/t/${teamId}/view`}>See Game Day view</Link>
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{heading}</CardTitle>
+          <CardDescription>{formatEventDateTime(game.startsAt)}</CardDescription>
+        </CardHeader>
+        {game.location ? (
+          <CardContent>
+            <p className="text-sm text-foreground">{game.location}</p>
+          </CardContent>
+        ) : null}
+      </Card>
+    </>
+  );
+
+  if (team && hasDepthChart(team.sport)) {
+    const [depthRows, depthRsvpRows] = await Promise.all([
+      getDepthChart(teamId),
+      listEventRsvps(teamId, game.id),
+    ]);
+    // Sorted before anything reads it, exactly as Game Day and the editor do:
+    // a kid the coach hasn't placed yet joins the bench in the order handed.
+    const sorted = [...depthRows].sort(byJerseyThenName);
+    const depthRsvps = buildRsvpStateMap(
+      sorted.map((entry) => entry.playerId),
+      depthRsvpRows,
+    );
+
+    return (
+      <div className="mx-auto w-full max-w-2xl space-y-6">
+        {gameHeader}
+        <DepthReadiness
+          teamId={teamId}
+          gameId={game.id}
+          readiness={computeDepthReadiness(sorted, depthRsvps)}
+          hasChart={hasDepthChartSet(sorted)}
+        />
       </div>
     );
   }
@@ -215,28 +277,9 @@ export default async function ReadinessPage({
     (entry) => entry.battingOrder !== null,
   );
 
-  const heading = game.opponent ? `Next game vs ${game.opponent}` : "Next game";
-
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h3 className="text-xl font-semibold text-foreground">Readiness</h3>
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/t/${teamId}/view`}>See Game Day view</Link>
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{heading}</CardTitle>
-          <CardDescription>{formatEventDateTime(game.startsAt)}</CardDescription>
-        </CardHeader>
-        {game.location ? (
-          <CardContent>
-            <p className="text-sm text-foreground">{game.location}</p>
-          </CardContent>
-        ) : null}
-      </Card>
+      {gameHeader}
 
       {!hasChart ? (
         <Card>
