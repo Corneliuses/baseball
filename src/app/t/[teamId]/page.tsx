@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { JerseyDot } from "@/components/JerseyDot";
+import { MiniCourtHero } from "@/components/MiniCourtHero";
 import { MiniDiamondHero } from "@/components/MiniDiamondHero";
 import { RSVP_STYLE } from "@/components/rsvp-style";
 import { Button } from "@/components/ui/button";
@@ -23,15 +24,21 @@ import {
   seatedEntryIds,
   type ChartViewEntry,
 } from "@/lib/chart-view";
+import {
+  buildDepthDraft,
+  depthRole,
+  depthSpotOf,
+  hasDepthChartSet,
+} from "@/lib/depth-chart";
 import { sortDirectory } from "@/lib/directory-rules";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { mapsUrl } from "@/lib/maps";
 import { listCoachContacts } from "@/lib/memberships";
-import { getChart } from "@/lib/roster";
+import { getChart, getDepthChart, type DepthChartRow } from "@/lib/roster";
 import { buildRsvpStateMapsByEvent } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listRsvpsForEvents } from "@/lib/rsvps";
 import { nextEvents, type ScheduleEvent } from "@/lib/schedule";
-import { hasLineupChart, SPORT_LABELS } from "@/lib/sport";
+import { hasDepthChart, hasLineupChart, SPORT_LABELS } from "@/lib/sport";
 import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
@@ -83,9 +90,18 @@ function StarGlyph() {
   );
 }
 
+/// What a player card needs to know about a kid whatever the sport: both
+/// `getChart` and `getDepthChart` rows carry it.
+type HomeKid = Pick<
+  ChartViewEntry,
+  "entryId" | "playerId" | "playerName" | "jerseyNumber"
+>;
+
 /// A player card's name plate: the jersey worn big and the name in slab caps
-/// on a pinstripe band. Every card has one, chart or no chart.
-function NameBand({ entry }: { entry: ChartViewEntry }) {
+/// on a pinstripe band (floorboards inside a basketball team — the same
+/// utility, re-drawn under the sport attribute). Every card has one, chart or
+/// no chart.
+function NameBand({ entry }: { entry: HomeKid }) {
   return (
     <div className="flex items-center gap-3 bg-pinstripe px-4 py-4">
       {entry.jerseyNumber !== null ? (
@@ -95,6 +111,25 @@ function NameBand({ entry }: { entry: ChartViewEntry }) {
         {entry.playerName}
       </p>
     </div>
+  );
+}
+
+/// A player card's marquee strip: the chart line, in Banana Yellow with a star
+/// when the chart puts the kid in the game, quiet secondary stock otherwise.
+/// Uppercased by CSS so the DOM keeps the role line's exact sentence — the one
+/// the other chart pages agree on, and the one the page tests pin.
+function Marquee({ line, celebrate }: { line: string; celebrate: boolean }) {
+  return (
+    <p
+      className={`flex items-center gap-2 px-4 py-2 font-mono text-sm font-bold uppercase tracking-widest ${
+        celebrate
+          ? "bg-banana text-banana-foreground"
+          : "bg-secondary text-secondary-foreground"
+      }`}
+    >
+      {celebrate ? <StarGlyph /> : null}
+      <span>{line}</span>
+    </p>
   );
 }
 
@@ -184,33 +219,47 @@ export default async function TeamHomePage({
   // One read across all three events rather than one per card: asking the same
   // question three times over separately fetched rows is how two cards end up
   // disagreeing about the same family.
-  const [chartEntries, rsvpRows] = guardedPlayerIds.size
+  //
+  // The sport decides which chart is read: a basketball team's roster comes
+  // from `getDepthChart`, which carries the court columns and none of
+  // baseball's, so its cards are drawn from the chart Game Day draws.
+  const sportHasDepth = hasDepthChart(team.sport);
+  const [chartEntries, depthEntries, rsvpRows] = guardedPlayerIds.size
     ? await Promise.all([
-        getChart(teamId),
+        sportHasDepth
+          ? Promise.resolve([] as ChartViewEntry[])
+          : getChart(teamId),
+        sportHasDepth
+          ? getDepthChart(teamId)
+          : Promise.resolve([] as DepthChartRow[]),
         listRsvpsForEvents(
           teamId,
           upcoming.map((event) => event.id),
         ),
       ])
-    : [[] as ChartViewEntry[], []];
+    : [[] as ChartViewEntry[], [] as DepthChartRow[], []];
 
-  // Sorted, not left in the order `getChart` handed over: that is a findMany
-  // with no orderBy, so a parent with two kids would see them swap places
-  // between requests. Jersey then name is the roster's order everywhere else.
-  const myKids = chartEntries
+  // Sorted, not left in the order the read handed over: a parent with two
+  // kids would otherwise see them swap places between requests. Jersey then
+  // name is the roster's order everywhere else.
+  const myKids: HomeKid[] = (sportHasDepth ? depthEntries : chartEntries)
     .filter((entry) => guardedPlayerIds.has(entry.playerId))
     .sort(byJerseyThenName);
+  const chartEntryById = new Map(
+    chartEntries.map((entry) => [entry.entryId, entry]),
+  );
   const rsvpStatesByEvent = buildRsvpStateMapsByEvent(
     upcoming.map((event) => event.id),
     myKids.map((entry) => entry.playerId),
     rsvpRows,
   );
 
-  // Whether the team's sport has a lineup chart at all. Without one the roster
-  // still feeds the RSVP rows below (RSVP is sport-neutral), but nothing reads
-  // the chart columns: `allPlay` means nothing to such a team, so neither
-  // seating rule nor `chartRole` is asked about it, and its player card is the
-  // name band alone.
+  // Whether the team's sport has baseball's lineup chart. Without one the
+  // roster still feeds the RSVP rows below (RSVP is sport-neutral), but
+  // nothing reads baseball's chart columns: `allPlay` means nothing to such a
+  // team, so neither seating rule nor `chartRole` is asked about it. A
+  // basketball card reads the depth chart instead; a sport with neither chart
+  // gets the name band alone.
   const sportHasChart = hasLineupChart(team.sport);
 
   // Whether this team has a chart at all, asked across the whole roster rather
@@ -238,6 +287,15 @@ export default async function TeamHomePage({
   /// handing them the raw row is what let the two pages disagree.
   const asSeated = (entry: ChartViewEntry): ChartViewEntry =>
     seated.has(entry.entryId) ? entry : { ...entry, position: null };
+
+  // Basketball's equivalents, asked of Game Day's own derivation for the same
+  // reason: the draft is built from the whole roster sorted jersey-then-name,
+  // exactly as `DepthChartGameDay` builds it, so "2nd off the bench" here is
+  // the number /view prints beside the same kid — unplaced kids included,
+  // since they join the bottom of the bench there too. "No depth chart set
+  // yet" is likewise a fact about the team, asked across the whole roster.
+  const depthDraft = buildDepthDraft([...depthEntries].sort(byJerseyThenName));
+  const hasDepth = sportHasDepth && hasDepthChartSet(depthEntries);
 
   // Archived teams reject every write regardless of role, so the buttons are
   // hidden rather than shown and refused — AC 4. The summaries and any answer
@@ -330,7 +388,40 @@ export default async function TeamHomePage({
           </h3>
           <ul className="space-y-3">
             {myKids.map((entry, index) => {
-              // No chart for this sport: the jersey and name band, and no
+              // Basketball: a starter stands on the half court (MiniCourtHero,
+              // CourtArt and Game Day's coordinates) and gets the banana; a
+              // bench kid gets their place in the rotation on quiet stock, the
+              // way a baseball substitute does — they are on no court, and the
+              // hero never draws a spot the chart didn't assign.
+              if (sportHasDepth) {
+                const spot = hasDepth
+                  ? depthSpotOf(depthDraft, entry.entryId)
+                  : null;
+                const starting = spot?.kind === "starter" ? spot.position : null;
+                return (
+                  <li
+                    key={entry.entryId}
+                    className="animate-rise"
+                    style={{ animationDelay: `${index * 40}ms` }}
+                  >
+                    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                      {starting !== null ? (
+                        <MiniCourtHero
+                          position={starting}
+                          jerseyNumber={entry.jerseyNumber}
+                        />
+                      ) : null}
+                      <NameBand entry={entry} />
+                      <Marquee
+                        line={spot ? depthRole(spot) : "No depth chart set yet"}
+                        celebrate={starting !== null}
+                      />
+                    </article>
+                  </li>
+                );
+              }
+
+              // No chart at all for this sport: the jersey and name band, and no
               // marquee. "No chart set yet" would promise a chart that is not
               // coming, and a calm page spends no banana (design-plan §7).
               if (!sportHasChart) {
@@ -347,11 +438,12 @@ export default async function TeamHomePage({
                 );
               }
 
-              const seatedEntry = asSeated(entry);
+              const chartEntry = chartEntryById.get(entry.entryId)!;
+              const seatedEntry = asSeated(chartEntry);
               // "Not playing" is the coach's explicit word about this kid, so
               // it is said even before any chart exists — "No chart set yet"
               // over a kid the coach has already ruled out would be wrong.
-              const roleLine = hasChart || entry.notPlaying
+              const roleLine = hasChart || chartEntry.notPlaying
                 ? chartRole(seatedEntry, team.allPlay, {
                     benchLabel: "Substitute",
                   })
@@ -393,19 +485,7 @@ export default async function TeamHomePage({
                       />
                     ) : null}
                     <NameBand entry={entry} />
-                    {/* Uppercased by CSS so the DOM keeps chartRole's exact
-                        sentence — the one the readiness page and /view agree
-                        on, and the one the page tests pin. */}
-                    <p
-                      className={`flex items-center gap-2 px-4 py-2 font-mono text-sm font-bold uppercase tracking-widest ${
-                        celebrate
-                          ? "bg-banana text-banana-foreground"
-                          : "bg-secondary text-secondary-foreground"
-                      }`}
-                    >
-                      {celebrate ? <StarGlyph /> : null}
-                      <span>{roleLine}</span>
-                    </p>
+                    <Marquee line={roleLine} celebrate={celebrate} />
                   </article>
                 </li>
               );

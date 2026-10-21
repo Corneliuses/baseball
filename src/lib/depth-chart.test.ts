@@ -6,6 +6,8 @@ import {
   boardOf,
   buildDepthDraft,
   courtSpotId,
+  depthRole,
+  depthSpotOf,
   hasDepthChartSet,
   placeOnBench,
   placeStarter,
@@ -67,6 +69,32 @@ describe("hasDepthChartSet", () => {
     expect(hasDepthChartSet([entry("a"), entry("b")])).toBe(false);
     expect(hasDepthChartSet([entry("a"), entry("b", "CENTER")])).toBe(true);
     expect(hasDepthChartSet([entry("a", null, 1)])).toBe(true);
+  });
+});
+
+describe("depthSpotOf and depthRole", () => {
+  const draft = buildDepthDraft([
+    entry("a", "SMALL_FORWARD"),
+    entry("b", null, 1),
+    entry("c"),
+  ]);
+
+  it("names a starter by their position", () => {
+    const spot = depthSpotOf(draft, "a");
+
+    expect(spot).toEqual({ kind: "starter", position: "SMALL_FORWARD" });
+    expect(depthRole(spot!)).toBe("Starting small forward");
+  });
+
+  // An unplaced kid joins the bottom of the bench, and Game Day numbers them
+  // there — so the card has to say the same number, not "not placed".
+  it("numbers the bench the way Game Day does, unplaced kids included", () => {
+    expect(depthRole(depthSpotOf(draft, "b")!)).toBe("1st off the bench");
+    expect(depthRole(depthSpotOf(draft, "c")!)).toBe("2nd off the bench");
+  });
+
+  it("is null for an entry the draft doesn't hold", () => {
+    expect(depthSpotOf(draft, "zz")).toBeNull();
   });
 });
 
