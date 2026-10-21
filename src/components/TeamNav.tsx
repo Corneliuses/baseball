@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { Role, Sport } from "@/generated/prisma/enums";
-import { hasAnyChart, hasDepthChart, hasLineupChart } from "@/lib/sport";
+import { hasAnyChart, hasDepthChart } from "@/lib/sport";
 import { cn } from "@/lib/utils";
 import {
   CapIcon,
@@ -95,8 +95,8 @@ export function matchNavItem(
 /// The lineup tabs follow the team's chart. Game Day and Edit Lineup exist for
 /// any sport with one (`hasAnyChart`): baseball's diamond and batting order, or
 /// basketball's depth chart on a half court, which gets the court glyph and
-/// links straight to its own editor. Readiness is baseball's alone
-/// (`hasLineupChart`). A team without a chart gets no tab to a page that would
+/// links straight to its own editor. Readiness follows the same gate: each
+/// sport checks its own chart against the next game. A team without a chart gets no tab to a page that would
 /// 404; each of those pages still gates itself, so hiding the tab is a
 /// courtesy, not the boundary.
 function navItems(teamId: string, role: Role, sport: Sport): TeamNavItem[] {
@@ -123,7 +123,7 @@ function navItems(teamId: string, role: Role, sport: Sport): TeamNavItem[] {
   );
 
   if (role !== "PARENT") {
-    if (hasLineupChart(sport)) {
+    if (anyChart) {
       items.push({
         href: `${base}/readiness`,
         label: "Readiness",

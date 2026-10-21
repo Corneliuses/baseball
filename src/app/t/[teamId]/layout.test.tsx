@@ -122,7 +122,7 @@ describe("TeamLayout", () => {
   // The nav's lineup tabs follow the team's sport, which only the layout knows.
   it("hands TeamNav the team's sport, so a basketball coach edits the depth chart", async () => {
     requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
-    expect(await render()).toContain('href="/t/team-1/readiness"');
+    expect(await render()).toContain('href="/t/team-1/chart"');
 
     getTeamById.mockResolvedValue({
       id: "team-1",
@@ -134,7 +134,7 @@ describe("TeamLayout", () => {
     });
 
     const html = await render();
-    expect(html).not.toContain('href="/t/team-1/readiness"');
+    expect(html).not.toContain('href="/t/team-1/chart"');
     expect(html).toContain('href="/t/team-1/chart/depth"');
   });
 

@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 const requireTeamAccess = vi.fn();
 const nextGame = vi.fn();
 const getChart = vi.fn();
+const getDepthChart = vi.fn();
 const listEventRsvps = vi.fn();
 const getTeamById = vi.fn();
 
@@ -18,6 +19,7 @@ vi.mock("@/lib/schedule", () => ({
 
 vi.mock("@/lib/roster", () => ({
   getChart: (...args: unknown[]) => getChart(...args),
+  getDepthChart: (...args: unknown[]) => getDepthChart(...args),
 }));
 
 vi.mock("@/lib/rsvps", () => ({
@@ -107,30 +109,104 @@ describe("ReadinessPage access", () => {
   });
 });
 
-describe("ReadinessPage for a sport without a lineup chart", () => {
-  it("calls notFound() for a basketball team", async () => {
-    getTeamById.mockResolvedValue({
-      id: "team-1",
-      sport: "BASKETBALL",
-      allPlay: true,
-      archivedAt: null,
-    });
+// Basketball checks its depth chart instead: five starters and an ordered
+// bench, never baseball's chart columns.
+describe("ReadinessPage for a basketball team", () => {
+  const depthChart = [
+    { entryId: "e-pg", playerId: "pg", playerName: "Pia", jerseyNumber: 1, courtPosition: "POINT_GUARD" as const, benchOrder: null },
+    { entryId: "e-sg", playerId: "sg", playerName: "Sam", jerseyNumber: 2, courtPosition: "SHOOTING_GUARD" as const, benchOrder: null },
+    { entryId: "e-sf", playerId: "sf", playerName: "Finn", jerseyNumber: 3, courtPosition: "SMALL_FORWARD" as const, benchOrder: null },
+    { entryId: "e-pf", playerId: "pf", playerName: "Poe", jerseyNumber: 4, courtPosition: "POWER_FORWARD" as const, benchOrder: null },
+    { entryId: "e-c", playerId: "c", playerName: "Cy", jerseyNumber: 5, courtPosition: "CENTER" as const, benchOrder: null },
+    { entryId: "e-b1", playerId: "b1", playerName: "Bo", jerseyNumber: 10, courtPosition: null, benchOrder: 1 },
+    { entryId: "e-b2", playerId: "b2", playerName: "Bea", jerseyNumber: 11, courtPosition: null, benchOrder: 2 },
+  ];
 
-    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
-    expect(getChart).not.toHaveBeenCalled();
+  beforeEach(() => {
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASKETBALL", allPlay: true, archivedAt: null });
+    getDepthChart.mockResolvedValue(depthChart);
   });
 
-  // Asked before the no-game card, so the 404 does not depend on the schedule.
-  it("404s rather than showing the no-game card when nothing is scheduled", async () => {
-    nextGame.mockResolvedValue(null);
-    getTeamById.mockResolvedValue({
-      id: "team-1",
-      sport: "BASKETBALL",
-      allPlay: true,
-      archivedAt: null,
-    });
+  it("checks the depth chart and never reads baseball's chart", async () => {
+    const html = await render();
 
-    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(getDepthChart).toHaveBeenCalledWith("team-1");
+    expect(getChart).not.toHaveBeenCalled();
+    expect(html).toContain("Ready for tip-off");
+    expect(html).not.toContain("Ready for game day");
+  });
+
+  it("names a declined starter and the starting spot they leave open", async () => {
+    listEventRsvps.mockResolvedValue([{ playerId: "sf", attending: false }]);
+
+    const html = await render();
+
+    expect(html).toContain("Needs attention");
+    expect(html).toContain("Starts at SF");
+    expect(html).toContain("Starting spots open");
+    expect(html).toContain('href="/t/team-1/chart/depth"');
+    expect(html).not.toContain('href="/t/team-1/chart/positions"');
+  });
+
+  it("closes the bench up when a bench player declines", async () => {
+    listEventRsvps.mockResolvedValue([{ playerId: "b1", attending: false }]);
+
+    const html = await render();
+
+    expect(html).toContain("1st off the bench");
+    expect(html).toContain("The bench as it stands");
+    expect(html).not.toContain("Starting spots open");
+  });
+
+  it("shows no bench card when only a starter declined", async () => {
+    listEventRsvps.mockResolvedValue([{ playerId: "pg", attending: false }]);
+
+    const html = await render();
+
+    expect(html).not.toContain("The bench as it stands");
+  });
+
+  it("calls the team short-handed when fewer than five can come", async () => {
+    listEventRsvps.mockResolvedValue([
+      { playerId: "b1", attending: false },
+      { playerId: "b2", attending: false },
+      { playerId: "c", attending: false },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Short-handed");
+    expect(html).toContain("fewer than 5 to take the floor");
+    expect(html).toContain("04");
+  });
+
+  it("shows a no-depth-chart state when nothing is placed", async () => {
+    getDepthChart.mockResolvedValue(
+      depthChart.map((entry) => ({ ...entry, courtPosition: null, benchOrder: null })),
+    );
+
+    const html = await render();
+
+    expect(html).toContain("No depth chart set yet");
+    expect(html).toContain("Hawks");
+  });
+
+  it("offers no form or write action of its own", async () => {
+    listEventRsvps.mockResolvedValue([{ playerId: "sf", attending: false }]);
+
+    const html = await render();
+
+    expect(html).not.toContain("<form");
+    expect(html).toContain("permanent");
+  });
+
+  it("shows the no-game card without reading the chart", async () => {
+    nextGame.mockResolvedValue(null);
+
+    const html = await render();
+
+    expect(html).toContain("No upcoming game");
+    expect(getDepthChart).not.toHaveBeenCalled();
   });
 });
 
