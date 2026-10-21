@@ -18,13 +18,16 @@ import { APP_NAME, APP_SHORT_NAME } from "@/lib/app-name";
 /// conversion and compares, so changing either token there fails the suite here
 /// until this file follows.
 ///
-/// The icons were rasterised once from `public/favicon.svg` (the team crest) at
+/// The icons were rasterised once from `public/favicon.svg` (the app crest, an
+/// ear of corn — deliberately sport-agnostic, since one install serves every
+/// team the app runs, baseball or not) at
 /// authoring time rather than generated at build time, so there is no image
 /// toolchain in the build. To redo them after a crest change, render that file
 /// with any SVG rasteriser at 192 and 512 square with transparent corners, plus
 /// a 512 square with the crest inset to 80% on a `#FAF4E5` ground for the
 /// maskable entry, and a 180 square inset to 86% on the same ground for
-/// `src/app/apple-icon.png`.
+/// `src/app/apple-icon.png`. `src/app/favicon.ico` is the same file at 16, 32
+/// and 48 square, packed into one ICO.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     // `id` pins the app's identity independently of `start_url`, so a future
