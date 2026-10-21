@@ -60,6 +60,8 @@ describe("LoadingInterstitial", () => {
     // with dark seams rather than red stitches.
     expect(html).toContain("size-14");
     expect(html).toContain("fill-banana");
+    // Seams in the colour made for the orange, so they stay dark at night.
+    expect(html).toContain("text-banana-foreground");
     expect(html).not.toContain("stroke-destructive");
     expect(html).toContain('role="status"');
     expect(html).toContain(LOADING_LABEL);

@@ -49,10 +49,12 @@ export function LoadingInterstitial({ className }: { className?: string }) {
     >
       {/* The basketball is a real ball: orange leather (the screen's one
           loud accent — a loading screen has nothing else on it) with dark
-          seams, rather than the baseball's red stitches on an outline. */}
+          seams in both themes (banana-foreground, the colour made to sit on
+          that orange; text-foreground would turn them cream at night),
+          rather than the baseball's red stitches on an outline. */}
       {basketball ? (
         <BasketballSpinner
-          className="size-14 text-foreground"
+          className="size-14 text-banana-foreground"
           ballClassName="fill-banana"
         />
       ) : (
