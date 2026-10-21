@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { APP_NAME } from "@/lib/app-name";
 import { messageFor, messageTable } from "@/lib/error-messages";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getRosterEntry, type RosterEntryGuardian } from "@/lib/roster";
@@ -24,7 +25,7 @@ import {
 } from "../actions";
 
 export const metadata = {
-  title: "Player — Youth Baseball Team Manager",
+  title: `Player — ${APP_NAME}`,
 };
 
 const ERROR_MESSAGES = messageTable({
@@ -338,7 +339,7 @@ export default async function RosterEntryPage({
             <div className="space-y-3">
               <p role="alert" className="text-sm text-destructive">
                 Remove {entry.player.name} from this roster? Their jersey
-                number, batting slot, and position on this team go with them.
+                number and their place in the lineup on this team go with them.
               </p>
               <div className="flex gap-2">
                 <form action={removeRosterEntryAction}>

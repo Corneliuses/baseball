@@ -122,3 +122,18 @@ describe("AddPlayerForm after a rejection", () => {
     expect(html).toContain("already in use on this team");
   });
 });
+
+describe("AddPlayerForm asking about a same-name player", () => {
+  it("explains a second player in words true for any sport", () => {
+    const html = render({
+      status: "duplicate-name",
+      match: { kind: "rostered", name: "Ada" },
+      values: { name: "Ada", dateOfBirth: "", jerseyNumber: "" },
+    });
+
+    expect(html).toContain(
+      "separate jersey, separate guardians, separate spot in the lineup.",
+    );
+    expect(html).not.toContain("batting");
+  });
+});

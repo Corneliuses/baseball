@@ -348,14 +348,14 @@ production — the dev command can prompt, generate new migrations, and reset th
   it only when defined. Any future sport-specific checkbox needs the same treatment.
 - **The app's name is `APP_NAME` (`src/lib/app-name.ts`), and a test keeps it that way.**
   Every page title, the header, the manifest, the email signature and the ICS `PRODID`
-  read the constant, and a repo-wide guard test fails if the old literal "Youth Baseball
-  Team Manager" reappears anywhere in `src/` outside that module. Two old names survive on
-  purpose and must not be "fixed": `UID_DOMAIN` in `src/lib/ics.ts`
+  read the constant, and `src/lib/app-name.test.ts` fails if the old literal "Youth
+  Baseball Team Manager" reappears anywhere in `src/` outside that module. Two old names
+  survive on purpose and must not be "fixed": `UID_DOMAIN` in `src/lib/ics.ts`
   (`youth-baseball-team-manager`) is every event's identity in every subscribed calendar,
   so changing it — or making it follow the host to `coach.corneliuses.com` — duplicates
-  the whole season in every family's calendar; and the `ybtm:groupme-joined:` localStorage
-  key in `BleacherChatterCard.tsx`, whose rename would re-prompt every family who already
-  dismissed the card.
+  the whole season in every family's calendar; and the `ybtm:` localStorage keys in
+  `BleacherChatterCard.tsx` and `InstallPrompt.tsx`, whose rename would re-prompt every
+  family who already dismissed the card or the install tip.
 - **Three surfaces paint `FieldArt`, and their fences are the banana budget.** design-plan.md
   §2 allows exactly one Banana Yellow element per screen. `FieldArt` takes a `fence` prop
   because the wall is the loudest thing it paints: the positions editor spends its banana
@@ -504,11 +504,12 @@ production — the dev command can prompt, generate new migrations, and reset th
   - **Only exactly registered redirect URIs work.** The service matches
     `AUTH_URL + /api/auth/callback` exactly, so a per-deploy `*.vercel.app` URL can never
     sign in; the preview alias registered with the service is the only preview that can.
-    `.github/workflows/preview-domain.yml` points `preview.baseball.corneliuses.com` at the
-    newest ready Preview deployment on every Vercel `deployment_status`, so the last PR
-    pushed is the one that can sign in (it needs the `VERCEL_TOKEN` repository secret).
-    Don't clear the domain's git branch in Vercel: a project domain with no branch is a
-    Production domain.
+    `.github/workflows/preview-domain.yml` points both `preview.coach.corneliuses.com` and
+    `preview.baseball.corneliuses.com` at the newest ready Preview deployment on every
+    Vercel `deployment_status`, so the last PR pushed is the one that can sign in (it needs
+    the `VERCEL_TOKEN` repository secret). Both are registered with the auth service; the
+    one Preview's `AUTH_URL` names is the one where sign-in completes. Don't clear either
+    domain's git branch in Vercel: a project domain with no branch is a Production domain.
 - **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting`,
   `clients.claim`, and the `push` / `notificationclick` pair — no `fetch` handler, which is
   Decision 9 and the reason there is no Workbox build step. Adding a `fetch` handler is not

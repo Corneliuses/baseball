@@ -45,7 +45,7 @@ export function InvitationEmail({
       <EmailHeading
         eyebrow="You're invited"
         title={`Join ${teamName}`}
-        subtitle="Schedule, RSVPs, and the batting order — in one place, on your phone."
+        subtitle="Schedule, RSVPs, and the lineup — in one place, on your phone."
       />
 
       {message ? <NoteBlock>{message}</NoteBlock> : null}

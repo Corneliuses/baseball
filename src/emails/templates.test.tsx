@@ -10,6 +10,7 @@ import { EventReminderEmail } from "./EventReminderEmail";
 import { EventsAnnouncementEmail } from "./EventsAnnouncementEmail";
 import { InvitationEmail } from "./InvitationEmail";
 import { TeamMessageEmail } from "./TeamMessageEmail";
+import { APP_NAME } from "@/lib/app-name";
 
 /**
  * Every template, actually rendered.
@@ -66,7 +67,12 @@ const TEMPLATES: {
     ),
     banana: true,
     url: `${URL}/invite/tok123`,
-    contains: [TEAM, "September 20, 2026", "See you Saturday."],
+    contains: [
+      TEAM,
+      "September 20, 2026",
+      "See you Saturday.",
+      "Schedule, RSVPs, and the lineup",
+    ],
   },
   {
     name: "AddedToTeamEmail",
@@ -222,7 +228,7 @@ describe.each(TEMPLATES)("$name", ({ name, banana, url, contains }) => {
     expect(markup).toContain(`background-color:${EMAIL_COLOR.page}`);
     expect(markup).toContain(`background-color:${EMAIL_COLOR.card}`);
     expect(markup).toContain(`background-color:${EMAIL_COLOR.scoreboard}`);
-    expect(markup).toContain("Youth Baseball Team Manager");
+    expect(markup).toContain(APP_NAME);
   });
 
   it("names the team on the cap", () => {

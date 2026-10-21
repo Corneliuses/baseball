@@ -81,7 +81,7 @@ async function redirectUrlOf(promise: Promise<unknown>): Promise<string> {
 beforeEach(() => {
   vi.clearAllMocks();
   requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "coach-1" });
-  getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+  getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
   getChart.mockResolvedValue([chartEntry("a"), chartEntry("b"), chartEntry("c")]);
   savePositions.mockResolvedValue(undefined);
 });
@@ -203,7 +203,7 @@ describe("savePositionsAction", () => {
       ALL_POSITIONS.map((position, i) => [position, [`re-${i}`]]),
     );
     getChart.mockResolvedValue(ALL_POSITIONS.map((_, i) => chartEntry(`re-${i}`)));
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: false });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: false });
 
     await redirectUrlOf(
       savePositionsAction(
@@ -362,6 +362,7 @@ describe("savePositionsAction", () => {
     // loaded before the setting was toggled would post.
     getTeamById.mockResolvedValue({
       id: "team-1",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -415,6 +416,29 @@ describe("savePositionsAction", () => {
 
     expect(url).toBe("/t/team-1/chart/positions?error=invalid-positions");
     expect(getChart).not.toHaveBeenCalled();
+  });
+
+  // The page 404s for a sport without a lineup chart, so only a forged POST
+  // gets here, and it must not write baseball chart columns onto that roster.
+  it("refuses a basketball team as no access, writing nothing", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      sport: "BASKETBALL",
+      allPlay: true,
+      archivedAt: null,
+    });
+
+    const url = await redirectUrlOf(
+      savePositionsAction(
+        form({
+          teamId: "team-1",
+          positions: '{"SHORTSTOP":["c"],"PITCHER":["a"]}',
+        }),
+      ),
+    );
+
+    expect(url).toBe("/t/team-1/chart/positions?error=access");
+    expect(savePositions).not.toHaveBeenCalled();
   });
 
   it("redirects to access on TeamAccessError", async () => {
@@ -541,7 +565,7 @@ describe("savePositionsAction — not playing", () => {
   });
 
   it("leaves the batting order alone when a kid comes back on a selective team", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: false, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: false, archivedAt: null });
     getChart.mockResolvedValue([
       { ...chartEntry("a"), battingOrder: 1 },
       { ...chartEntry("b"), notPlaying: true },

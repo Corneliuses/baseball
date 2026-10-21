@@ -31,6 +31,7 @@ import { getChart } from "@/lib/roster";
 import { buildRsvpStateMapsByEvent } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listRsvpsForEvents } from "@/lib/rsvps";
 import { nextEvents, type ScheduleEvent } from "@/lib/schedule";
+import { hasLineupChart, SPORT_LABELS } from "@/lib/sport";
 import { roleLabel } from "@/lib/roles";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
 import { getTeamById } from "@/lib/teams";
@@ -79,6 +80,21 @@ function StarGlyph() {
     >
       <path d="M10 1.5l2.47 5.36 5.86.62-4.37 3.96 1.2 5.77L10 14.3l-5.16 2.91 1.2-5.77-4.37-3.96 5.86-.62z" />
     </svg>
+  );
+}
+
+/// A player card's name plate: the jersey worn big and the name in slab caps
+/// on a pinstripe band. Every card has one, chart or no chart.
+function NameBand({ entry }: { entry: ChartViewEntry }) {
+  return (
+    <div className="flex items-center gap-3 bg-pinstripe px-4 py-4">
+      {entry.jerseyNumber !== null ? (
+        <JerseyDot number={entry.jerseyNumber} size="lg" />
+      ) : null}
+      <p className="font-display text-2xl uppercase leading-tight tracking-wide text-foreground">
+        {entry.playerName}
+      </p>
+    </div>
   );
 }
 
@@ -190,12 +206,19 @@ export default async function TeamHomePage({
     rsvpRows,
   );
 
+  // Whether the team's sport has a lineup chart at all. Without one the roster
+  // still feeds the RSVP rows below (RSVP is sport-neutral), but nothing reads
+  // the chart columns: `allPlay` means nothing to such a team, so neither
+  // seating rule nor `chartRole` is asked about it, and its player card is the
+  // name band alone.
+  const sportHasChart = hasLineupChart(team.sport);
+
   // Whether this team has a chart at all, asked across the whole roster rather
   // than this parent's kids — "no chart set yet" is a fact about the team, and
   // it is what /view says for the same data. Without it every line below
   // asserts a definite spot nobody assigned: OF for every kid on an allPlay
   // team, Substitute on a selective one.
-  const hasChart = hasChartSet(chartEntries);
+  const hasChart = sportHasChart && hasChartSet(chartEntries);
 
   // Which roster spots the diamond actually seats, asked once here rather than
   // per kid — and asked of `/view`'s own seating rule rather than re-derived,
@@ -205,7 +228,9 @@ export default async function TeamHomePage({
   // a board can hold more rows than it — three kids saved at CF the moment
   // allPlay is switched off. Reading the column straight would tell all three
   // families "CF" while /view seats one and lists two as substitutes.
-  const seated = seatedEntryIds(chartEntries, team.allPlay);
+  const seated = sportHasChart
+    ? seatedEntryIds(chartEntries, team.allPlay)
+    : new Set<string>();
 
   /// The same entry as the diamond understands it: the position column when the
   /// board really seats this kid there, and null — the outfield, or the bench —
@@ -252,9 +277,12 @@ export default async function TeamHomePage({
         {team.season && (
           <p className="text-muted-foreground">Season: {team.season}</p>
         )}
-        <p className="text-muted-foreground">
-          {team.allPlay ? "All players bat and field" : "Selective lineup"}
-        </p>
+        <p className="text-muted-foreground">{SPORT_LABELS[team.sport]}</p>
+        {sportHasChart && (
+          <p className="text-muted-foreground">
+            {team.allPlay ? "All players bat and field" : "Selective lineup"}
+          </p>
+        )}
         {team.archivedAt && (
           <p className="font-medium text-destructive">
             This team is archived and read-only.
@@ -302,6 +330,23 @@ export default async function TeamHomePage({
           </h3>
           <ul className="space-y-3">
             {myKids.map((entry, index) => {
+              // No chart for this sport: the jersey and name band, and no
+              // marquee. "No chart set yet" would promise a chart that is not
+              // coming, and a calm page spends no banana (design-plan §7).
+              if (!sportHasChart) {
+                return (
+                  <li
+                    key={entry.entryId}
+                    className="animate-rise"
+                    style={{ animationDelay: `${index * 40}ms` }}
+                  >
+                    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                      <NameBand entry={entry} />
+                    </article>
+                  </li>
+                );
+              }
+
               const seatedEntry = asSeated(entry);
               // "Not playing" is the coach's explicit word about this kid, so
               // it is said even before any chart exists — "No chart set yet"
@@ -347,14 +392,7 @@ export default async function TeamHomePage({
                         jerseyNumber={entry.jerseyNumber}
                       />
                     ) : null}
-                    <div className="flex items-center gap-3 bg-pinstripe px-4 py-4">
-                      {entry.jerseyNumber !== null ? (
-                        <JerseyDot number={entry.jerseyNumber} size="lg" />
-                      ) : null}
-                      <p className="font-display text-2xl uppercase leading-tight tracking-wide text-foreground">
-                        {entry.playerName}
-                      </p>
-                    </div>
+                    <NameBand entry={entry} />
                     {/* Uppercased by CSS so the DOM keeps chartRole's exact
                         sentence — the one the readiness page and /view agree
                         on, and the one the page tests pin. */}

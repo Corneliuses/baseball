@@ -159,6 +159,7 @@ describe("design-plan.md utility claims", () => {
     "animate-rise",
     "animate-step-up",
     "animate-spin-ball",
+    "animate-dribble",
     "animate-tick",
   ];
 
@@ -171,6 +172,7 @@ describe("design-plan.md utility claims", () => {
     "animate-rise",
     "animate-step-up",
     "animate-spin-ball",
+    "animate-dribble",
     "animate-tick",
   ])(
     "%s stays gated on prefers-reduced-motion",
@@ -187,15 +189,16 @@ describe("design-plan.md utility claims", () => {
     },
   );
 
-  it.each(["animate-rise", "animate-step-up"])(
+  it.each(["animate-rise", "animate-step-up", "animate-dribble"])(
     "%s animates transform only, never opacity",
     (name) => {
       // Motion serialises initial state into the SSR markup and CSS keyframes
       // ship in the stylesheet, so a fade means the lineup is blank until the
       // bundle loads — on a page read at a field on one bar of signal. The
       // step-up has a second reason: a scale would push the banana halo onto
-      // the warning track (DIAMOND_GEOMETRY.haloRadius).
-      const keyframe = name === "animate-rise" ? "rise" : "step-up";
+      // the warning track (DIAMOND_GEOMETRY.haloRadius). The dribble keeps a
+      // squash out of it too, so its keyframe stays one property (#95).
+      const keyframe = name.replace(/^animate-/, "");
       const block = globalsCss.slice(
         globalsCss.indexOf(`@keyframes ${keyframe} {`),
       );

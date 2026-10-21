@@ -5,7 +5,9 @@ import { useActionState } from "react";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { StatusBanner } from "@/components/StatusBanner";
+import type { Sport } from "@/generated/prisma/enums";
 import { messageFor } from "@/lib/error-messages";
+import { hasLineupChart, SPORT_LABELS } from "@/lib/sport";
 
 import { updateTeamAction } from "./actions";
 import { SETTINGS_ERROR_MESSAGES } from "./settings-messages";
@@ -18,6 +20,9 @@ export interface TeamDetailsFormProps {
   teamId: string;
   name: string;
   season: string;
+  /// Shown, never edited: changing sport once a roster exists would strand the
+  /// baseball chart columns.
+  sport: Sport;
   allPlay: boolean;
   groupMeUrl: string;
   /// From `?saved=1` — the action redirects on success, so the confirmation
@@ -51,6 +56,7 @@ export function TeamDetailsForm({
   teamId,
   name: storedName,
   season: storedSeason,
+  sport,
   allPlay: storedAllPlay,
   groupMeUrl: storedGroupMeUrl,
   saved = false,
@@ -68,6 +74,7 @@ export function TeamDetailsForm({
   const [season, setSeason] = React.useState(
     () => echoed?.season ?? storedSeason,
   );
+  const hasChart = hasLineupChart(sport);
   const [allPlay, setAllPlay] = React.useState(
     () => echoed?.allPlay ?? storedAllPlay,
   );
@@ -98,6 +105,10 @@ export function TeamDetailsForm({
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="teamId" value={teamId} />
+
+      <p className="text-sm text-foreground">
+        <span className="font-medium">Sport:</span> {SPORT_LABELS[sport]}
+      </p>
 
       <div className="space-y-2">
         <label htmlFor="name" className="block text-sm font-medium text-foreground">
@@ -158,19 +169,23 @@ export function TeamDetailsForm({
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          id="allPlay"
-          name="allPlay"
-          type="checkbox"
-          checked={allPlay}
-          onChange={(event) => setAllPlay(event.target.checked)}
-          className="h-4 w-4 rounded border-border"
-        />
-        <label htmlFor="allPlay" className="text-sm text-foreground">
-          Every kid bats and fields (all-play)
-        </label>
-      </div>
+      {/* All-play is a lineup-chart setting, so a sport without a chart has
+          no box — and the action never writes the column for it. */}
+      {hasChart ? (
+        <div className="flex items-center gap-2">
+          <input
+            id="allPlay"
+            name="allPlay"
+            type="checkbox"
+            checked={allPlay}
+            onChange={(event) => setAllPlay(event.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <label htmlFor="allPlay" className="text-sm text-foreground">
+            Every kid bats and fields (all-play)
+          </label>
+        </div>
+      ) : null}
 
       {message ? (
         <StatusBanner tone="error" id={errorId}>

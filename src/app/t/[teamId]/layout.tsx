@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PageContainer } from "@/components/layout/PageContainer";
+import { SportProvider } from "@/components/SportProvider";
 import { TeamNav } from "@/components/TeamNav";
 import { TeamSwitcher } from "@/components/TeamSwitcher";
 import type { Role } from "@/generated/prisma/enums";
@@ -96,9 +97,12 @@ export default async function TeamLayout({
           </div>
           <TeamSwitcher teams={switcherTeams} currentTeamId={teamId} />
         </div>
-        <TeamNav teamId={teamId} role={role} />
+        <TeamNav teamId={teamId} role={role} sport={team.sport} />
       </div>
-      {children}
+      {/* loading.tsx renders inside this, with no data of its own: the
+          provider is how its fallback (and every SubmitButton below) learns
+          which ball to draw. */}
+      <SportProvider sport={team.sport}>{children}</SportProvider>
     </PageContainer>
   );
 }

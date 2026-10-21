@@ -23,6 +23,7 @@ const STORED = {
   teamId: "team-1",
   name: "Sharks",
   season: "2026",
+  sport: "BASEBALL" as const,
   allPlay: true,
   groupMeUrl: "https://groupme.com/join_group/1/stored",
 };
@@ -85,6 +86,23 @@ describe("TeamDetailsForm at rest", () => {
 
     expect(html).toContain("Saved.");
     expect(html).toContain('role="status"');
+  });
+});
+
+describe("TeamDetailsForm and the team's sport", () => {
+  it("shows a baseball team's sport as text, not an input", () => {
+    const html = render({ status: "idle" });
+
+    expect(html).toContain("Baseball");
+    expect(html).not.toMatch(/<(input|select)[^>]*name="sport"/);
+  });
+
+  it("offers no all-play box for basketball", () => {
+    const html = render({ status: "idle" }, { sport: "BASKETBALL" });
+
+    expect(html).toContain("Basketball");
+    expect(html).not.toContain('name="allPlay"');
+    expect(html).not.toContain("all-play");
   });
 });
 

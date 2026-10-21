@@ -11,6 +11,7 @@ import {
 
 import { EMAIL_COLOR, EMAIL_FONT, EMAIL_WIDTH } from "./brand";
 import { StitchRule, captionStyle } from "./EmailKit";
+import { APP_NAME, APP_SHORT_NAME } from "@/lib/app-name";
 
 /// The shell every email in this directory wears: cream page stock, a charcoal
 /// scoreboard cap with the team's name on it, one card of warm white, and a
@@ -73,7 +74,7 @@ export function EmailLayout({
         <Section style={pageStyle}>
           <Container style={containerStyle}>
             <Section style={bandStyle}>
-              <Text style={bandProductStyle}>Team Manager</Text>
+              <Text style={bandProductStyle}>{APP_SHORT_NAME}</Text>
               <Text style={bandTeamStyle}>{teamName}</Text>
             </Section>
 
@@ -82,7 +83,7 @@ export function EmailLayout({
             <StitchRule />
 
             {footnote ? <Text style={footnoteStyle}>{footnote}</Text> : null}
-            <Text style={signatureStyle}>Youth Baseball Team Manager</Text>
+            <Text style={signatureStyle}>{APP_NAME}</Text>
           </Container>
         </Section>
       </Body>

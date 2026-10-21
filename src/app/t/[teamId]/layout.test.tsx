@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { useSport } from "@/components/SportProvider";
+
 const requireTeamAccess = vi.fn();
 const getTeamById = vi.fn();
 const getAllTeams = vi.fn();
@@ -41,11 +43,15 @@ function linksTo(html: string, href: string): string[] {
     .filter((anchor) => anchor.includes(`href="${href}"`));
 }
 
-async function render(teamId = "team-1") {
+function SportProbe() {
+  return <p>sport is {useSport()}</p>;
+}
+
+async function render(teamId = "team-1", children = <p>page body</p>) {
   const { default: TeamLayout } = await import("./layout");
   return renderToStaticMarkup(
     await TeamLayout({
-      children: <p>page body</p>,
+      children,
       params: Promise.resolve({ teamId }),
     }),
   );
@@ -67,6 +73,7 @@ beforeEach(() => {
     name: "Sluggers",
     season: "Fall 2026",
     allPlay: true,
+    sport: "BASEBALL",
     archivedAt: null,
   });
 });
@@ -112,6 +119,22 @@ describe("TeamLayout", () => {
     expect(linksTo(html, "/")[0]).toContain("All teams");
   });
 
+  // The nav's lineup tabs follow the team's sport, which only the layout knows.
+  it("hands TeamNav the team's sport, so a basketball team has no Game Day tab", async () => {
+    expect(await render()).toContain('href="/t/team-1/view"');
+
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Hoopers",
+      season: "Winter 2026",
+      allPlay: true,
+      sport: "BASKETBALL",
+      archivedAt: null,
+    });
+
+    expect(await render()).not.toContain('href="/t/team-1/view"');
+  });
+
   it("renders the team name linking to the team home", async () => {
     const html = await render();
 
@@ -122,5 +145,22 @@ describe("TeamLayout", () => {
     );
     expect(headerLink).toBeDefined();
     expect(html).toContain("page body");
+  });
+
+  it("hands the team's sport to the page and its loading fallback", async () => {
+    // loading.tsx renders inside this layout with no data of its own, so the
+    // provider here is the only way its spinner learns which ball to draw.
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Hoopers",
+      season: "Winter 2026",
+      allPlay: false,
+      sport: "BASKETBALL",
+      archivedAt: null,
+    });
+
+    const html = await render("team-1", <SportProbe />);
+
+    expect(html).toContain("sport is BASKETBALL");
   });
 });

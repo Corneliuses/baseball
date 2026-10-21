@@ -30,6 +30,7 @@ const TEAM_SELECT = {
   id: true,
   name: true,
   season: true,
+  sport: true,
   allPlay: true,
   groupMeUrl: true,
   archivedAt: true,
@@ -40,6 +41,7 @@ const SAMPLE_TEAM = {
   id: "team-1",
   name: "Sharks",
   season: "2026",
+  sport: "BASEBALL",
   allPlay: true,
   groupMeUrl: null,
   archivedAt: null,
@@ -108,14 +110,40 @@ describe("getTeamById", () => {
 
 describe("createTeam", () => {
   it("issues one nested create — Team plus its owner Membership — not a $transaction", async () => {
-    await createTeam({ name: "Sharks", season: "2026", allPlay: true }, "owner-1");
+    await createTeam(
+      { name: "Sharks", season: "2026", sport: "BASEBALL", allPlay: true },
+      "owner-1",
+    );
 
     expect(createTeamRow).toHaveBeenCalledTimes(1);
     expect(createTeamRow).toHaveBeenCalledWith({
       data: {
         name: "Sharks",
         season: "2026",
+        sport: "BASEBALL",
         allPlay: true,
+        calendarToken: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+        memberships: {
+          create: { userId: "owner-1", role: "OWNER" },
+        },
+      },
+      select: TEAM_SELECT,
+    });
+  });
+
+  // Basketball has no all-play rule; the column keeps its database default
+  // rather than being written with a value nobody chose.
+  it("omits allPlay entirely when it is not given", async () => {
+    await createTeam(
+      { name: "Hoopers", season: null, sport: "BASKETBALL" },
+      "owner-1",
+    );
+
+    expect(createTeamRow).toHaveBeenCalledWith({
+      data: {
+        name: "Hoopers",
+        season: null,
+        sport: "BASKETBALL",
         calendarToken: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
         memberships: {
           create: { userId: "owner-1", role: "OWNER" },
@@ -129,7 +157,10 @@ describe("createTeam", () => {
     createTeamRow.mockRejectedValue(new Error("constraint violation"));
 
     await expect(
-      createTeam({ name: "Sharks", season: null, allPlay: true }, "owner-1"),
+      createTeam(
+        { name: "Sharks", season: null, sport: "BASEBALL", allPlay: true },
+        "owner-1",
+      ),
     ).rejects.toThrow("constraint violation");
   });
 });
@@ -151,6 +182,20 @@ describe("updateTeam", () => {
         allPlay: false,
         groupMeUrl: "https://groupme.com/join_group/1/x",
       },
+      select: TEAM_SELECT,
+    });
+  });
+
+  it("leaves allPlay unwritten when the input omits it", async () => {
+    await updateTeam("team-1", {
+      name: "Hoopers",
+      season: "2027",
+      groupMeUrl: null,
+    });
+
+    expect(updateTeamRow).toHaveBeenCalledWith({
+      where: { id: "team-1" },
+      data: { name: "Hoopers", season: "2027", groupMeUrl: null },
       select: TEAM_SELECT,
     });
   });

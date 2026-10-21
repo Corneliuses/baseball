@@ -92,7 +92,7 @@ beforeEach(() => {
   guardedRosteredPlayerIds.mockResolvedValue(new Set());
   // allPlay off by default here so the existing assertions describe the
   // nine-named-positions diamond; the allPlay cases set it explicitly.
-  getTeamById.mockResolvedValue({ id: "team-1", allPlay: false, archivedAt: null });
+  getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: false, archivedAt: null });
 });
 
 describe("ViewPage access", () => {
@@ -111,6 +111,22 @@ describe("ViewPage access", () => {
     requireTeamAccess.mockRejectedValue(new Error("db down"));
 
     await expect(render()).rejects.toThrow("db down");
+  });
+});
+
+describe("ViewPage for a sport without a lineup chart", () => {
+  // Basketball has no chart yet, so there is no Game Day: a pasted URL is a
+  // missing page, not a diamond of baseball positions over its roster.
+  it("calls notFound() for a basketball team", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      sport: "BASKETBALL",
+      allPlay: true,
+      archivedAt: null,
+    });
+
+    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(getChart).not.toHaveBeenCalled();
   });
 });
 
@@ -246,7 +262,7 @@ describe("ViewPage chart rendering", () => {
     // zone for these teams (#11 Decision 1) and the kids out there persist as
     // position = null — drawing three Open markers would both misreport the
     // spots and leave those kids off the diamond entirely.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       ...fullChart,
       {
@@ -271,7 +287,7 @@ describe("ViewPage chart rendering", () => {
   });
 
   it("draws one OF marker per outfielder on an allPlay team", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       ...fullChart,
       ...["cal", "dee", "eli"].map((playerId, index) => ({
@@ -292,7 +308,7 @@ describe("ViewPage chart rendering", () => {
     // Revised 2026-09-17. Before that an allPlay board drew a solid disc
     // behind the plate with "the coach pitches" for screen readers; neither
     // may come back, since a disc says the spot cannot be filled.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
 
     const html = await render();
 
@@ -303,7 +319,7 @@ describe("ViewPage chart rendering", () => {
   });
 
   it("seats an allPlay team's catcher behind the plate, not in the outfield", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
         playerId: "cal",
@@ -325,7 +341,7 @@ describe("ViewPage chart rendering", () => {
     // LF/CF/RF are placeable allPlay spots since the named-outfield revision:
     // a pinned kid draws at the spot with its abbreviation, exactly as the
     // editor showed the coach.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
         playerId: "cal",
@@ -347,7 +363,7 @@ describe("ViewPage chart rendering", () => {
     // The collision case: the zone's shallow first coordinate IS center
     // field, so a pinned centre fielder pushes the unpinned kid to the deep
     // row — one CF marker, one OF marker, nobody stacked.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       {
         playerId: "cal",
@@ -373,7 +389,7 @@ describe("ViewPage chart rendering", () => {
   });
 
   it("stacks up to three named outfielders on one spot, fanned apart", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       ["cal", 3],
       ["dee", 4],
@@ -402,7 +418,7 @@ describe("ViewPage chart rendering", () => {
     // board gives up the pinned coordinates for that case rather than drawing
     // two names on one point, so every kid is still drawn exactly once and
     // still labelled with the spot they play.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       ...["a", "b", "c"].map((id, index) => ({
         playerId: `pin-${id}`,
@@ -434,7 +450,7 @@ describe("ViewPage chart rendering", () => {
   });
 
   it("exposes an allPlay outfield to screen readers", async () => {
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue([
       ...fullChart,
       {
@@ -775,7 +791,7 @@ describe("ViewPage bench", () => {
   it("draws no bench for an allPlay team — those players are the outfield", async () => {
     // Calling them benched would tell those parents their kid is sitting when
     // the diamond two inches above shows them in the outfield zone.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue(benched);
 
     const html = await render();
@@ -787,7 +803,7 @@ describe("ViewPage bench", () => {
   it("lists a not-playing kid in their own card, on an allPlay team too", async () => {
     // On allPlay a kid with no position is in the outfield zone, so without
     // the flag there is no way to say "this kid is not playing" at all.
-    getTeamById.mockResolvedValue({ id: "team-1", allPlay: true, archivedAt: null });
+    getTeamById.mockResolvedValue({ id: "team-1", sport: "BASEBALL", allPlay: true, archivedAt: null });
     getChart.mockResolvedValue(
       benched.map((entry) =>
         entry.playerId === "eli" ? { ...entry, notPlaying: true } : entry,

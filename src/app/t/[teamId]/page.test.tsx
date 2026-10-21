@@ -118,6 +118,7 @@ beforeEach(() => {
     id: "team-1",
     name: "Sluggers",
     season: "Fall 2026",
+    sport: "BASEBALL",
     allPlay: true,
     groupMeUrl: null,
     archivedAt: null,
@@ -145,11 +146,30 @@ describe("TeamHomePage", () => {
     }
   });
 
+  it("names a basketball team's sport and says nothing about a lineup", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Hoopers",
+      season: "Fall 2026",
+      sport: "BASKETBALL",
+      allPlay: true,
+      groupMeUrl: null,
+      archivedAt: null,
+    });
+
+    const html = await render();
+
+    expect(html).toContain("Basketball");
+    expect(html).not.toContain("All players bat and field");
+    expect(html).not.toContain("Selective lineup");
+  });
+
   it("flags an archived team as read-only", async () => {
     getTeamById.mockResolvedValue({
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: true,
       groupMeUrl: null,
       archivedAt: new Date("2026-01-01T00:00:00Z"),
@@ -165,6 +185,7 @@ describe("TeamHomePage", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: true,
       groupMeUrl: "https://groupme.com/join_group/12345678/AbCdEfGh",
       archivedAt: null,
@@ -314,6 +335,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -348,6 +370,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -376,6 +399,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -392,6 +416,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -408,6 +433,34 @@ describe("TeamHomePage your players", () => {
 
     expect(substituteHtml).not.toContain("fill-grass");
     expect(noChartHtml).not.toContain("fill-grass");
+  });
+
+  // Basketball has no chart yet: the card is the jersey and the name, with no
+  // chart line, no field and no banana, and never "No chart set yet", which
+  // would promise a chart that is not coming. RSVP is sport-neutral.
+  it("shows a basketball kid's name and jersey only, and keeps the RSVP buttons", async () => {
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      sport: "BASKETBALL",
+      name: "Hoopers",
+      season: "Winter 2026",
+      allPlay: true,
+      groupMeUrl: null,
+      archivedAt: null,
+    });
+    getChart.mockResolvedValue([{ ...REESE, position: "SHORTSTOP" }]);
+
+    const html = await render();
+
+    expect(html).toContain("Reese");
+    expect(html).toContain(">12<");
+    expect(html).not.toContain("Bats 3rd");
+    expect(html).not.toContain("No chart set yet");
+    expect(html).not.toContain("Substitute");
+    expect(html).not.toContain("fill-grass");
+    expect(html).not.toContain("bg-banana");
+    expect(html).toContain("Going");
+    expect(html).toContain("Not going");
   });
 
   it("announces the cards with the staggered lineup rise", async () => {
@@ -441,6 +494,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -465,6 +519,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: true,
       archivedAt: null,
     });
@@ -499,6 +554,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -531,6 +587,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -558,6 +615,7 @@ describe("TeamHomePage your players", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: false,
       archivedAt: null,
     });
@@ -713,6 +771,7 @@ describe("TeamHomePage one-tap RSVP", () => {
       id: "team-1",
       name: "Sluggers",
       season: "Fall 2026",
+      sport: "BASEBALL",
       allPlay: true,
       archivedAt: new Date("2026-01-01T00:00:00Z"),
     });
