@@ -61,7 +61,7 @@ export default async function TeamLayout({
     : await getMemberTeams(user.id);
 
   return (
-    <PageContainer>
+    <PageContainer sport={team.sport}>
       {/* The team's own header band: name, switcher, and the persistent nav.
           TeamNav's role prop only decides which links render — every page
           underneath still calls requireTeamAccess for itself. */}
