@@ -1,5 +1,7 @@
+import type { Sport } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/app-name";
+import { sportTheme } from "@/lib/sport";
 
 function BaseballCornIcon() {
   return (
@@ -59,15 +61,23 @@ function BaseballCornIcon() {
   );
 }
 
+/// `sport` is passed by the team layout only: it puts the whole page — header
+/// band included — under that sport's palette (`data-sport`, globals.css).
+/// Pages outside a team have no sport and keep the default theme.
 export function PageContainer({
   children,
   className,
+  sport,
 }: Readonly<{
   children: React.ReactNode;
   className?: string;
+  sport?: Sport;
 }>) {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div
+      data-sport={sport ? sportTheme(sport) : undefined}
+      className="min-h-screen flex flex-col bg-background text-foreground"
+    >
       {/* Pinstriped band, per design-plan.md §5 — stripes live on header
           surfaces only, never behind body text. */}
       <header className="border-b-2 border-primary/30 bg-card bg-pinstripe">
