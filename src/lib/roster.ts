@@ -396,6 +396,11 @@ export type DepthChartRow = {
 export async function getDepthChart(teamId: string): Promise<DepthChartRow[]> {
   const entries = await db.rosterEntry.findMany({
     where: { teamId },
+    // Callers sort jersey-then-name, which ties for two unnumbered kids with
+    // the same name; the sort is stable, so this fixes their order. Without it
+    // the derived bench could swap them between the editor's read and the
+    // save's, and refuse an untouched chart as `chart-changed`.
+    orderBy: { id: "asc" },
     select: {
       id: true,
       jerseyNumber: true,
