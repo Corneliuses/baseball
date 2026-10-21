@@ -1,14 +1,18 @@
 name: Preview domain
 
-# Points preview.baseball.corneliuses.com at the newest ready Preview
-# deployment, so whichever PR was pushed last is the one that can sign in.
+# Points preview.coach.corneliuses.com and preview.baseball.corneliuses.com
+# at the newest ready Preview deployment, so whichever PR was pushed last is
+# the one that can sign in. preview.coach follows the production move to
+# coach.corneliuses.com (#96); preview.baseball keeps working for links that
+# already carry it. Both are registered redirect URIs with the auth service,
+# but only the one Preview's AUTH_URL names can complete a login.
 #
 # Sign-in needs it: the auth service only redirects back to exactly registered
-# URIs, and Preview's AUTH_URL is this domain, so a per-deploy *.vercel.app URL
+# URIs, and Preview's AUTH_URL is one of these domains, so a per-deploy *.vercel.app URL
 # can never complete a login. Vercel itself can only tie a domain to one git
 # branch, which is why this repoints it per deployment instead.
 #
-# One domain, so the last push wins: two PRs open at once take turns. Vercel
+# One deployment, so the last push wins: two PRs open at once take turns. Vercel
 # sends a deployment_status for every deployment it builds, and GitHub runs the
 # copy of this file at the deployed commit, so a branch that predates it does
 # not repoint the domain.
@@ -39,7 +43,7 @@ jobs:
       group: preview-domain
       cancel-in-progress: false
     env:
-      DOMAIN: preview.baseball.corneliuses.com
+      DOMAINS: preview.coach.corneliuses.com preview.baseball.corneliuses.com
       TEAM_ID: team_FIGdad6vepcLwF2SoY16kp6I
       PROJECT_ID: prj_31ziJAWdjYvtgyiadphxIroTrS7P
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -54,9 +58,11 @@ jobs:
             -H "Authorization: Bearer $VERCEL_TOKEN" \
             "https://api.vercel.com/v6/deployments?teamId=$TEAM_ID&projectId=$PROJECT_ID&target=preview&state=READY&limit=1" \
             | jq -er '.deployments[0].url')
-          echo "Pointing $DOMAIN at $host"
-          curl --fail-with-body -sS --retry 3 --retry-all-errors -X POST \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            -H "Content-Type: application/json" \
-            "https://api.vercel.com/v2/deployments/$host/aliases?teamId=$TEAM_ID" \
-            -d "{\"alias\":\"$DOMAIN\"}"
+          for domain in $DOMAINS; do
+            echo "Pointing $domain at $host"
+            curl --fail-with-body -sS --retry 3 --retry-all-errors -X POST \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://api.vercel.com/v2/deployments/$host/aliases?teamId=$TEAM_ID" \
+              -d "{\"alias\":\"$domain\"}"
+          done
