@@ -54,6 +54,15 @@
   --track: 33 62% 60%;
   --chalk: 0 0% 100%;
 
+  /* The basketball half court — consumed by CourtArt (the depth chart). A
+     maple floor with a navy-painted lane: the paint stays clear of the orange
+     the basketball theme spends on --primary and --banana, so a halo or a
+     rim never disappears into the floor. */
+  --hardwood: 34 62% 72%;
+  --hardwood-grain: 32 52% 66%;
+  --court-paint: 214 45% 38%;
+  --court-line: 0 0% 100%;
+
   /* The readiness scoreboard is charcoal in BOTH themes — a scoreboard is
      dark; light mode just means it's daytime around it. */
   --scoreboard: 218 22% 10%;
@@ -102,6 +111,11 @@
     --track: 25 36% 31%;
     --chalk: 45 36% 88%;
 
+    --hardwood: 28 30% 26%;
+    --hardwood-grain: 28 30% 22%;
+    --court-paint: 214 35% 24%;
+    --court-line: 45 36% 88%;
+
     --scoreboard: 218 22% 8%;
     --scoreboard-foreground: 45 36% 88%;
     --scoreboard-accent: 45 100% 65%;
@@ -145,6 +159,10 @@
   --color-dirt: hsl(var(--dirt));
   --color-track: hsl(var(--track));
   --color-chalk: hsl(var(--chalk));
+  --color-hardwood: hsl(var(--hardwood));
+  --color-hardwood-grain: hsl(var(--hardwood-grain));
+  --color-court-paint: hsl(var(--court-paint));
+  --color-court-line: hsl(var(--court-line));
   --color-scoreboard: hsl(var(--scoreboard));
   --color-scoreboard-foreground: hsl(var(--scoreboard-foreground));
   --color-scoreboard-accent: hsl(var(--scoreboard-accent));

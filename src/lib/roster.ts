@@ -1,7 +1,8 @@
-import type { Position } from "@/generated/prisma/enums";
+import type { CourtPosition, Position } from "@/generated/prisma/enums";
 
 import { db } from "./db";
 import type { ChartViewEntry } from "./chart-view";
+import type { DepthAssignment } from "./depth-chart";
 import { planGuardianCascade, type GuardianLink } from "./returning-players";
 import type { ReturningCandidate } from "./returning-players";
 
@@ -373,6 +374,70 @@ export async function savePositions(
           ),
         ]
       : []),
+  ]);
+}
+
+/// One roster entry as basketball's depth chart reads it — the court columns
+/// beside the same player fields `getChart` returns.
+export type DepthChartRow = {
+  entryId: string;
+  playerId: string;
+  playerName: string;
+  jerseyNumber: number | null;
+  courtPosition: CourtPosition | null;
+  benchOrder: number | null;
+};
+
+/**
+ * The team's depth chart, one row per roster entry. Like `getChart` it
+ * propagates errors: a swallowed outage would draw an empty court, which reads
+ * as "everyone is on the bench".
+ */
+export async function getDepthChart(teamId: string): Promise<DepthChartRow[]> {
+  const entries = await db.rosterEntry.findMany({
+    where: { teamId },
+    select: {
+      id: true,
+      jerseyNumber: true,
+      courtPosition: true,
+      benchOrder: true,
+      player: { select: { id: true, name: true } },
+    },
+  });
+
+  return entries.map((entry) => ({
+    entryId: entry.id,
+    playerId: entry.player.id,
+    playerName: entry.player.name,
+    jerseyNumber: entry.jerseyNumber,
+    courtPosition: entry.courtPosition,
+    benchOrder: entry.benchOrder,
+  }));
+}
+
+/**
+ * Persist basketball's depth chart, replacing the stored one — the same
+ * two-phase write as `savePositions`, for the same reason: the
+ * `[teamId, courtPosition]` and `[teamId, benchOrder]` unique indexes are not
+ * DEFERRABLE, so swapping two starters or two bench slots would transiently
+ * duplicate a value. Phase 1 clears the whole team; phase 2 writes the final
+ * values. Values come from `validateDepthChart`, never raw from the client.
+ */
+export async function saveDepthChart(
+  teamId: string,
+  assignments: readonly DepthAssignment[],
+): Promise<void> {
+  await db.$transaction([
+    db.rosterEntry.updateMany({
+      where: { teamId },
+      data: { courtPosition: null, benchOrder: null },
+    }),
+    ...assignments.map(({ entryId, courtPosition, benchOrder }) =>
+      db.rosterEntry.update({
+        where: { id: entryId, teamId },
+        data: { courtPosition, benchOrder },
+      }),
+    ),
   ]);
 }
 

@@ -86,6 +86,20 @@ export function DiamondIcon({ className }: IconProps) {
   );
 }
 
+/// Game Day for a basketball team. A half court from above: the sidelines,
+/// the lane, and the three-point arc around the rim — the court /view paints
+/// at full size.
+export function CourtIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="1" />
+      <path d="M9.5 3.5v6.5h5V3.5" />
+      <path d="M6 3.5v2a6 6 0 0012 0v-2" />
+      <path d="M9.5 20.5a2.5 2.5 0 015 0" />
+    </Icon>
+  );
+}
+
 /// Roster. A jersey on its hanger-less shoulders, collar open.
 export function JerseyIcon({ className }: IconProps) {
   return (

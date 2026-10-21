@@ -54,6 +54,18 @@ enum Position {
   RIGHT_FIELD
 }
 
+/// The five basketball positions, as the depth chart draws them on the half
+/// court. Basketball's own enum, never folded into `Position`: the two charts
+/// are separate modules (Decision 17), and a baseball position on a court —
+/// or a point guard on a diamond — stays unrepresentable.
+enum CourtPosition {
+  POINT_GUARD
+  SHOOTING_GUARD
+  SMALL_FORWARD
+  POWER_FORWARD
+  CENTER
+}
+
 /// The sport a team plays. Fixed when the team is created. Lineup-chart
 /// surfaces are gated per sport through hasLineupChart (src/lib/sport.ts).
 enum Sport {
@@ -220,6 +232,19 @@ model RosterEntry {
   /// reader never has to ask "not playing, but batting third?".
   notPlaying Boolean @default(false)
 
+  /// Basketball's lineup: the court position this entry starts at. One
+  /// starter per position, enforced by the unique index below. Null = not
+  /// starting. Written only for a basketball team, exactly as the baseball
+  /// columns above are written only for baseball — see `hasDepthChart` in
+  /// src/lib/sport.ts.
+  courtPosition CourtPosition?
+
+  /// Basketball's bench order: 1 is first off the bench. Null for a starter,
+  /// and for a kid added to the roster since the coach last saved — readers
+  /// list those after the numbered bench, in roster order.
+  /// `saveDepthChart` renumbers the bench 1..n on every save.
+  benchOrder Int?
+
   createdAt DateTime @default(now())
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
@@ -235,6 +260,10 @@ model RosterEntry {
   /// expressible here.
   @@unique([teamId, position, positionSlot])
   @@unique([teamId, jerseyNumber])
+  /// One starter per court position — "two starting point guards" is
+  /// refused by the database, not just by validateDepthChart.
+  @@unique([teamId, courtPosition])
+  @@unique([teamId, benchOrder])
   @@index([teamId])
 }
 

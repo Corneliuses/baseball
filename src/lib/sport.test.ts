@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { Sport } from "@/generated/prisma/enums";
-import { SPORTS, SPORT_LABELS, hasLineupChart } from "./sport";
+import {
+  SPORTS,
+  SPORT_LABELS,
+  hasAnyChart,
+  hasDepthChart,
+  hasLineupChart,
+} from "./sport";
 
 describe("SPORTS and SPORT_LABELS", () => {
   it("list every enum value", () => {
@@ -22,5 +28,16 @@ describe("hasLineupChart", () => {
 
   it("is false for basketball", () => {
     expect(hasLineupChart("BASKETBALL")).toBe(false);
+  });
+});
+
+describe("hasDepthChart and hasAnyChart", () => {
+  it("gives basketball the depth chart and baseball the lineup chart, never both", () => {
+    for (const sport of Object.values(Sport)) {
+      expect(hasDepthChart(sport) && hasLineupChart(sport)).toBe(false);
+      expect(hasAnyChart(sport)).toBe(true);
+    }
+    expect(hasDepthChart("BASKETBALL")).toBe(true);
+    expect(hasDepthChart("BASEBALL")).toBe(false);
   });
 });
