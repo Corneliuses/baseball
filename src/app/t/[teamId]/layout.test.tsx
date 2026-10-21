@@ -135,6 +135,29 @@ describe("TeamLayout", () => {
     expect(await render()).not.toContain('href="/t/team-1/view"');
   });
 
+  // The basketball palette is a scoped attribute, set once here for the whole
+  // page (header band included); baseball is the default theme and gets none.
+  it("puts a basketball team's pages under the basketball palette", async () => {
+    const baseball = await render();
+    expect(baseball).not.toContain("data-sport");
+
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Hoopers",
+      season: "Winter 2026",
+      allPlay: true,
+      sport: "BASKETBALL",
+      archivedAt: null,
+    });
+
+    const html = await render();
+    expect(html).toContain('data-sport="basketball"');
+    // The ball beside the name, decorative, so the heading's name is the text.
+    const heading = /<h2[^>]*>([\s\S]*?)<\/h2>/.exec(html)?.[1] ?? "";
+    expect(heading).toContain('aria-hidden="true"');
+    expect(heading).toContain("Hoopers");
+  });
+
   it("renders the team name linking to the team home", async () => {
     const html = await render();
 

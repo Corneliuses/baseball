@@ -117,6 +117,53 @@ describe("design-plan.md colour tables", () => {
   );
 });
 
+describe("design-plan.md hardwood table", () => {
+  /// `[data-sport="basketball"] { … }` and its dark override, as token maps.
+  function basketballTokens() {
+    const lightBlock = /^\[data-sport="basketball"\] \{([\s\S]*?)\n\}/m.exec(
+      globalsCss,
+    );
+    const darkBlock =
+      /@media \(prefers-color-scheme: dark\) \{\s*\[data-sport="basketball"\] \{([\s\S]*?)\n {2}\}/.exec(
+        globalsCss,
+      );
+    if (!lightBlock || !darkBlock) {
+      throw new Error(
+        "Could not find the basketball blocks in globals.css — this parser, " +
+          "not the stylesheet, is probably what needs updating.",
+      );
+    }
+    const parse = (block: string) =>
+      new Map(
+        [...block.matchAll(/--([a-z-]+):\s*([^;]+);/g)].map(
+          ([, name, value]) => [name, value.trim()],
+        ),
+      );
+    return { light: parse(lightBlock[1]), dark: parse(darkBlock[1]) };
+  }
+
+  const hsl = (cell: string) => /`(\d+ \d+% \d+%)`/.exec(cell)?.[1] ?? null;
+  const rows = [
+    ...plan.matchAll(
+      /^\|\s*`--([a-z-]+)` \(hardwood\)\s*\|([^|]*)\|([^|]*)\|/gm,
+    ),
+  ].map(([, name, lightCell, darkCell]) => ({
+    name,
+    light: hsl(lightCell),
+    dark: hsl(darkCell),
+  }));
+  const { light, dark } = basketballTokens();
+
+  it("documents the basketball palette at all", () => {
+    expect(rows.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it.each(rows)("--$name (hardwood) has the values the plan states", (row) => {
+    expect(light.get(row.name)).toBe(row.light);
+    expect(dark.get(row.name)).toBe(row.dark);
+  });
+});
+
 describe("design-plan.md geometry claims", () => {
   /// Claims written as `FIELD_ART.trackRadius = 392` or
   /// `DIAMOND_GEOMETRY.height = 520`, including one level of nesting
