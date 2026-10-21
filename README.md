@@ -152,8 +152,10 @@ Production is **https://coach.corneliuses.com**, a domain on the Vercel project.
 previous host, `baseball.corneliuses.com`, stays on the project as a 308 redirect to it:
 invitation links already sitting in inboxes and every calendar subscribed to
 `/api/calendar/[token]` carry the old host, and the redirect keeps both working. Don't
-remove it. Preview deployments sign in at `preview.baseball.corneliuses.com` (see
-`.github/workflows/preview-domain.yml`).
+remove it. Every PR push repoints `preview.coach.corneliuses.com` and
+`preview.baseball.corneliuses.com` at the newest Preview deployment (see
+`.github/workflows/preview-domain.yml`); sign-in completes on whichever one Preview's
+`AUTH_URL` names.
 
 The host lives in configuration, not code. `AUTH_URL` in Vercel's Production environment
 is the single switch: the auth service's redirect URI is derived from it, and so is every

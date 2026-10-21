@@ -455,11 +455,12 @@ production — the dev command can prompt, generate new migrations, and reset th
   - **Only exactly registered redirect URIs work.** The service matches
     `AUTH_URL + /api/auth/callback` exactly, so a per-deploy `*.vercel.app` URL can never
     sign in; the preview alias registered with the service is the only preview that can.
-    `.github/workflows/preview-domain.yml` points `preview.baseball.corneliuses.com` at the
-    newest ready Preview deployment on every Vercel `deployment_status`, so the last PR
-    pushed is the one that can sign in (it needs the `VERCEL_TOKEN` repository secret).
-    Don't clear the domain's git branch in Vercel: a project domain with no branch is a
-    Production domain.
+    `.github/workflows/preview-domain.yml` points both `preview.coach.corneliuses.com` and
+    `preview.baseball.corneliuses.com` at the newest ready Preview deployment on every
+    Vercel `deployment_status`, so the last PR pushed is the one that can sign in (it needs
+    the `VERCEL_TOKEN` repository secret). Both are registered with the auth service; the
+    one Preview's `AUTH_URL` names is the one where sign-in completes. Don't clear either
+    domain's git branch in Vercel: a project domain with no branch is a Production domain.
 - **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting`,
   `clients.claim`, and the `push` / `notificationclick` pair — no `fetch` handler, which is
   Decision 9 and the reason there is no Workbox build step. Adding a `fetch` handler is not
