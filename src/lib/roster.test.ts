@@ -50,6 +50,7 @@ import {
   addPlayerToRoster,
   addReturningPlayer,
   getChart,
+  getDepthChart,
   getRoster,
   getRosterEntry,
   getRosterWithGuardians,
@@ -555,6 +556,39 @@ describe("getChart", () => {
     findManyRosterEntries.mockRejectedValue(new Error("connection lost"));
 
     await expect(getChart("team-1")).rejects.toThrow("connection lost");
+  });
+});
+
+describe("getDepthChart", () => {
+  it("scopes to the team, orders by id so ties stay put, and maps the court columns", async () => {
+    findManyRosterEntries.mockResolvedValue([
+      {
+        id: "entry-1",
+        jerseyNumber: null,
+        courtPosition: "CENTER",
+        benchOrder: null,
+        player: { id: "player-1", name: "Ava" },
+      },
+    ]);
+
+    const chart = await getDepthChart("team-1");
+
+    expect(findManyRosterEntries).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { teamId: "team-1" },
+        orderBy: { id: "asc" },
+      }),
+    );
+    expect(chart).toEqual([
+      {
+        entryId: "entry-1",
+        playerId: "player-1",
+        playerName: "Ava",
+        jerseyNumber: null,
+        courtPosition: "CENTER",
+        benchOrder: null,
+      },
+    ]);
   });
 });
 

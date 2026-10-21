@@ -558,6 +558,13 @@ order is — but it has not yet been tested by one.
 the brand (the crest, the baseball mark, baseball-flavoured copy) stays baseball's. Both
 are deferred, not rejected.
 
+> **Revised 2026-10-21:** the basketball chart's shape is decided — **five starters plus an
+> ordered bench**, chosen by the coach over a ranked depth list per position. It is
+> standing, like Decision 16's chart: `RosterEntry.courtPosition` (a `CourtPosition` enum,
+> one starter per position) and `benchOrder` (1 = first off the bench), behind its own gate
+> `hasDepthChart`, drawn on a half court on Game Day and edited at `/chart/depth`.
+> Readiness for basketball is still not built.
+
 ## Stack Summary
 
 | Layer | Choice | Team familiarity | Est. monthly cost | Notes |

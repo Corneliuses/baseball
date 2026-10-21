@@ -105,12 +105,10 @@ Other things worth knowing:
 Every team has a sport, chosen when the team is created and fixed after that. A basketball
 team gets everything that is not a lineup: the roster, guardians and invitations, the
 schedule and its calendar feed, RSVPs, day-of reminders and push, team email, and the
-member directory. What it does not get yet is a chart — the Game Day, Readiness and Edit
-Lineup tabs are hidden and their routes 404, because basketball's playing-time model
-(starters and a bench, or an equal-time rotation) depends on the league's rules, which are
-not known yet. That decision is recorded, open, as Decision 17; when it is made the chart
-arrives as its own module behind the same `hasLineupChart` gate, not as columns borrowed
-from baseball's.
+member directory. Its lineup is its own: a depth chart of five starters (PG, SG, SF, PF, C)
+drawn on a half court plus an ordered bench, set by dragging players in Edit Lineup and
+read by every family on Game Day. Readiness is still baseball-only. The chart is a module
+of its own behind `hasDepthChart`, not columns borrowed from baseball's (Decision 17).
 
 ## Getting started
 

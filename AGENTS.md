@@ -171,18 +171,20 @@ These are structural, not stylistic. Read the comments in `prisma/schema.prisma`
    existing membership. Someone who coached last season arrives as a parent and is
    elevated on the new team individually.
 
-4. **The chart is baseball's.** `Team.sport` (`BASEBALL` | `BASKETBALL`) decides.
+4. **Each sport has its own chart.** `Team.sport` (`BASEBALL` | `BASKETBALL`) decides.
    `battingOrder`, `position`, `positionSlot` and `notPlaying` on `RosterEntry`, and
-   `Team.allPlay`, mean nothing for basketball and are never written for it.
-   `hasLineupChart` (`src/lib/sport.ts`) is the one gate, and everything that assumes a
-   chart asks it: the nav's Game Day / Readiness / Edit Lineup tabs, the four chart routes,
-   both chart saves (the real boundary — a forged POST must not write baseball columns onto
-   a basketball roster), and team home's role line and `MiniDiamondHero`. Do not widen
-   `Position`, do not add a generic position column, and do not add a basketball
-   playing-time setting until the league's rules are known — the open decision is recorded
-   in Decision 17. When it is decided, basketball gets its own chart module behind this
-   same gate, not columns on the baseball chart. The sport check lives in the page and the
-   action, never in `requireTeamAccess` or `proxy.ts`: access and sport are different
+   `Team.allPlay`, are baseball's and are never written for basketball; `courtPosition`
+   and `benchOrder` are basketball's (five starters plus an ordered bench, Decision 17's
+   revision of 2026-10-21) and are never written for baseball. `hasLineupChart` and
+   `hasDepthChart` (`src/lib/sport.ts`) are the gates, never true for the same sport, and
+   everything that assumes a chart asks the one it draws: the nav (Game Day and Edit
+   Lineup follow `hasAnyChart`; Readiness is baseball-only), the chart routes (`/view`
+   draws the diamond or the court; `/chart/depth` is basketball's editor), every chart
+   save (the real boundary — a forged POST must not write one sport's columns onto the
+   other's roster), and team home's role line and `MiniDiamondHero`. Do not widen
+   `Position` or reuse baseball's columns for the court — `CourtPosition` is its own enum
+   and `src/lib/depth-chart.ts` its own pure module. The sport check lives in the page and
+   the action, never in `requireTeamAccess` or `proxy.ts`: access and sport are different
    questions. Sport is not editable after creation, because changing it would strand chart
    columns on the roster.
 

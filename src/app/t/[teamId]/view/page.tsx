@@ -17,14 +17,15 @@ import { APP_NAME } from "@/lib/app-name";
 import { buildChartView, type ChartViewPlayer } from "@/lib/chart-view";
 import { formatEventDateTime } from "@/lib/calendar";
 import { mapsUrl } from "@/lib/maps";
-import { getChart } from "@/lib/roster";
+import { getChart, getDepthChart } from "@/lib/roster";
 import { buildRsvpStateMap } from "@/lib/rsvp";
 import { guardedRosteredPlayerIds, listEventRsvps } from "@/lib/rsvps";
 import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
-import { hasLineupChart } from "@/lib/sport";
+import { hasDepthChart, hasLineupChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
 
+import { DepthChartGameDay } from "./DepthChartGameDay";
 import { Diamond } from "./Diamond";
 import { Reveal } from "./Reveal";
 
@@ -101,6 +102,67 @@ function ChartRow({
   );
 }
 
+/// The next game, or the "no upcoming game" card — the top of Game Day for
+/// both sports, since the schedule is sport-neutral.
+function NextGameCard({
+  teamId,
+  game,
+}: {
+  teamId: string;
+  game: Awaited<ReturnType<typeof nextGame>>;
+}) {
+  const heading = game?.opponent
+    ? `Next game vs ${game.opponent}`
+    : "Next game";
+
+  return (
+    game ? (
+      <Card>
+        <CardHeader>
+          <CardTitle>{heading}</CardTitle>
+          <CardDescription>
+            {formatEventDateTime(game.startsAt)}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {game.location ? (
+            <p className="text-sm text-foreground">
+              <a
+                href={mapsUrl(game.location)}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-primary"
+              >
+                {game.location}
+              </a>
+            </p>
+          ) : null}
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/t/${teamId}/schedule/${game.id}`}>
+              Game details &amp; RSVP
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    ) : (
+      <Card>
+        <CardHeader>
+          <CardTitle>No upcoming game</CardTitle>
+          <CardDescription>
+            Nothing is on the schedule right now — this is the standing
+            chart, ready for the next one.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href={`/t/${teamId}/schedule`}>Go to schedule</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  );
+}
+
 /// The parent-facing payoff (#8): the standing chart, read in the context of
 /// the next game, with RSVP state as decoration only. Entirely read-only —
 /// the chart columns are authored elsewhere (#10, #11); for the validation
@@ -132,11 +194,36 @@ export default async function ViewPage({
   // database outage propagates rather than rendering the same "no upcoming
   // game" header a healthy team would show on a bye week.
   //
-  // The team is read alongside it, ahead of the chart, because a team whose
-  // sport has no lineup chart has no Game Day: a pasted URL 404s rather than
-  // drawing a diamond of baseball positions over a basketball roster. A null
-  // team (deleted since the access check) falls through to the defaults below.
+  // The team is read alongside it, ahead of the chart, because the sport
+  // decides which chart this page draws: a basketball team gets its depth
+  // chart on a half court, never a diamond of baseball positions over its
+  // roster, and a sport with neither chart 404s. A null team (deleted since
+  // the access check) falls through to the baseball defaults below.
   const [game, team] = await Promise.all([nextGame(teamId), getTeamById(teamId)]);
+  // Basketball draws its own Game Day: the depth chart on a half court.
+  // Same top card, same RSVP decoration, none of the baseball chart columns.
+  if (team && hasDepthChart(team.sport)) {
+    const [entries, rsvpRows, guardedPlayerIds] = await Promise.all([
+      getDepthChart(teamId),
+      game ? listEventRsvps(teamId, game.id) : Promise.resolve([]),
+      guardedRosteredPlayerIds(teamId, userId),
+    ]);
+    const rsvpStates = buildRsvpStateMap(
+      entries.map((entry) => entry.playerId),
+      rsvpRows,
+    );
+    return (
+      <div className="mx-auto w-full max-w-4xl space-y-6">
+        <NextGameCard teamId={teamId} game={game} />
+        <DepthChartGameDay
+          entries={entries}
+          rsvpStates={rsvpStates}
+          showRsvp={game !== null}
+          guardedPlayerIds={guardedPlayerIds}
+        />
+      </div>
+    );
+  }
   if (team && !hasLineupChart(team.sport)) {
     notFound();
   }
@@ -187,56 +274,9 @@ export default async function ViewPage({
     ? []
     : chart.unassigned.filter((player) => player.battingOrder === null);
 
-  const heading = game?.opponent
-    ? `Next game vs ${game.opponent}`
-    : "Next game";
-
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
-      {game ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{heading}</CardTitle>
-            <CardDescription>
-              {formatEventDateTime(game.startsAt)}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {game.location ? (
-              <p className="text-sm text-foreground">
-                <a
-                  href={mapsUrl(game.location)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline underline-offset-2 hover:text-primary"
-                >
-                  {game.location}
-                </a>
-              </p>
-            ) : null}
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/t/${teamId}/schedule/${game.id}`}>
-                Game details &amp; RSVP
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>No upcoming game</CardTitle>
-            <CardDescription>
-              Nothing is on the schedule right now — this is the standing
-              chart, ready for the next one.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild variant="outline">
-              <Link href={`/t/${teamId}/schedule`}>Go to schedule</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <NextGameCard teamId={teamId} game={game} />
 
       {!chart.hasChart ? (
         <Card>

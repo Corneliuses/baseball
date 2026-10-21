@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,7 @@ import { getChart } from "@/lib/roster";
 import { sortRoster } from "@/lib/roster-rules";
 import { nextGame } from "@/lib/schedule";
 import { requireTeamAccess, TeamAccessError } from "@/lib/team-access";
-import { hasLineupChart } from "@/lib/sport";
+import { hasDepthChart, hasLineupChart } from "@/lib/sport";
 import { getTeamById } from "@/lib/teams";
 
 import { BattingOrderEditor } from "./BattingOrderEditor";
@@ -78,6 +78,11 @@ export default async function ChartPage({
   const team = await getTeamById(teamId);
   if (!team) {
     notFound();
+  }
+  // Basketball's editor is the depth chart, one route down. The nav links
+  // there directly; this catches an old bookmark of the baseball URL.
+  if (hasDepthChart(team.sport)) {
+    redirect(`/t/${teamId}/chart/depth`);
   }
   // A team whose sport has no lineup chart has nothing to edit here, so a
   // pasted URL behaves like a missing page. The save action refuses too.

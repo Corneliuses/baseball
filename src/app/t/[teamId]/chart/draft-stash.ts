@@ -29,7 +29,7 @@
  * quietly degrades to exactly the behaviour that existed before this module.
  */
 
-export type ChartKind = "order" | "positions";
+export type ChartKind = "order" | "positions" | "depth";
 
 function storageKey(teamId: string, kind: ChartKind): string {
   return `chart-draft:${teamId}:${kind}`;
