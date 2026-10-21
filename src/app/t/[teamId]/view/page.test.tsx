@@ -7,6 +7,7 @@ const getChart = vi.fn();
 const listEventRsvps = vi.fn();
 const guardedRosteredPlayerIds = vi.fn();
 const getTeamById = vi.fn();
+const getDepthChart = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -19,6 +20,7 @@ vi.mock("@/lib/schedule", () => ({
 
 vi.mock("@/lib/roster", () => ({
   getChart: (...args: unknown[]) => getChart(...args),
+  getDepthChart: (...args: unknown[]) => getDepthChart(...args),
 }));
 
 vi.mock("@/lib/rsvps", () => ({
@@ -114,19 +116,87 @@ describe("ViewPage access", () => {
   });
 });
 
-describe("ViewPage for a sport without a lineup chart", () => {
-  // Basketball has no chart yet, so there is no Game Day: a pasted URL is a
-  // missing page, not a diamond of baseball positions over its roster.
-  it("calls notFound() for a basketball team", async () => {
-    getTeamById.mockResolvedValue({
-      id: "team-1",
-      sport: "BASKETBALL",
-      allPlay: true,
-      archivedAt: null,
-    });
+describe("ViewPage for a basketball team", () => {
+  const hoopers = {
+    id: "team-1",
+    sport: "BASKETBALL",
+    allPlay: true,
+    archivedAt: null,
+  };
+  const depthRow = (
+    playerId: string,
+    playerName: string,
+    jerseyNumber: number | null,
+    courtPosition: string | null,
+    benchOrder: number | null = null,
+  ) => ({
+    entryId: `entry-${playerId}`,
+    playerId,
+    playerName,
+    jerseyNumber,
+    courtPosition,
+    benchOrder,
+  });
 
-    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+  beforeEach(() => {
+    getTeamById.mockResolvedValue(hoopers);
+    getDepthChart.mockResolvedValue([
+      depthRow("ava", "Ava Cole", 3, "POINT_GUARD"),
+      depthRow("ben", "Ben Ruiz", 5, null, 2),
+      depthRow("cam", "Cam Diaz", 11, "CENTER"),
+      depthRow("dee", "Dee Park", 20, null, 1),
+    ]);
+  });
+
+  // Never a diamond of baseball positions over a basketball roster.
+  it("draws the depth chart on a half court and never reads the baseball chart", async () => {
+    const html = await render();
+
     expect(getChart).not.toHaveBeenCalled();
+    expect(html).toContain("On the court");
+    expect(html).toContain('data-court-position="POINT_GUARD"');
+    expect(html).toContain("Starting five");
+    expect(html).not.toContain("Batting order");
+    expect(html).toContain("Next game vs Hawks");
+  });
+
+  it("names each starter's position and lists the bench in the coach's order", async () => {
+    const html = await render();
+
+    expect(html).toContain("Point guard: Ava Cole");
+    expect(html).toContain("Shooting guard: open");
+    const bench = html.slice(html.indexOf(">Bench<"));
+    expect(bench.indexOf("Dee Park")).toBeGreaterThan(-1);
+    expect(bench.indexOf("Dee Park")).toBeLessThan(bench.indexOf("Ben Ruiz"));
+  });
+
+  it("hands the rim back even when the reader's kid is on the bench", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["ben"]));
+
+    expect(await render()).not.toContain("fill-none stroke-banana");
+  });
+
+  it("spends the banana on the reader's own kid and hands the rim back", async () => {
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["cam"]));
+
+    const html = await render();
+
+    expect(html).toContain(`Cam Diaz ${YOUR_PLAYER_SR_SUFFIX}`);
+    expect(html).toContain(YOUR_PLAYER_TEXT);
+    expect(html).not.toContain("fill-none stroke-banana");
+  });
+
+  it("keeps the banana on the rim for a reader with no kid on the chart", async () => {
+    expect(await render()).toContain("fill-none stroke-banana");
+  });
+
+  it("says no depth chart is set when nobody is placed", async () => {
+    getDepthChart.mockResolvedValue([depthRow("dee", "Dee Park", 20, null)]);
+
+    const html = await render();
+
+    expect(html).toContain("No depth chart set yet");
+    expect(html).not.toContain("On the court");
   });
 });
 

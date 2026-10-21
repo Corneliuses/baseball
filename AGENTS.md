@@ -4,14 +4,16 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# Youth Baseball Team Manager
+# Cornelius Team Manager
 
-An invite-only PWA for one person who coaches youth baseball teams across seasons. The
-coach sets a schedule and a standing batting order and positions chart; parents RSVP their
-kids and see where and when their kid is playing, on a phone, at a field.
+An invite-only PWA for one person who coaches youth baseball **and basketball** teams
+across seasons. The coach sets a schedule and, for baseball, a standing batting order and
+positions chart; parents RSVP their kids and see where and when their kid is playing, on a
+phone, at a field or a court. The name lives in one constant, `APP_NAME`
+(`src/lib/app-name.ts`, with `APP_SHORT_NAME` for the manifest) — see Gotchas.
 
 **Read `.agents/app-brainstorm/youth-baseball-team-manager/` before non-trivial work.**
-`product-brief.md` is the scope and `stack-decisions.md` is 16 numbered decisions with
+`product-brief.md` is the scope and `stack-decisions.md` is 17 numbered decisions with
 rationale. Both are a decision record — change them only when a decision is actually
 being revised, not to reflect code.
 
@@ -48,7 +50,9 @@ roster entry detail at `roster/[entryId]`, the schedule at `schedule` /
 chart editors — the batting order at `chart` and the positions diamond at
 `chart/positions` — and team email messaging at `messages` (coach-only broadcast
 history) and `messages/new` (the compose form every role uses) plus `/t/new` for
-owner-gated team creation. Outside `/t/` entirely — because `proxy.ts` would bounce a
+owner-gated team creation, which asks for the team's sport (fixed from then on). The four
+chart routes — `view`, `readiness`, `chart` and `chart/positions` — `notFound()` for a team
+whose sport has no chart (rule 4 below), so a pasted URL behaves like a missing page. Outside `/t/` entirely — because `proxy.ts` would bounce a
 cookie-less calendar app to sign-in — `/api/calendar/[token]` serves each team's ICS
 feed, authorized by the capability token in the URL (`Team.calendarToken`) rather than a
 session; the subscribe URL is surfaced on the schedule page. `/api/cron/reminders` is the
@@ -146,7 +150,7 @@ solution. More fundamentally it cannot be the boundary: a server action POSTs to
 current page URL, so Proxy can see `/t/team-A/roster` but not which record the action
 mutates. Only the action knows that, which is why `requireTeamAccess` runs inside it.
 
-### The data model — three rules that are easy to break by being helpful
+### The data model — four rules that are easy to break by being helpful
 
 These are structural, not stylistic. Read the comments in `prisma/schema.prisma`.
 
@@ -166,6 +170,23 @@ These are structural, not stylistic. Read the comments in `prisma/schema.prisma`
    `Membership(user, team, PARENT)` for each linked guardian and must **never** modify an
    existing membership. Someone who coached last season arrives as a parent and is
    elevated on the new team individually.
+
+4. **Each sport has its own chart.** `Team.sport` (`BASEBALL` | `BASKETBALL`) decides.
+   `battingOrder`, `position`, `positionSlot` and `notPlaying` on `RosterEntry`, and
+   `Team.allPlay`, are baseball's and are never written for basketball; `courtPosition`
+   and `benchOrder` are basketball's (five starters plus an ordered bench, Decision 17's
+   revision of 2026-10-21) and are never written for baseball. `hasLineupChart` and
+   `hasDepthChart` (`src/lib/sport.ts`) are the gates, never true for the same sport, and
+   everything that assumes a chart asks the one it draws: the nav (Game Day and Edit
+   Lineup follow `hasAnyChart`; Readiness is baseball-only), the chart routes (`/view`
+   draws the diamond or the court; `/chart/depth` is basketball's editor), every chart
+   save (the real boundary — a forged POST must not write one sport's columns onto the
+   other's roster), and team home's role line and `MiniDiamondHero`. Do not widen
+   `Position` or reuse baseball's columns for the court — `CourtPosition` is its own enum
+   and `src/lib/depth-chart.ts` its own pure module. The sport check lives in the page and
+   the action, never in `requireTeamAccess` or `proxy.ts`: access and sport are different
+   questions. Sport is not editable after creation, because changing it would strand chart
+   columns on the roster.
 
 ### The readiness check
 
@@ -227,8 +248,10 @@ name comes from. `DATABASE_URL` and `AUTH_SECRET` are the two needed to boot.
 **Migrations live in `prisma/migrations/`** — `20260728053521_001` is the initial
 14-table schema, and everything after it is small and additive (the team calendar token,
 the RSVP `recordedById` column and its index, the auth service's `User.authSub` and
-`Session.idToken`) with one exception: `20261018200000_drop_authjs_tables` drops Auth.js's
-`Account` and `VerificationToken` once nothing read them. `Session` is the app's own table
+`Session.idToken`, and `add_team_sport` — the `Sport` enum and `Team.sport`, defaulting to
+`BASEBALL` so every existing team stayed a baseball team with no backfill) with one
+exception: `20261018200000_drop_authjs_tables` drops Auth.js's `Account` and
+`VerificationToken` once nothing read them. `Session` is the app's own table
 now and stays. Creating further migrations needs a live
 Postgres URL: a Neon dev branch, not `prisma dev`, which provisions Prisma Postgres, a
 different service than Decision 3's choice — or hand-write the SQL and verify it against
@@ -307,6 +330,34 @@ production — the dev command can prompt, generate new migrations, and reset th
   every card in view on every visit to `/`. Tabs inside a team prefetch nothing dynamic,
   because the layout they share is already mounted. Don't move data reads up into the team
   layout to tidy a page: everything it reads is what an arrival waits on.
+
+  **Inside a basketball team the ball dribbles, and it learns the sport from a context.**
+  `loading.tsx` takes no params and renders before any page data exists, so the only thing
+  above it that knows the team is the layout. The team layout wraps its children in
+  `SportProvider` (`src/components/SportProvider.tsx`, a client context with `useSport()`),
+  and `LoadingInterstitial` and `SubmitButton` read it to draw `BasketballSpinner`
+  (`animate-dribble`, a `translateY`-only bounce) instead of `BaseballSpinner`
+  (`animate-spin-ball`). It is the one channel from a server layout to a client fallback
+  that adds no read. Outside a team — `/profile`, `/t/new` — there is no provider and the
+  default is baseball, which is why the context defaults rather than throwing. Both
+  utilities stop under `prefers-reduced-motion`, and both are named in design-plan.md §8,
+  where the drift test holds them.
+- **An absent checkbox reads as `false`, so `allPlay` is only written for a chart sport.**
+  `TeamDetailsForm` omits the `allPlay` checkbox for basketball, and
+  `formData.get("allPlay") === "on"` would then quietly turn the column off on every
+  basketball save. `updateTeamAction` reads the team's sport after `requireTeamAccess` and
+  leaves `allPlay` out of `updateTeam`'s input for a non-chart sport; `updateTeam` spreads
+  it only when defined. Any future sport-specific checkbox needs the same treatment.
+- **The app's name is `APP_NAME` (`src/lib/app-name.ts`), and a test keeps it that way.**
+  Every page title, the header, the manifest, the email signature and the ICS `PRODID`
+  read the constant, and `src/lib/app-name.test.ts` fails if the old literal "Youth
+  Baseball Team Manager" reappears anywhere in `src/` outside that module. Two old names
+  survive on purpose and must not be "fixed": `UID_DOMAIN` in `src/lib/ics.ts`
+  (`youth-baseball-team-manager`) is every event's identity in every subscribed calendar,
+  so changing it — or making it follow the host to `coach.corneliuses.com` — duplicates
+  the whole season in every family's calendar; and the `ybtm:` localStorage keys in
+  `BleacherChatterCard.tsx` and `InstallPrompt.tsx`, whose rename would re-prompt every
+  family who already dismissed the card or the install tip.
 - **Three surfaces paint `FieldArt`, and their fences are the banana budget.** design-plan.md
   §2 allows exactly one Banana Yellow element per screen. `FieldArt` takes a `fence` prop
   because the wall is the loudest thing it paints: the positions editor spends its banana

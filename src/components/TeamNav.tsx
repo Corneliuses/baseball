@@ -5,11 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { Role, Sport } from "@/generated/prisma/enums";
-import { hasLineupChart } from "@/lib/sport";
+import { hasAnyChart, hasDepthChart, hasLineupChart } from "@/lib/sport";
 import { cn } from "@/lib/utils";
 import {
   CapIcon,
   ClipboardIcon,
+  CourtIcon,
   DiamondIcon,
   GearIcon,
   JerseyIcon,
@@ -91,22 +92,26 @@ export function matchNavItem(
  * `/members`, so each section now lights its own tab.
  */
 ///
-/// The three lineup tabs — Game Day, Readiness, Edit Lineup — exist only for a
-/// sport with a lineup chart (`hasLineupChart`). A team without one gets no tab
-/// to a page that would 404; each of those pages still gates itself, so
-/// hiding the tab is a courtesy, not the boundary.
+/// The lineup tabs follow the team's chart. Game Day and Edit Lineup exist for
+/// any sport with one (`hasAnyChart`): baseball's diamond and batting order, or
+/// basketball's depth chart on a half court, which gets the court glyph and
+/// links straight to its own editor. Readiness is baseball's alone
+/// (`hasLineupChart`). A team without a chart gets no tab to a page that would
+/// 404; each of those pages still gates itself, so hiding the tab is a
+/// courtesy, not the boundary.
 function navItems(teamId: string, role: Role, sport: Sport): TeamNavItem[] {
   const base = `/t/${teamId}`;
-  const chart = hasLineupChart(sport);
+  const anyChart = hasAnyChart(sport);
+  const depth = hasDepthChart(sport);
   const items: TeamNavItem[] = [
     { href: base, label: "Home", icon: PennantIcon, group: "team", exact: true },
     { href: `${base}/schedule`, label: "Schedule", icon: TicketIcon, group: "team" },
   ];
-  if (chart) {
+  if (anyChart) {
     items.push({
       href: `${base}/view`,
       label: "Game Day",
-      icon: DiamondIcon,
+      icon: depth ? CourtIcon : DiamondIcon,
       group: "team",
     });
   }
@@ -118,21 +123,21 @@ function navItems(teamId: string, role: Role, sport: Sport): TeamNavItem[] {
   );
 
   if (role !== "PARENT") {
-    if (chart) {
-      items.push(
-        {
-          href: `${base}/readiness`,
-          label: "Readiness",
-          icon: ScoreboardIcon,
-          group: "coach",
-        },
-        {
-          href: `${base}/chart`,
-          label: "Edit Lineup",
-          icon: ClipboardIcon,
-          group: "coach",
-        },
-      );
+    if (hasLineupChart(sport)) {
+      items.push({
+        href: `${base}/readiness`,
+        label: "Readiness",
+        icon: ScoreboardIcon,
+        group: "coach",
+      });
+    }
+    if (anyChart) {
+      items.push({
+        href: depth ? `${base}/chart/depth` : `${base}/chart`,
+        label: "Edit Lineup",
+        icon: ClipboardIcon,
+        group: "coach",
+      });
     }
     items.push({
       href: `${base}/directory`,

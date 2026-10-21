@@ -42,6 +42,9 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
   },
+  redirect: (url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  },
 }));
 
 import { TeamAccessError } from "@/lib/team-access";
@@ -119,11 +122,13 @@ describe("ChartPage access", () => {
   });
 });
 
-describe("ChartPage for a sport without a lineup chart", () => {
-  it("calls notFound() for a basketball team", async () => {
+describe("ChartPage for a basketball team", () => {
+  it("sends a basketball team to its depth chart without reading the baseball chart", async () => {
     getTeamById.mockResolvedValue({ ...team, sport: "BASKETBALL" });
 
-    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(render()).rejects.toThrow(
+      "NEXT_REDIRECT:/t/team-1/chart/depth",
+    );
     expect(getChart).not.toHaveBeenCalled();
   });
 });

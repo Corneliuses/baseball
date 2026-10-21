@@ -86,6 +86,20 @@ export function DiamondIcon({ className }: IconProps) {
   );
 }
 
+/// Game Day for a basketball team. A half court from above: the sidelines,
+/// the lane, and the three-point arc around the rim — the court /view paints
+/// at full size.
+export function CourtIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="1" />
+      <path d="M9.5 3.5v6.5h5V3.5" />
+      <path d="M6 3.5v2a6 6 0 0012 0v-2" />
+      <path d="M9.5 20.5a2.5 2.5 0 015 0" />
+    </Icon>
+  );
+}
+
 /// Roster. A jersey on its hanger-less shoulders, collar open.
 export function JerseyIcon({ className }: IconProps) {
   return (
@@ -148,6 +162,18 @@ export function CapIcon({ className }: IconProps) {
       <path d="M6 14.5a6 6 0 0112 0" />
       <path d="M4.5 14.5h14a3.5 3.5 0 013.5 3.5H4.5a1.75 1.75 0 010-3.5z" />
       <path d="M12 8.5v-1" />
+    </Icon>
+  );
+}
+
+/// A basketball team's mark beside its name in the team header — the ball's
+/// outline and its four seams, the static twin of `BasketballSpinner`.
+export function BasketballIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5v17M3.5 12h17" />
+      <path d="M6.2 5.8a9 9 0 010 12.4M17.8 5.8a9 9 0 000 12.4" />
     </Icon>
   );
 }

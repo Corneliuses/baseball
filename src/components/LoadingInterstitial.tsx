@@ -37,8 +37,7 @@ import { cn } from "@/lib/utils";
 export const LOADING_LABEL = "Loading…";
 
 export function LoadingInterstitial({ className }: { className?: string }) {
-  const Spinner =
-    useSport() === "BASKETBALL" ? BasketballSpinner : BaseballSpinner;
+  const basketball = useSport() === "BASKETBALL";
 
   return (
     <div
@@ -48,10 +47,22 @@ export function LoadingInterstitial({ className }: { className?: string }) {
         className,
       )}
     >
-      <Spinner
-        className="size-14 text-foreground"
-        seamClassName="stroke-destructive"
-      />
+      {/* The basketball is a real ball: orange leather (the screen's one
+          loud accent — a loading screen has nothing else on it) with dark
+          seams in both themes (banana-foreground, the colour made to sit on
+          that orange; text-foreground would turn them cream at night),
+          rather than the baseball's red stitches on an outline. */}
+      {basketball ? (
+        <BasketballSpinner
+          className="size-14 text-banana-foreground"
+          ballClassName="fill-banana"
+        />
+      ) : (
+        <BaseballSpinner
+          className="size-14 text-foreground"
+          seamClassName="stroke-destructive"
+        />
+      )}
       <p className="text-sm font-semibold text-muted-foreground">{LOADING_LABEL}</p>
     </div>
   );

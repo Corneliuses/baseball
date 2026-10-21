@@ -57,6 +57,14 @@ describe("TeamCard", () => {
     expect(screen.getByText("Basketball")).toBeInTheDocument();
   });
 
+  it("should wear the basketball palette only on a basketball team", () => {
+    const { container, rerender } = render(<TeamCard {...baseProps} />);
+    expect(container.querySelector("[data-sport]")).toBeNull();
+
+    rerender(<TeamCard {...baseProps} sport="BASKETBALL" />);
+    expect(container.querySelector('[data-sport="basketball"]')).not.toBeNull();
+  });
+
   it("should not describe a lineup for a sport without a chart", () => {
     render(<TeamCard {...baseProps} sport="BASKETBALL" allPlay={true} />);
 

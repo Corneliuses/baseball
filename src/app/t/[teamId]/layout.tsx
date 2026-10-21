@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BasketballIcon } from "@/components/icons";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SportProvider } from "@/components/SportProvider";
 import { TeamNav } from "@/components/TeamNav";
@@ -90,7 +91,12 @@ export default async function TeamLayout({
               All teams
             </Link>
             <Link href={`/t/${teamId}`} className="block">
-              <h2 className="font-display text-2xl text-foreground">
+              <h2 className="flex items-center gap-2 font-display text-2xl text-foreground">
+                {/* Basketball teams carry the ball beside their name, in the
+                    team orange; baseball's diamond lives in its field art. */}
+                {team.sport === "BASKETBALL" ? (
+                  <BasketballIcon className="size-6 shrink-0 text-primary" />
+                ) : null}
                 {team.name}
               </h2>
             </Link>

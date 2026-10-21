@@ -1,8 +1,9 @@
 # Cornelius Team Manager
 
-An invite-only PWA for coaching youth baseball and basketball teams. One person runs the
-team; parents RSVP their kids and see the schedule and lineup on their phone, at the field
-or the gym, often on one bar of signal.
+An invite-only PWA for coaching youth baseball and basketball. One person runs the teams;
+parents RSVP their kids and see when and where to be — and, for baseball, the batting
+order and field positions — on their phone, at the field or the gym, often on one bar of
+signal. It lives at [coach.corneliuses.com](https://coach.corneliuses.com).
 
 It replaces a group text, a league website nobody checks, and a lineup card written in the
 parking lot fifteen minutes before first pitch.
@@ -99,6 +100,16 @@ Other things worth knowing:
   and a push notification too if they turned those on. Email is the channel of record:
   push is an enhancement that can fail or be absent without anyone missing anything.
 
+## Basketball
+
+Every team has a sport, chosen when the team is created and fixed after that. A basketball
+team gets everything that is not a lineup: the roster, guardians and invitations, the
+schedule and its calendar feed, RSVPs, day-of reminders and push, team email, and the
+member directory. Its lineup is its own: a depth chart of five starters (PG, SG, SF, PF, C)
+drawn on a half court plus an ordered bench, set by dragging players in Edit Lineup and
+read by every family on Game Day. Readiness is still baseball-only. The chart is a module
+of its own behind `hasDepthChart`, not columns borrowed from baseball's (Decision 17).
+
 ## Getting started
 
 Requires **Node 22** and **pnpm 10**.
@@ -141,7 +152,7 @@ Run `pnpm check` before pushing — it chains lint, typecheck, and tests.
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Prisma 7 on Neon
 Postgres · Kernel ID (OpenID Connect) sign-in · `@dnd-kit` · Motion · Resend · `web-push` · Vitest ·
-deployed on Vercel.
+deployed on Vercel at `coach.corneliuses.com`.
 
 Every one of those was chosen deliberately, with alternatives considered and rejected in
 writing — see the stack decisions below.
@@ -175,7 +186,7 @@ notifications have to be turned on again on `/profile`, and everyone signs in on
 - **[Product brief](.agents/app-brainstorm/youth-baseball-team-manager/product-brief.md)** —
   scope, the core loop, and what is deliberately out of scope.
 - **[Stack decisions](.agents/app-brainstorm/youth-baseball-team-manager/stack-decisions.md)** —
-  16 numbered decisions with options considered, rationale, and the conditions under which
+  17 numbered decisions with options considered, rationale, and the conditions under which
   each should be revisited.
 
 ## A note on the data

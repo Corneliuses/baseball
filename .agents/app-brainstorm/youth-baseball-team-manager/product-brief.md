@@ -4,6 +4,11 @@
 positions for a youth baseball team, and parents RSVP their kids and see exactly where
 and when their kid is playing.
 
+> **Revised 2026-10:** the app also runs basketball teams, and is now called Cornelius Team
+> Manager. Everything below is the baseball core loop and still holds; a basketball team
+> gets the shared parts (roster, schedule, RSVPs, reminders, messaging) and no chart yet.
+> See Decision 17 in `stack-decisions.md`.
+
 > **Process note:** This brief skips `app-brainstorm` Gate 1 (divergent idea generation
 > and scoring). The author arrived with a fully specified concept, so the workflow
 > entered at Step 5 (stack requirements) after capturing Step 1 constraints. There is no

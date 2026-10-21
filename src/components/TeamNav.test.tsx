@@ -165,34 +165,36 @@ describe("TeamNav focus styling", () => {
   });
 });
 
-// A team without a lineup chart gets no tab to a page that 404s for it. Every
-// other tab is the same as baseball's: the gate is the chart, not the sport.
-describe("TeamNav for a sport without a lineup chart", () => {
-  it("shows a basketball parent the shared links without Game Day", () => {
+// Basketball has the depth chart rather than baseball's lineup chart: Game Day
+// and Edit Lineup point at the court, and Readiness — baseball's alone — is
+// absent. Every other tab is the same as baseball's.
+describe("TeamNav for a basketball team", () => {
+  it("shows a basketball parent Game Day, drawn as a court", () => {
     const html = render("PARENT", "/t/team-1", "BASKETBALL");
 
     for (const href of [
       "/t/team-1",
       "/t/team-1/schedule",
+      "/t/team-1/view",
       "/t/team-1/roster",
       "/t/team-1/messages",
       "/profile",
     ]) {
       expect(html).toContain(`href="${href}"`);
     }
-    expect(html).not.toContain('href="/t/team-1/view"');
-    expect(html).not.toContain("Game Day");
+    expect(html).toContain("Game Day");
   });
 
-  it("shows a basketball coach the staff rack without the lineup tools", () => {
+  it("gives a basketball coach the depth chart editor but no Readiness", () => {
     const html = render("COACH", "/t/team-1", "BASKETBALL");
 
     expect(html).toContain('href="/t/team-1/directory"');
-    expect(html).not.toContain('href="/t/team-1/view"');
+    expect(html).toContain('href="/t/team-1/view"');
+    expect(html).toContain('href="/t/team-1/chart/depth"');
+    expect(html).toContain("Edit Lineup");
     expect(html).not.toContain('href="/t/team-1/readiness"');
     expect(html).not.toContain('href="/t/team-1/chart"');
     expect(html).not.toContain("Readiness");
-    expect(html).not.toContain("Edit Lineup");
   });
 
   it("still gives a basketball owner Members and Settings", () => {
@@ -200,7 +202,7 @@ describe("TeamNav for a sport without a lineup chart", () => {
 
     expect(html).toContain('href="/t/team-1/members"');
     expect(html).toContain('href="/t/team-1/settings"');
-    expect(html).not.toContain('href="/t/team-1/chart"');
+    expect(html).toContain('href="/t/team-1/chart/depth"');
   });
 });
 

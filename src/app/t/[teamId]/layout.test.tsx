@@ -120,8 +120,9 @@ describe("TeamLayout", () => {
   });
 
   // The nav's lineup tabs follow the team's sport, which only the layout knows.
-  it("hands TeamNav the team's sport, so a basketball team has no Game Day tab", async () => {
-    expect(await render()).toContain('href="/t/team-1/view"');
+  it("hands TeamNav the team's sport, so a basketball coach edits the depth chart", async () => {
+    requireTeamAccess.mockResolvedValue({ role: "COACH", userId: "user-1" });
+    expect(await render()).toContain('href="/t/team-1/readiness"');
 
     getTeamById.mockResolvedValue({
       id: "team-1",
@@ -132,7 +133,32 @@ describe("TeamLayout", () => {
       archivedAt: null,
     });
 
-    expect(await render()).not.toContain('href="/t/team-1/view"');
+    const html = await render();
+    expect(html).not.toContain('href="/t/team-1/readiness"');
+    expect(html).toContain('href="/t/team-1/chart/depth"');
+  });
+
+  // The basketball palette is a scoped attribute, set once here for the whole
+  // page (header band included); baseball is the default theme and gets none.
+  it("puts a basketball team's pages under the basketball palette", async () => {
+    const baseball = await render();
+    expect(baseball).not.toContain("data-sport");
+
+    getTeamById.mockResolvedValue({
+      id: "team-1",
+      name: "Hoopers",
+      season: "Winter 2026",
+      allPlay: true,
+      sport: "BASKETBALL",
+      archivedAt: null,
+    });
+
+    const html = await render();
+    expect(html).toContain('data-sport="basketball"');
+    // The ball beside the name, decorative, so the heading's name is the text.
+    const heading = /<h2[^>]*>([\s\S]*?)<\/h2>/.exec(html)?.[1] ?? "";
+    expect(heading).toContain('aria-hidden="true"');
+    expect(heading).toContain("Hoopers");
   });
 
   it("renders the team name linking to the team home", async () => {
