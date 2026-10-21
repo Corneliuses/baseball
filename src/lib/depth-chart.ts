@@ -1,5 +1,10 @@
 import type { CourtPosition } from "@/generated/prisma/enums";
-import { COURT_POSITIONS, isCourtPosition } from "@/lib/court-positions";
+import {
+  COURT_POSITIONS,
+  COURT_POSITION_NAMES,
+  isCourtPosition,
+  ordinal,
+} from "@/lib/court-positions";
 
 /**
  * Basketball's depth chart, pure and DB-free (Decision 17's "a new module
@@ -87,6 +92,39 @@ export function startingPositionOf(
     COURT_POSITIONS.find((position) => draft.starters[position] === entryId) ??
     null
   );
+}
+
+/// Where one kid stands on the depth chart: starting at a position, or a
+/// numbered slot on the bench (1 = first off the bench).
+export type DepthSpot =
+  | { kind: "starter"; position: CourtPosition }
+  | { kind: "bench"; slot: number };
+
+/**
+ * A kid's spot on a draft, or null for an entry the draft doesn't hold. The
+ * bench slot is the kid's place in `draft.bench`, counted from 1 — which is
+ * the number Game Day prints beside them, unplaced kids included, so team
+ * home and `/view` cannot number the same kid differently.
+ */
+export function depthSpotOf(
+  draft: DepthDraft,
+  entryId: string,
+): DepthSpot | null {
+  const position = startingPositionOf(draft, entryId);
+  if (position !== null) {
+    return { kind: "starter", position };
+  }
+  const index = draft.bench.indexOf(entryId);
+  return index === -1 ? null : { kind: "bench", slot: index + 1 };
+}
+
+/// Basketball's counterpart of `chartRole`: a spot as one line of text, for
+/// team home's player card — "Starting point guard", "2nd off the bench".
+export function depthRole(spot: DepthSpot): string {
+  if (spot.kind === "starter") {
+    return `Starting ${COURT_POSITION_NAMES[spot.position].toLowerCase()}`;
+  }
+  return `${ordinal(spot.slot)} off the bench`;
 }
 
 /**

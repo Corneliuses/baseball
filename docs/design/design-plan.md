@@ -298,6 +298,17 @@ has no banana, matching the calm-admin rule below rather than inventing a yellow
 spend it on. `isBenched` in `chart-role.ts` is `chartRole`'s own bench condition, exported
 so the styling and the sentence cannot disagree.
 
+**Inside a basketball team the card stands on the half court.** `MiniCourtHero` is the
+same card cut from Game Day's court: `CourtArt` cropped to the same window
+(`heroViewBox`, given the court's size) on the kid's `COURT_SPOT_COORDS` spot, lifted 25
+units toward the basket so a guard at the top of the key has the arc in frame rather
+than bare floorboards, with the same haloed jersey marker at the same scale. The rim
+draws in court-line white, as the field hero's fence draws in chalk. The marquee carries
+`depthRole`'s line — "Starting point guard" in ball orange with the star for a starter,
+"2nd off the bench" on quiet stock and with no court art for everyone else, numbered
+exactly as Game Day numbers its bench — and "No depth chart set yet" before the coach has
+set one. The name band's pinstripes are already floorboards there.
+
 **Schedule** — games become **ticket stubs** (sketch A): perforated edge, slab opponent
 name, Geist Mono date, RSVP tallies on the stub end. Practices print on plain cream stock
 with a clay dashed border — games must feel like the main event. Month grid keeps using

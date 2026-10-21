@@ -20,9 +20,15 @@ export const HERO_CROP = { width: 240, height: 110 } as const;
 /// window never pans past the field's edge into blank space — a corner
 /// outfielder sits off-centre in their frame instead, which is also how a
 /// photographer would crop them.
-export function heroViewBox(center: { x: number; y: number }): string {
-  const x = clamp(center.x - HERO_CROP.width / 2, 0, DIAMOND_GEOMETRY.width - HERO_CROP.width);
-  const y = clamp(center.y - HERO_CROP.height / 2, 0, DIAMOND_GEOMETRY.height - HERO_CROP.height);
+///
+/// `board` defaults to the diamond; basketball's `MiniCourtHero` passes the
+/// half court, so both sports' cards are cut to the same window.
+export function heroViewBox(
+  center: { x: number; y: number },
+  board: { width: number; height: number } = DIAMOND_GEOMETRY,
+): string {
+  const x = clamp(center.x - HERO_CROP.width / 2, 0, board.width - HERO_CROP.width);
+  const y = clamp(center.y - HERO_CROP.height / 2, 0, board.height - HERO_CROP.height);
   return `${x} ${y} ${HERO_CROP.width} ${HERO_CROP.height}`;
 }
 

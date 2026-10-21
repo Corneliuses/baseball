@@ -8,6 +8,7 @@ const nextEvents = vi.fn();
 const guardedRosteredPlayerIds = vi.fn();
 const listRsvpsForEvents = vi.fn();
 const getChart = vi.fn();
+const getDepthChart = vi.fn();
 
 vi.mock("@/lib/team-access", () => ({
   requireTeamAccess: (...args: unknown[]) => requireTeamAccess(...args),
@@ -33,6 +34,7 @@ vi.mock("@/lib/rsvps", () => ({
 
 vi.mock("@/lib/roster", () => ({
   getChart: (...args: unknown[]) => getChart(...args),
+  getDepthChart: (...args: unknown[]) => getDepthChart(...args),
 }));
 
 /// The page renders the action as a form `action={}`; it is never called in
@@ -49,6 +51,7 @@ vi.mock("next/navigation", () => ({
 
 import TeamHomePage from "./page";
 import { POSITION_COORDS } from "@/components/diamond-geometry";
+import { courtHeroViewBox } from "@/components/MiniCourtHero";
 import { heroViewBox } from "@/components/MiniDiamondHero";
 
 /// 6:00 PM Central on 15 August 2026 (CDT, UTC-5).
@@ -114,6 +117,7 @@ beforeEach(() => {
   guardedRosteredPlayerIds.mockResolvedValue(new Set());
   listRsvpsForEvents.mockResolvedValue([]);
   getChart.mockResolvedValue([]);
+  getDepthChart.mockResolvedValue([]);
   getTeamById.mockResolvedValue({
     id: "team-1",
     name: "Sluggers",
@@ -435,34 +439,6 @@ describe("TeamHomePage your players", () => {
     expect(noChartHtml).not.toContain("fill-grass");
   });
 
-  // Basketball has no chart yet: the card is the jersey and the name, with no
-  // chart line, no field and no banana, and never "No chart set yet", which
-  // would promise a chart that is not coming. RSVP is sport-neutral.
-  it("shows a basketball kid's name and jersey only, and keeps the RSVP buttons", async () => {
-    getTeamById.mockResolvedValue({
-      id: "team-1",
-      sport: "BASKETBALL",
-      name: "Hoopers",
-      season: "Winter 2026",
-      allPlay: true,
-      groupMeUrl: null,
-      archivedAt: null,
-    });
-    getChart.mockResolvedValue([{ ...REESE, position: "SHORTSTOP" }]);
-
-    const html = await render();
-
-    expect(html).toContain("Reese");
-    expect(html).toContain(">12<");
-    expect(html).not.toContain("Bats 3rd");
-    expect(html).not.toContain("No chart set yet");
-    expect(html).not.toContain("Substitute");
-    expect(html).not.toContain("fill-grass");
-    expect(html).not.toContain("bg-banana");
-    expect(html).toContain("Going");
-    expect(html).toContain("Not going");
-  });
-
   it("announces the cards with the staggered lineup rise", async () => {
     guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1", "player-3"]));
     getChart.mockResolvedValue([
@@ -701,6 +677,129 @@ describe("TeamHomePage your players", () => {
     expect(html).not.toContain("Going");
     expect(getChart).not.toHaveBeenCalled();
     expect(listRsvpsForEvents).not.toHaveBeenCalled();
+  });
+});
+
+describe("TeamHomePage basketball player card", () => {
+  const HOOPERS = {
+    id: "team-1",
+    sport: "BASKETBALL",
+    name: "Hoopers",
+    season: "Winter 2026",
+    allPlay: true,
+    groupMeUrl: null,
+    archivedAt: null,
+  };
+  const JORDAN = {
+    entryId: "entry-1",
+    playerId: "player-1",
+    playerName: "Jordan",
+    jerseyNumber: 23,
+    courtPosition: "POINT_GUARD" as const,
+    benchOrder: null,
+  };
+  const OTHER = {
+    entryId: "entry-9",
+    playerId: "player-9",
+    playerName: "Avery",
+    jerseyNumber: 5,
+    courtPosition: null,
+    benchOrder: 1,
+  };
+
+  beforeEach(() => {
+    requireTeamAccess.mockResolvedValue({ role: "PARENT", userId: "user-1" });
+    nextEvents.mockResolvedValue([GAME]);
+    guardedRosteredPlayerIds.mockResolvedValue(new Set(["player-1"]));
+    getTeamById.mockResolvedValue(HOOPERS);
+    getDepthChart.mockResolvedValue([JORDAN, OTHER]);
+  });
+
+  // The depth chart, never baseball's columns: a basketball roster entry's
+  // battingOrder/position are never written, so reading them would describe
+  // nothing.
+  it("reads the depth chart rather than baseball's chart", async () => {
+    await render();
+
+    expect(getDepthChart).toHaveBeenCalledWith("team-1");
+    expect(getChart).not.toHaveBeenCalled();
+  });
+
+  it("puts a starter on the half court and spends the banana on them", async () => {
+    const html = await render();
+
+    expect(html).toContain("Jordan");
+    expect(html).toContain(">23<");
+    expect(html).toContain("Starting point guard");
+    expect(html).toContain(
+      `viewBox="${courtHeroViewBox("POINT_GUARD")}"`,
+    );
+    expect(html).toContain("fill-hardwood");
+    expect(html).toContain("bg-banana");
+    // Never the diamond.
+    expect(html).not.toContain("fill-grass");
+  });
+
+  // Game Day numbers the bench 1..n in the order the coach set, so the card
+  // has to say the same number for the same kid.
+  it("gives a bench kid their place in the rotation, quietly and off the court", async () => {
+    getDepthChart.mockResolvedValue([
+      { ...JORDAN, courtPosition: null, benchOrder: 2 },
+      OTHER,
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("2nd off the bench");
+    expect(html).not.toContain("fill-hardwood");
+    expect(html).not.toContain("bg-banana");
+  });
+
+  it("counts a kid the coach hasn't placed at the bottom of the bench, as Game Day does", async () => {
+    getDepthChart.mockResolvedValue([
+      { ...JORDAN, courtPosition: null, benchOrder: null },
+      OTHER,
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("2nd off the bench");
+  });
+
+  it("says no depth chart is set rather than inventing a role", async () => {
+    getDepthChart.mockResolvedValue([
+      { ...JORDAN, courtPosition: null },
+      { ...OTHER, benchOrder: null },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("No depth chart set yet");
+    expect(html).not.toContain("off the bench");
+    expect(html).not.toContain("fill-hardwood");
+    expect(html).not.toContain("bg-banana");
+  });
+
+  it("speaks basketball, never baseball", async () => {
+    const html = await render();
+
+    expect(html).not.toContain("Bats");
+    expect(html).not.toContain("Substitute");
+    expect(html).not.toContain("No chart set yet");
+  });
+
+  it("never shows another family's kid", async () => {
+    const html = await render();
+
+    expect(html).not.toContain("Avery");
+  });
+
+  it("keeps the one-tap RSVP buttons, which are sport-neutral", async () => {
+    const html = await render();
+
+    expect(html).toContain("Going");
+    expect(html).toContain("Not going");
+    expect(html).toContain('name="playerId" value="player-1"');
   });
 });
 
