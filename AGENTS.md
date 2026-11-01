@@ -521,6 +521,14 @@ production — the dev command can prompt, generate new migrations, and reset th
     the `VERCEL_TOKEN` repository secret). Both are registered with the auth service; the
     one Preview's `AUTH_URL` names is the one where sign-in completes. Don't clear either
     domain's git branch in Vercel: a project domain with no branch is a Production domain.
+  - **Agents sign in with a test identity, through the same gate as everyone.** The
+    address and password are supplied by Brian in the agent's environment as
+    `AI_USERNAME` and `AI_PASSWORD` (see `.env.example`); the app reads neither. Never
+    commit their values or print `AI_PASSWORD`. The account is let in by an ordinary
+    PARENT invitation on the Eagles team, accepted on its first login like any parent's,
+    never by an allowlist, an `OWNER_EMAIL` change, or a bypass of `decideSignIn`. If the
+    invitation lapses before that first login (they last `INVITATION_TTL_DAYS`), re-issue
+    it from Eagles' Members page.
 - **`public/sw.js` caches nothing, and must not start.** It is `skipWaiting`,
   `clients.claim`, and the `push` / `notificationclick` pair — no `fetch` handler, which is
   Decision 9 and the reason there is no Workbox build step. Adding a `fetch` handler is not
