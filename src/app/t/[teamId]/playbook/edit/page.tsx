@@ -100,6 +100,10 @@ export default async function EditPlaybookPage({
             players see each one by name with an animation of it running.
           </p>
           <PlaybookPicker
+            // Remount whenever the stored playbook changes, so after a
+            // `playbook-changed` refusal the ticks really are the other
+            // coach's — the same reason the chart editors key on their data.
+            key={JSON.stringify(stored)}
             teamId={teamId}
             library={PLAY_LIBRARY}
             chosen={chosen}

@@ -195,14 +195,29 @@ describe("playSnapshot", () => {
 
   it("loops back to the set after one full play", () => {
     const loop = playDurationSeconds(TOY);
-    expect(loop).toBeCloseTo(PLAY_HOLD_SECONDS + 2 * stepLength);
+    expect(loop).toBeCloseTo(PLAY_HOLD_SECONDS + 2 * stepLength + PLAY_MOVE_SECONDS);
     expect(playSnapshot(TOY, loop + 0.01)).toEqual(playSnapshot(TOY, 0.01));
   });
 
-  it("ends every library play exactly on its last frame", () => {
+  it("walks everyone back to the set instead of snapping there", () => {
+    const loop = playDurationSeconds(TOY);
+    const halfway = playSnapshot(TOY, loop - PLAY_MOVE_SECONDS / 2);
+    // Player 1 is halfway from x=10 back to x=0; the ball is in the air from 2
+    // back to 1.
+    expect(halfway.frameIndex).toBe(0);
+    expect(halfway.players[0].x).toBeCloseTo(5);
+    expect(halfway.ball.x).toBeCloseTo(10);
+    const end = playSnapshot(TOY, loop - 0.0001);
+    expect(end.players[0].x).toBeCloseTo(0, 2);
+  });
+
+  it("ends every library play's last hold exactly on its last frame", () => {
     for (const play of PLAY_LIBRARY) {
       const last = play.frames.length - 1;
-      const snap = playSnapshot(play, playDurationSeconds(play) - 0.001);
+      const snap = playSnapshot(
+        play,
+        playDurationSeconds(play) - PLAY_MOVE_SECONDS - 0.001,
+      );
       expect(snap.frameIndex).toBe(last);
       expect(snap.players).toEqual([...play.frames[last].players]);
       expect(snap.ball).toEqual(play.frames[last].players[play.frames[last].ball]);

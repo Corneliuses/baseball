@@ -4,7 +4,12 @@ import * as React from "react";
 
 import { PlayAnimation } from "@/components/PlayAnimation";
 import { SubmitButton } from "@/components/SubmitButton";
-import { MAX_PLAYBOOK_PLAYS, type Play } from "@/lib/plays";
+import {
+  MAX_PLAYBOOK_PLAYS,
+  samePlaybook,
+  validatePlaybook,
+  type Play,
+} from "@/lib/plays";
 
 import { savePlaybookAction } from "./actions";
 
@@ -33,8 +38,11 @@ export function PlaybookPicker({
     () => new Set(chosen),
   );
   const full = selected.size >= MAX_PLAYBOOK_PLAYS;
-  const unchanged =
-    selected.size === chosen.length && chosen.every((id) => selected.has(id));
+  // "Would writing change the database", not "has the coach ticked anything":
+  // a stored id the library has since dropped makes those differ, and the
+  // coach must be able to save the cleaned-up list (AGENTS.md, Save vs Cancel).
+  const draft = validatePlaybook([...selected]);
+  const unchanged = draft.ok && samePlaybook(draft.playIds, baseline);
 
   const toggle = (id: string) => {
     setSelected((current) => {

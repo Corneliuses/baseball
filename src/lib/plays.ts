@@ -354,7 +354,7 @@ export function getPlay(id: string): Play | undefined {
   return PLAYS_BY_ID.get(id);
 }
 
-/// A stored playbook as the plays it names, in the coach's order. Ids no
+/// A stored playbook as the plays it names, in stored (library) order. Ids no
 /// longer in the library are dropped, as are repeats — a stored column is
 /// read as untrusted, the same as the form that wrote it.
 export function resolvePlaybook(ids: readonly string[]): Play[] {
@@ -375,8 +375,9 @@ export type PlaybookValidation =
   | { ok: false; reason: "unknown-play" | "duplicate-play" | "too-many-plays" };
 
 /// The save's boundary: every id is in the library, none repeats, and there
-/// are no more than `MAX_PLAYBOOK_PLAYS`. Order is kept, and the stored order
-/// is the library's, so the playbook reads the same way the picker lists it.
+/// are no more than `MAX_PLAYBOOK_PLAYS`. The ids come back in **library**
+/// order, whatever order they were sent in, so the playbook reads the same way
+/// the picker lists it.
 export function validatePlaybook(ids: readonly string[]): PlaybookValidation {
   if (ids.length > MAX_PLAYBOOK_PLAYS) {
     return { ok: false, reason: "too-many-plays" };
@@ -412,10 +413,13 @@ export const PLAY_HOLD_SECONDS = 1.3;
 
 const STEP_SECONDS = PLAY_MOVE_SECONDS + PLAY_HOLD_SECONDS;
 
-/// One full loop of a play: a hold on the set, then a move and a hold for
-/// every later frame.
+/// One full loop of a play: a hold on the set, a move and a hold for every
+/// later frame, then a move back to the set — so the loop walks everyone back
+/// into place instead of snapping them there in one frame.
 export function playDurationSeconds(play: Play): number {
-  return PLAY_HOLD_SECONDS + (play.frames.length - 1) * STEP_SECONDS;
+  return (
+    PLAY_HOLD_SECONDS + (play.frames.length - 1) * STEP_SECONDS + PLAY_MOVE_SECONDS
+  );
 }
 
 export type PlaySnapshot = {
@@ -461,6 +465,23 @@ export function playSnapshot(play: Play, seconds: number): PlaySnapshot {
   }
 
   const afterSet = t - PLAY_HOLD_SECONDS;
+  const lastHoldEnds = (frames.length - 1) * STEP_SECONDS;
+  if (afterSet >= lastHoldEnds) {
+    // The walk back to the set. The ball goes back to the set's holder the
+    // same way a pass would, and the caption is the set's again.
+    const last = frames[frames.length - 1];
+    const first = frames[0];
+    const progress = ease(Math.min((afterSet - lastHoldEnds) / PLAY_MOVE_SECONDS, 1));
+    const players = last.players.map((point, index) =>
+      lerp(point, first.players[index], progress),
+    );
+    const ball =
+      last.ball === first.ball
+        ? players[first.ball]
+        : lerp(last.players[last.ball], first.players[first.ball], progress);
+    return { players, ball, frameIndex: 0 };
+  }
+
   const step = Math.min(Math.floor(afterSet / STEP_SECONDS), frames.length - 2);
   const within = afterSet - step * STEP_SECONDS;
   if (within >= PLAY_MOVE_SECONDS) {

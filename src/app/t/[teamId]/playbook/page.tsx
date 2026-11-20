@@ -77,6 +77,7 @@ export default async function PlaybookPage({
             through 5, and the orange dot is the ball. Tap Pause to stop, or
             Back and Next to go step by step.
           </p>
+          <PositionsNote />
           <ol className="space-y-6">
             {plays.map((play) => (
               <li key={play.id}>
@@ -95,5 +96,17 @@ export default async function PlaybookPage({
         </>
       )}
     </div>
+  );
+}
+
+/// The coach's standing note to families above the plays: in youth
+/// basketball everyone rotates, so a play is only useful if a kid can run it
+/// from any spot.
+function PositionsNote() {
+  return (
+    <p className="rounded-md border-2 border-primary/30 bg-primary/10 px-3 py-2.5 text-sm font-semibold text-foreground">
+      Make sure your child knows all the positions. Players rotate, so in any
+      play they could be 1, 2, 3, 4 or 5.
+    </p>
   );
 }

@@ -65,6 +65,10 @@ describe("PlaybookPage", () => {
     expect(html).not.toContain("/playbook/edit");
   });
 
+  it("reminds families to learn every position", async () => {
+    expect(await render()).toContain("Make sure your child knows all the positions");
+  });
+
   it("tells a parent the coach hasn't chosen yet", async () => {
     getTeamPlaybook.mockResolvedValue([]);
 
