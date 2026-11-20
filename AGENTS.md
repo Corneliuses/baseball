@@ -49,7 +49,9 @@ roster entry detail at `roster/[entryId]`, the schedule at `schedule` /
 `schedule/[eventId]`, the read-only chart at `view`, the two coach-only drag-and-drop
 chart editors — the batting order at `chart` and the positions diamond at
 `chart/positions` — and team email messaging at `messages` (coach-only broadcast
-history) and `messages/new` (the compose form every role uses) plus `/t/new` for
+history) and `messages/new` (the compose form every role uses), basketball's playbook at
+`playbook` (every member: each chosen play by name with an animation of it running) and
+`playbook/edit` (coach-only: tick up to five plays from the library), plus `/t/new` for
 owner-gated team creation, which asks for the team's sport (fixed from then on). The four
 chart routes — `view`, `readiness`, `chart` and `chart/positions` — `notFound()` for a team
 whose sport has no chart (rule 4 below), so a pasted URL behaves like a missing page. Outside `/t/` entirely — because `proxy.ts` would bounce a
@@ -182,7 +184,9 @@ These are structural, not stylistic. Read the comments in `prisma/schema.prisma`
    diamond or the court; `/readiness` checks either chart; `/chart/depth` is basketball's
    editor), every chart
    save (the real boundary — a forged POST must not write one sport's columns onto the
-   other's roster), and team home's role line and `MiniDiamondHero`. Do not widen
+   other's roster), and team home's role line and `MiniDiamondHero`. The playbook
+   (`Team.playbook`, gated by `hasPlaybook`) is basketball's too and is never written for
+   baseball; see the playbook gotcha below. Do not widen
    `Position` or reuse baseball's columns for the court — `CourtPosition` is its own enum
    and `src/lib/depth-chart.ts` its own pure module. The sport check lives in the page and
    the action, never in `requireTeamAccess` or `proxy.ts`: access and sport are different
@@ -862,3 +866,17 @@ production — the dev command can prompt, generate new migrations, and reset th
   `src/lib/auth-client.ts` both avoid on purpose. `/api/push/subscription`'s `DELETE` matches on
   endpoint **and** `userId`: the endpoint is unique table-wide, so without the user filter
   it would be a fine deletion key for anyone who learned one.
+- **The play library is code, and a team's playbook is only ids into it.** `PLAY_LIBRARY`
+  (`src/lib/plays.ts`) seeds nine simple youth plays, each a few frames of five players and
+  a ball holder in feet on `court-geometry`'s half court; `Team.playbook` stores the ids the
+  coach ticked, at most `MAX_PLAYBOOK_PLAYS` (5), in library order. Never rename a play's
+  `id` — a team that chose it silently loses it — and don't add a `Play` table to edit
+  plays in the database: a play dropped from the library is ignored on read
+  (`resolvePlaybook`), not stranded. `validatePlaybook` in the action is the cap; the
+  picker's disabled checkboxes are a convenience. The save replaces the whole list, so it
+  carries a `baseline` and refuses on a mismatch (`playbook-changed`), like the charts.
+  `PlayAnimation` asks the pure `playSnapshot` where everyone is on each animation frame;
+  the server renders the set, paused, and the clock starts on the client unless the reader
+  prefers reduced motion (then Back/Next step through it). It spends **no banana** — the
+  rim is court-line white and the ball the team's primary — because a playbook page holds
+  up to five courts and design-plan §2's budget is one per screen.

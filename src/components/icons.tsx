@@ -143,6 +143,19 @@ export function ClipboardIcon({ className }: IconProps) {
   );
 }
 
+/// Playbook. A coach's whiteboard with an X, an O and the arrow between them.
+export function PlaybookIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <rect x="3" y="4" width="18" height="14" rx="1.5" />
+      <path d="M6.5 7.5l3 3M9.5 7.5l-3 3" />
+      <circle cx="16" cy="13.5" r="1.75" />
+      <path d="M10 10.5c1.5 2 2.5 3 4 3" />
+      <path d="M9 21l3-3 3 3" />
+    </Icon>
+  );
+}
+
 /// Directory. A contact card: one face, two lines of details.
 export function RolodexIcon({ className }: IconProps) {
   return (
