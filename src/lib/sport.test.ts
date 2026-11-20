@@ -8,6 +8,7 @@ import {
   SPORT_LABELS,
   hasAnyChart,
   hasDepthChart,
+  hasPlaybook,
   hasLineupChart,
   sportTheme,
 } from "./sport";
@@ -71,5 +72,12 @@ describe("sportTheme", () => {
       expect(second).toBeGreaterThan(first);
       expect(css.slice(0, second).lastIndexOf("@media (prefers-color-scheme: dark)")).toBeGreaterThan(first);
     }
+  });
+});
+
+describe("hasPlaybook", () => {
+  it("is basketball's alone", () => {
+    expect(hasPlaybook("BASKETBALL")).toBe(true);
+    expect(hasPlaybook("BASEBALL")).toBe(false);
   });
 });

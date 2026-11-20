@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { Role, Sport } from "@/generated/prisma/enums";
-import { hasAnyChart, hasDepthChart } from "@/lib/sport";
+import { hasAnyChart, hasDepthChart, hasPlaybook } from "@/lib/sport";
 import { cn } from "@/lib/utils";
 import {
   CapIcon,
@@ -17,6 +17,7 @@ import {
   MegaphoneIcon,
   PennantIcon,
   PersonIcon,
+  PlaybookIcon,
   RolodexIcon,
   ScoreboardIcon,
   TicketIcon,
@@ -103,6 +104,7 @@ function navItems(teamId: string, role: Role, sport: Sport): TeamNavItem[] {
   const base = `/t/${teamId}`;
   const anyChart = hasAnyChart(sport);
   const depth = hasDepthChart(sport);
+  const playbook = hasPlaybook(sport);
   const items: TeamNavItem[] = [
     { href: base, label: "Home", icon: PennantIcon, group: "team", exact: true },
     { href: `${base}/schedule`, label: "Schedule", icon: TicketIcon, group: "team" },
@@ -113,6 +115,17 @@ function navItems(teamId: string, role: Role, sport: Sport): TeamNavItem[] {
       label: "Game Day",
       icon: depth ? CourtIcon : DiamondIcon,
       group: "team",
+    });
+  }
+  if (playbook) {
+    // Exact, so the coach's picker underneath lights only its own tab
+    // rather than this one as well.
+    items.push({
+      href: `${base}/playbook`,
+      label: "Playbook",
+      icon: PlaybookIcon,
+      group: "team",
+      exact: true,
     });
   }
   items.push(
@@ -136,6 +149,14 @@ function navItems(teamId: string, role: Role, sport: Sport): TeamNavItem[] {
         href: depth ? `${base}/chart/depth` : `${base}/chart`,
         label: "Edit Lineup",
         icon: ClipboardIcon,
+        group: "coach",
+      });
+    }
+    if (playbook) {
+      items.push({
+        href: `${base}/playbook/edit`,
+        label: "Edit Playbook",
+        icon: PlaybookIcon,
         group: "coach",
       });
     }

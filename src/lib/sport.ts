@@ -26,6 +26,14 @@ export function hasDepthChart(sport: Sport): boolean {
   return sport === "BASKETBALL";
 }
 
+/// Whether a team of this sport has a playbook: up to five plays the coach
+/// picks from the library in src/lib/plays.ts, shown to every member with an
+/// animation of each play. Basketball's alone, like the depth chart; the
+/// Playbook tabs, both playbook pages and the save all ask this.
+export function hasPlaybook(sport: Sport): boolean {
+  return sport === "BASKETBALL";
+}
+
 /// Whether the team has any standing chart at all, which is what the Game Day,
 /// Readiness and Edit Lineup tabs need.
 export function hasAnyChart(sport: Sport): boolean {

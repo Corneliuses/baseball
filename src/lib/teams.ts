@@ -156,3 +156,29 @@ export async function unarchiveTeam(teamId: string): Promise<Team> {
     select: TEAM_SELECT,
   });
 }
+
+/// The ids a basketball team's playbook holds, as stored. Callers resolve them
+/// against the library with `resolvePlaybook` (src/lib/plays.ts), which also
+/// drops anything the library no longer has. Kept out of `TEAM_SELECT` so the
+/// switcher, the cards and every page that only needs the team's name don't
+/// read it.
+export async function getTeamPlaybook(teamId: string): Promise<string[]> {
+  const team = await db.team.findUnique({
+    where: { id: teamId },
+    select: { playbook: true },
+  });
+  return team?.playbook ?? [];
+}
+
+/// Replace a team's playbook. The caller has already run requireTeamAccess,
+/// checked the sport, and validated the ids with `validatePlaybook`.
+export async function saveTeamPlaybook(
+  teamId: string,
+  playIds: readonly string[],
+): Promise<void> {
+  await db.team.update({
+    where: { id: teamId },
+    data: { playbook: [...playIds] },
+    select: { id: true },
+  });
+}

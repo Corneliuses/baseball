@@ -211,6 +211,31 @@ describe("TeamNav for a basketball team", () => {
   });
 });
 
+describe("TeamNav playbook tabs", () => {
+  it("gives every basketball member a Playbook tab, and the coach the picker", () => {
+    const parent = render("PARENT", "/t/team-1", "BASKETBALL");
+    expect(parent).toContain('href="/t/team-1/playbook"');
+    expect(parent).toContain("Playbook");
+    expect(parent).not.toContain('href="/t/team-1/playbook/edit"');
+
+    const coach = render("COACH", "/t/team-1", "BASKETBALL");
+    expect(coach).toContain('href="/t/team-1/playbook"');
+    expect(coach).toContain('href="/t/team-1/playbook/edit"');
+    expect(coach).toContain("Edit Playbook");
+  });
+
+  it("never shows a baseball team either playbook tab", () => {
+    const html = render("OWNER");
+    expect(html).not.toContain("/playbook");
+  });
+
+  it("lights only Edit Playbook while the coach is in the picker", () => {
+    const html = render("COACH", "/t/team-1/playbook/edit", "BASKETBALL");
+    expect(linkFor(html, "/t/team-1/playbook/edit")).toContain('aria-current="page"');
+    expect(linkFor(html, "/t/team-1/playbook")).not.toContain("aria-current");
+  });
+});
+
 describe("TeamNav labels", () => {
   // The audit's C4 in one assertion: "Lineup" was the read-only view and
   // "Chart" was the editor, so the tab that sounded like a document was the

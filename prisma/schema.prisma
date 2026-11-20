@@ -175,6 +175,14 @@ model Team {
   /// keep serving.
   calendarToken String @unique
 
+  /// Basketball only: the plays the coach chose for the team's playbook, as
+  /// ids into the code-defined library (src/lib/plays.ts), at most five, in
+  /// library order. Never written for baseball (rule 4). Ids rather than a
+  /// Play table because the library is seeded in code: a play the library
+  /// drops is ignored on read (`resolvePlaybook`), not stranded. The save
+  /// replaces the whole list, so it carries a baseline like the charts.
+  playbook String[] @default([])
+
   memberships   Membership[]
   rosterEntries RosterEntry[]
   events        Event[]
