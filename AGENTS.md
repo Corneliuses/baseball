@@ -187,7 +187,7 @@ These are structural, not stylistic. Read the comments in `prisma/schema.prisma`
    save (the real boundary — a forged POST must not write one sport's columns onto the
    other's roster), and team home's role line and `MiniDiamondHero`. The playbook
    (`Team.playbook`, gated by `hasPlaybook`) and the at-home skills (`Team.skills`, gated
-   by `hasSkills`) are basketball's too and is never written for
+   by `hasSkills`) are basketball's too and are never written for
    baseball; see the playbook gotcha below. Do not widen
    `Position` or reuse baseball's columns for the court — `CourtPosition` is its own enum
    and `src/lib/depth-chart.ts` its own pure module. The sport check lives in the page and
