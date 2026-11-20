@@ -16,14 +16,19 @@ import {
 } from "./plays";
 
 describe("PLAY_LIBRARY", () => {
-  it("seeds five simple plays", () => {
+  it("seeds nine simple plays, more than a playbook holds", () => {
     expect(PLAY_LIBRARY.map((play) => play.name)).toEqual([
       "Give and Go",
       "Pick and Roll",
       "Pass and Cut",
       "Backdoor Cut",
       "Box Inbounds",
+      "Pin Down",
+      "Box Screen Up",
+      "Horns",
+      "Three-Lane Fast Break",
     ]);
+    expect(PLAY_LIBRARY.length).toBeGreaterThan(MAX_PLAYBOOK_PLAYS);
   });
 
   it("has unique, slug-shaped ids", () => {
@@ -82,7 +87,7 @@ describe("resolvePlaybook", () => {
     expect(plays.map((play) => play.id)).toEqual(["backdoor-cut", "give-and-go"]);
   });
 
-  it("returns the whole library when every play is chosen", () => {
+  it("never returns more than the cap, even from a column written around the action", () => {
     const ids = PLAY_LIBRARY.map((play) => play.id);
     expect(resolvePlaybook(ids)).toHaveLength(MAX_PLAYBOOK_PLAYS);
   });

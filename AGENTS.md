@@ -867,7 +867,7 @@ production — the dev command can prompt, generate new migrations, and reset th
   endpoint **and** `userId`: the endpoint is unique table-wide, so without the user filter
   it would be a fine deletion key for anyone who learned one.
 - **The play library is code, and a team's playbook is only ids into it.** `PLAY_LIBRARY`
-  (`src/lib/plays.ts`) seeds five simple youth plays, each a few frames of five players and
+  (`src/lib/plays.ts`) seeds nine simple youth plays, each a few frames of five players and
   a ball holder in feet on `court-geometry`'s half court; `Team.playbook` stores the ids the
   coach ticked, at most `MAX_PLAYBOOK_PLAYS` (5), in library order. Never rename a play's
   `id` — a team that chose it silently loses it — and don't add a `Play` table to edit

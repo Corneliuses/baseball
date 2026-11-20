@@ -63,8 +63,9 @@ const LEFT_LAYUP: CourtPoint = { x: 22, y: 6 };
 /// an inbounder is drawn standing on it.
 const INBOUNDER: CourtPoint = { x: 37, y: 2.2 };
 
-/// The seeded library — five simple plays a youth team can actually run — in
-/// the order the coach's picker lists it.
+/// The seeded library — nine simple plays a youth team can actually run — in
+/// the order the coach's picker lists it. More plays than a playbook holds, so
+/// picking five is a real choice.
 export const PLAY_LIBRARY: readonly Play[] = [
   {
     id: "give-and-go",
@@ -213,6 +214,133 @@ export const PLAY_LIBRARY: readonly Play[] = [
         players: [INBOUNDER, { x: 24, y: 9 }, { x: 30, y: 4.5 }, { x: 38, y: 26 }, LEFT_WING],
         ball: 2,
         caption: "1 passes to 3 for the layup. 4 and 5 step out as safety valves.",
+      },
+    ],
+  },
+  {
+    id: "pin-down",
+    name: "Pin Down",
+    summary:
+      "A forward runs down to screen for a guard on the block, who pops out to the wing for the ball.",
+    frames: [
+      {
+        players: [TOP, RIGHT_BLOCK, LEFT_WING, RIGHT_WING, LEFT_BLOCK],
+        ball: 0,
+        caption: "1 up top. 2 starts on the right block, 4 on the right wing.",
+      },
+      {
+        players: [TOP, RIGHT_BLOCK, LEFT_WING, { x: 36, y: 11 }, LEFT_BLOCK],
+        ball: 0,
+        caption: "4 runs down and sets a screen for 2.",
+      },
+      {
+        players: [TOP, RIGHT_WING, LEFT_WING, { x: 36, y: 11 }, LEFT_BLOCK],
+        ball: 0,
+        caption: "2 sprints up off the screen to the wing.",
+      },
+      {
+        players: [TOP, RIGHT_WING, LEFT_WING, RIGHT_BLOCK, LEFT_BLOCK],
+        ball: 1,
+        caption: "1 passes to 2. 4 seals the defender on the block.",
+      },
+      {
+        players: [TOP, RIGHT_WING, LEFT_WING, RIGHT_BLOCK, LEFT_BLOCK],
+        ball: 3,
+        caption: "2 feeds 4 inside for a short shot.",
+      },
+    ],
+  },
+  {
+    id: "box-screen-up",
+    name: "Box Screen Up",
+    summary:
+      "From a box set, the players on the blocks screen up and the bigs at the elbows pop open.",
+    frames: [
+      {
+        players: [TOP, RIGHT_BLOCK, LEFT_BLOCK, RIGHT_ELBOW, LEFT_ELBOW],
+        ball: 0,
+        caption: "Box set: 1 up top, 4 and 5 at the elbows, 2 and 3 on the blocks.",
+      },
+      {
+        players: [TOP, { x: 32, y: 13 }, { x: 18, y: 13 }, RIGHT_ELBOW, LEFT_ELBOW],
+        ball: 0,
+        caption: "2 and 3 step up and screen for the elbows.",
+      },
+      {
+        players: [TOP, { x: 32, y: 13 }, { x: 18, y: 13 }, RIGHT_WING, LEFT_WING],
+        ball: 0,
+        caption: "4 and 5 pop out to the wings.",
+      },
+      {
+        players: [TOP, RIGHT_BLOCK, LEFT_BLOCK, RIGHT_WING, LEFT_WING],
+        ball: 3,
+        caption: "1 passes to 4 on the wing; 2 and 3 roll back to the blocks.",
+      },
+      {
+        players: [TOP, RIGHT_BLOCK, LEFT_BLOCK, RIGHT_WING, LEFT_WING],
+        ball: 1,
+        caption: "4 feeds 2 on the block for a short shot.",
+      },
+    ],
+  },
+  {
+    id: "horns",
+    name: "Horns",
+    summary:
+      "Two bigs at the elbows give the ball handler a screen on either side, with shooters in the corners.",
+    frames: [
+      {
+        players: [TOP, RIGHT_CORNER, LEFT_CORNER, RIGHT_ELBOW, LEFT_ELBOW],
+        ball: 0,
+        caption: "Horns: 1 up top, 4 and 5 at the elbows, 2 and 3 in the corners.",
+      },
+      {
+        players: [TOP, RIGHT_CORNER, LEFT_CORNER, { x: 29, y: 28 }, LEFT_ELBOW],
+        ball: 0,
+        caption: "4 steps up to screen for 1.",
+      },
+      {
+        players: [{ x: 38, y: 14 }, RIGHT_CORNER, LEFT_CORNER, { x: 29, y: 28 }, LEFT_ELBOW],
+        ball: 0,
+        caption: "1 drives off the screen toward the basket.",
+      },
+      {
+        players: [{ x: 38, y: 14 }, RIGHT_CORNER, LEFT_CORNER, { x: 29, y: 28 }, LEFT_BLOCK],
+        ball: 0,
+        caption: "5 dives to the block as the defense collapses.",
+      },
+      {
+        players: [{ x: 38, y: 14 }, RIGHT_CORNER, LEFT_CORNER, { x: 29, y: 28 }, LEFT_BLOCK],
+        ball: 1,
+        caption: "1 kicks it out to 2 in the corner for the open shot.",
+      },
+    ],
+  },
+  {
+    id: "three-lane-break",
+    name: "Three-Lane Fast Break",
+    summary:
+      "After a rebound, fill the middle and both side lanes and race the ball up the floor.",
+    frames: [
+      {
+        players: [{ x: 25, y: 44 }, { x: 5, y: 44 }, { x: 45, y: 44 }, { x: 16, y: 45 }, { x: 34, y: 45 }],
+        ball: 0,
+        caption: "We get the ball at half court: 1 in the middle, 2 and 3 on the sidelines.",
+      },
+      {
+        players: [{ x: 25, y: 30 }, { x: 6, y: 22 }, { x: 44, y: 22 }, { x: 18, y: 42 }, { x: 32, y: 42 }],
+        ball: 0,
+        caption: "Everyone sprints. 2 and 3 stay wide and run ahead of the ball.",
+      },
+      {
+        players: [{ x: 25, y: 21 }, LEFT_LAYUP, { x: 44, y: 12 }, { x: 20, y: 34 }, { x: 30, y: 34 }],
+        ball: 0,
+        caption: "1 stops at the free-throw line. 2 cuts in from the left lane.",
+      },
+      {
+        players: [{ x: 25, y: 21 }, LEFT_LAYUP, { x: 44, y: 12 }, { x: 20, y: 34 }, { x: 30, y: 34 }],
+        ball: 1,
+        caption: "1 passes to 2 for the layup. 4 and 5 trail for the rebound.",
       },
     ],
   },
