@@ -90,7 +90,7 @@ export function SkillAnimation({ skill }: { skill: Skill }) {
     const dx = ball.x - shoulder.x;
     const dy = ball.y - shoulder.y;
     const length = Math.hypot(dx, dy);
-    const reach = Math.min(1, (ARM_REACH * ft) / Math.max(length, 1));
+    const reach = Math.min(1, (ARM_REACH * figure) / Math.max(length, 1));
     return (
       <line
         key={hand}
