@@ -34,6 +34,14 @@ export function hasPlaybook(sport: Sport): boolean {
   return sport === "BASKETBALL";
 }
 
+/// Whether a team of this sport has an at-home skills list: up to five solo
+/// drills the coach picks from the library in src/lib/skills.ts, shown to
+/// every member with an animation of each. Basketball's alone, like the
+/// playbook; the Skills tabs, both skills pages and the save all ask this.
+export function hasSkills(sport: Sport): boolean {
+  return sport === "BASKETBALL";
+}
+
 /// Whether the team has any standing chart at all, which is what the Game Day,
 /// Readiness and Edit Lineup tabs need.
 export function hasAnyChart(sport: Sport): boolean {

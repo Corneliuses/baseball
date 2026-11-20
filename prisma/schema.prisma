@@ -183,6 +183,13 @@ model Team {
   /// replaces the whole list, so it carries a baseline like the charts.
   playbook String[] @default([])
 
+  /// Basketball only: the at-home skills the coach chose for the team, as ids
+  /// into the code-defined library (src/lib/skills.ts), at most five, in
+  /// library order — the playbook's twin, for a kid practicing alone with no
+  /// hoop. Never written for baseball (rule 4). A skill the library drops is
+  /// ignored on read (`resolveSkills`); the save carries a baseline.
+  skills String[] @default([])
+
   memberships   Membership[]
   rosterEntries RosterEntry[]
   events        Event[]

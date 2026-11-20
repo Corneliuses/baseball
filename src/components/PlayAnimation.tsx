@@ -1,8 +1,10 @@
 "use client";
 
-import * as React from "react";
-
 import { CourtArt } from "@/components/CourtArt";
+import {
+  StepCaptionAndControls,
+  useLoopClock,
+} from "@/components/animation-playback";
 import { COURT_GEOMETRY } from "@/components/court-geometry";
 import {
   frameHoldSeconds,
@@ -19,30 +21,6 @@ const BALL_RADIUS = 1.1 * FT;
 /// held ball and a pass in the air both stay visible.
 const BALL_OFFSET = { x: 1.7 * FT, y: 1.7 * FT };
 
-const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
-
-function subscribeReducedMotion(onChange: () => void): () => void {
-  if (typeof window.matchMedia !== "function") {
-    return () => {};
-  }
-  const query = window.matchMedia(REDUCED_MOTION);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-function reducedMotionSnapshot(): boolean {
-  return (
-    typeof window.matchMedia === "function" &&
-    window.matchMedia(REDUCED_MOTION).matches
-  );
-}
-
-/// The server can't know, so it renders as if motion were reduced: the set,
-/// paused. The clock starts once the client reads the real preference.
-function reducedMotionServerSnapshot(): boolean {
-  return true;
-}
-
 /**
  * One play running on the half court: five numbered players moving through
  * the play's frames, the ball riding with its holder or flying on a pass, and
@@ -53,12 +31,9 @@ function reducedMotionServerSnapshot(): boolean {
  * and asks it where everyone is. Motion isn't used, because what moves is SVG
  * coordinates on a loop, not a transition between two layouts.
  *
- * - **Readable before any JS.** The server renders the set (frame 0) with its
- *   caption; the clock only starts after hydration.
- * - **Reduced motion is honoured.** For a reader whose OS asks for it the play
- *   starts paused, and Back / Next step through it frame by frame.
- * - **Off-screen plays sleep.** A playbook can hold five of these, so each
- *   stops its clock when scrolled out of view.
+ * The clock, the controls, reduced motion and off-screen sleep come from
+ * `animation-playback.tsx`, shared with `SkillAnimation`.
+ *
  * - **No banana.** The rim is drawn in court-line white and the ball in the
  *   team's own primary: a playbook page can hold five courts, and design-plan
  *   §2's one-banana budget can't be spent five times over.
@@ -67,54 +42,11 @@ function reducedMotionServerSnapshot(): boolean {
  * beside it is the play's real content.
  */
 export function PlayAnimation({ play }: { play: Play }) {
-  const [seconds, setSeconds] = React.useState(0);
-  const reducedMotion = React.useSyncExternalStore(
-    subscribeReducedMotion,
-    reducedMotionSnapshot,
-    reducedMotionServerSnapshot,
-  );
-  // null until the reader presses Play, Pause or a step button; until then
-  // the play runs unless their OS asks for less motion.
-  const [choice, setChoice] = React.useState<boolean | null>(null);
-  const playing = choice ?? !reducedMotion;
-  const [visible, setVisible] = React.useState(true);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const node = containerRef.current;
-    if (!node || typeof IntersectionObserver === "undefined") {
-      return;
-    }
-    const observer = new IntersectionObserver(([entry]) => {
-      setVisible(entry.isIntersecting);
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-
-  React.useEffect(() => {
-    if (!playing || !visible) {
-      return;
-    }
-    let frame = 0;
-    let last: number | null = null;
-    const loop = playDurationSeconds(play);
-    const tick = (now: number) => {
-      if (last !== null) {
-        const delta = (now - last) / 1000;
-        setSeconds((current) => (current + delta) % loop);
-      }
-      last = now;
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [playing, visible, play]);
+  const { seconds, playing, containerRef, togglePlaying, seekPaused } =
+    useLoopClock(playDurationSeconds(play), play.id);
 
   const snapshot = playSnapshot(play, seconds);
   const { frameIndex } = snapshot;
-  const frameCount = play.frames.length;
-  const caption = play.frames[frameIndex].caption;
 
   // The step being run (or just finished): from the previous frame into this
   // one. Dashed lines trace each player who moves on it, and a pass gets its
@@ -123,8 +55,7 @@ export function PlayAnimation({ play }: { play: Play }) {
   const to = play.frames[frameIndex];
 
   const stepTo = (index: number) => {
-    setChoice(false);
-    setSeconds(frameHoldSeconds(play, index));
+    seekPaused(frameHoldSeconds(play, index));
   };
 
   const { width, height } = COURT_GEOMETRY;
@@ -211,45 +142,13 @@ export function PlayAnimation({ play }: { play: Play }) {
         </svg>
       </div>
 
-      <p className="min-h-[2.5rem] text-sm text-foreground">
-        <span className="font-mono text-xs font-bold text-muted-foreground">
-          Step {frameIndex + 1} of {frameCount}
-        </span>{" "}
-        {caption}
-      </p>
-
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => stepTo(frameIndex - 1)}
-          disabled={frameIndex === 0}
-          className="rounded-full border-2 border-border bg-card px-3 py-1 text-sm font-semibold text-foreground ring-offset-background hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
-        >
-          Back
-        </button>
-        <button
-          type="button"
-          onClick={() => setChoice(!playing)}
-          aria-pressed={playing}
-          className="rounded-full border-2 border-primary bg-primary px-3.5 py-1 text-sm font-semibold text-primary-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          {playing ? "Pause" : "Play"}
-        </button>
-        <button
-          type="button"
-          onClick={() => stepTo(frameIndex + 1)}
-          disabled={frameIndex === frameCount - 1}
-          className="rounded-full border-2 border-border bg-card px-3 py-1 text-sm font-semibold text-foreground ring-offset-background hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
-
-      <ol className="sr-only">
-        {play.frames.map((frame, index) => (
-          <li key={index}>{frame.caption}</li>
-        ))}
-      </ol>
+      <StepCaptionAndControls
+        playing={playing}
+        onTogglePlaying={togglePlaying}
+        frameIndex={frameIndex}
+        captions={play.frames.map((frame) => frame.caption)}
+        onStep={stepTo}
+      />
     </div>
   );
 }

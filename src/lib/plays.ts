@@ -17,6 +17,12 @@
  * foot turns them into SVG units.
  */
 
+import {
+  resolveSelection,
+  sameSelection,
+  validateSelection,
+} from "@/lib/library-selection";
+
 /// The most plays a coach can put in a team's playbook. Youth teams run a
 /// handful of sets; five is the cap Brian asked for, and the action enforces
 /// it — the form's disabled checkboxes are a convenience, never the boundary.
@@ -358,16 +364,7 @@ export function getPlay(id: string): Play | undefined {
 /// longer in the library are dropped, as are repeats — a stored column is
 /// read as untrusted, the same as the form that wrote it.
 export function resolvePlaybook(ids: readonly string[]): Play[] {
-  const seen = new Set<string>();
-  const plays: Play[] = [];
-  for (const id of ids) {
-    const play = PLAYS_BY_ID.get(id);
-    if (play && !seen.has(id)) {
-      seen.add(id);
-      plays.push(play);
-    }
-  }
-  return plays.slice(0, MAX_PLAYBOOK_PLAYS);
+  return resolveSelection(PLAY_LIBRARY, ids, MAX_PLAYBOOK_PLAYS);
 }
 
 export type PlaybookValidation =
@@ -379,29 +376,22 @@ export type PlaybookValidation =
 /// order, whatever order they were sent in, so the playbook reads the same way
 /// the picker lists it.
 export function validatePlaybook(ids: readonly string[]): PlaybookValidation {
-  if (ids.length > MAX_PLAYBOOK_PLAYS) {
-    return { ok: false, reason: "too-many-plays" };
+  const result = validateSelection(PLAY_LIBRARY, ids, MAX_PLAYBOOK_PLAYS);
+  if (result.ok) {
+    return { ok: true, playIds: result.ids };
   }
-  if (new Set(ids).size !== ids.length) {
-    return { ok: false, reason: "duplicate-play" };
-  }
-  if (ids.some((id) => !PLAYS_BY_ID.has(id))) {
-    return { ok: false, reason: "unknown-play" };
-  }
-  const chosen = new Set(ids);
-  return {
-    ok: true,
-    playIds: PLAY_LIBRARY.filter((play) => chosen.has(play.id)).map(
-      (play) => play.id,
-    ),
-  };
+  return { ok: false, reason: PLAYBOOK_REFUSALS[result.reason] };
 }
+
+const PLAYBOOK_REFUSALS = {
+  unknown: "unknown-play",
+  duplicate: "duplicate-play",
+  "too-many": "too-many-plays",
+} as const;
 
 /// Whether two stored playbooks hold the same plays in the same order — the
 /// lost-update check, exactly as the chart editors compare a baseline.
-export function samePlaybook(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((id, index) => id === b[index]);
-}
+export const samePlaybook = sameSelection;
 
 // ── Animation ──────────────────────────────────────────────────────────────
 
