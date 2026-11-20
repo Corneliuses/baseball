@@ -182,3 +182,27 @@ export async function saveTeamPlaybook(
     select: { id: true },
   });
 }
+
+/// The ids of a basketball team's at-home skills, as stored. Callers resolve
+/// them with `resolveSkills` (src/lib/skills.ts). Kept out of `TEAM_SELECT`
+/// for the same reason as the playbook.
+export async function getTeamSkills(teamId: string): Promise<string[]> {
+  const team = await db.team.findUnique({
+    where: { id: teamId },
+    select: { skills: true },
+  });
+  return team?.skills ?? [];
+}
+
+/// Replace a team's skills. The caller has already run requireTeamAccess,
+/// checked the sport, and validated the ids with `validateSkills`.
+export async function saveTeamSkills(
+  teamId: string,
+  skillIds: readonly string[],
+): Promise<void> {
+  await db.team.update({
+    where: { id: teamId },
+    data: { skills: [...skillIds] },
+    select: { id: true },
+  });
+}

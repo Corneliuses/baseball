@@ -51,7 +51,8 @@ chart editors — the batting order at `chart` and the positions diamond at
 `chart/positions` — and team email messaging at `messages` (coach-only broadcast
 history) and `messages/new` (the compose form every role uses), basketball's playbook at
 `playbook` (every member: each chosen play by name with an animation of it running) and
-`playbook/edit` (coach-only: tick up to five plays from the library), plus `/t/new` for
+`playbook/edit` (coach-only: tick up to five plays from the library), its at-home twin
+`skills` / `skills/edit` (solo drills with no hoop, same shape), plus `/t/new` for
 owner-gated team creation, which asks for the team's sport (fixed from then on). The four
 chart routes — `view`, `readiness`, `chart` and `chart/positions` — `notFound()` for a team
 whose sport has no chart (rule 4 below), so a pasted URL behaves like a missing page. Outside `/t/` entirely — because `proxy.ts` would bounce a
@@ -185,7 +186,8 @@ These are structural, not stylistic. Read the comments in `prisma/schema.prisma`
    editor), every chart
    save (the real boundary — a forged POST must not write one sport's columns onto the
    other's roster), and team home's role line and `MiniDiamondHero`. The playbook
-   (`Team.playbook`, gated by `hasPlaybook`) is basketball's too and is never written for
+   (`Team.playbook`, gated by `hasPlaybook`) and the at-home skills (`Team.skills`, gated
+   by `hasSkills`) are basketball's too and is never written for
    baseball; see the playbook gotcha below. Do not widen
    `Position` or reuse baseball's columns for the court — `CourtPosition` is its own enum
    and `src/lib/depth-chart.ts` its own pure module. The sport check lives in the page and
@@ -880,3 +882,14 @@ production — the dev command can prompt, generate new migrations, and reset th
   prefers reduced motion (then Back/Next step through it). It spends **no banana** — the
   rim is court-line white and the ball the team's primary — because a playbook page holds
   up to five courts and design-plan §2's budget is one per screen.
+- **At-home skills are the playbook again, for one kid with no hoop.** `SKILL_LIBRARY`
+  (`src/lib/skills.ts`) seeds nine solo drills (slides, one-hand control, backspin at a
+  wall spot, wraps, crossovers…), each a few frames of one kid and an optional ball seen
+  from above on a patch of floor, with optional cones and a wall; `Team.skills` holds up
+  to `MAX_TEAM_SKILLS` (5) ids. Every playbook rule above applies unchanged — the id rules
+  themselves live once in `src/lib/library-selection.ts`, the picker is the shared
+  `LibraryPicker`, and the clock and controls are `animation-playback.tsx`, shared by
+  `PlayAnimation` and `SkillAnimation`. A frame's `hands` says which hands are on the ball;
+  mid-move only the hands holding it at both ends count, so no arm reaches for a ball in
+  flight. No library text may mention a rim, basket or layup (a test holds that): the point
+  is that a kid can do every one of these without a goal.

@@ -156,6 +156,18 @@ export function PlaybookIcon({ className }: IconProps) {
   );
 }
 
+/// Skills. A practice cone on the floor — the at-home drills need nothing
+/// more than a ball and a couple of these.
+export function ConeIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M10.5 4h3l4 14h-11z" />
+      <path d="M8.6 11h6.8" />
+      <path d="M4 18h16v2H4z" />
+    </Icon>
+  );
+}
+
 /// Directory. A contact card: one face, two lines of details.
 export function RolodexIcon({ className }: IconProps) {
   return (

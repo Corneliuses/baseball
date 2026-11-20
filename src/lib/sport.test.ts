@@ -9,6 +9,7 @@ import {
   hasAnyChart,
   hasDepthChart,
   hasPlaybook,
+  hasSkills,
   hasLineupChart,
   sportTheme,
 } from "./sport";
@@ -79,5 +80,12 @@ describe("hasPlaybook", () => {
   it("is basketball's alone", () => {
     expect(hasPlaybook("BASKETBALL")).toBe(true);
     expect(hasPlaybook("BASEBALL")).toBe(false);
+  });
+});
+
+describe("hasSkills", () => {
+  it("is basketball's alone", () => {
+    expect(hasSkills("BASKETBALL")).toBe(true);
+    expect(hasSkills("BASEBALL")).toBe(false);
   });
 });
