@@ -893,3 +893,11 @@ production — the dev command can prompt, generate new migrations, and reset th
   mid-move only the hands holding it at both ends count, so no arm reaches for a ball in
   flight. No library text may mention a rim, basket or layup (a test holds that): the point
   is that a kid can do every one of these without a goal.
+  Each skill also draws a **second view**, from the front or the side (`Skill.profile`),
+  in `SkillProfileView` beside the top view, both off the one `skillSnapshot` so they
+  share a caption and controls. The height data lives on the frame (`crouch`,
+  `ballHeight`, `dribble`, `arms`); the floor positions are the top view's, projected. The
+  front view is mirrored on purpose (the kid's right hand is on the viewer's left, as if
+  standing facing them). A dribbled hold bounces the ball `SKILL_HOLD_SECONDS /
+  DRIBBLE_SECONDS` times — keep that a whole number, or the ball leaves the hand mid-bounce
+  when the next move starts.

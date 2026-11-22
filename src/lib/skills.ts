@@ -35,6 +35,18 @@ export type FloorPoint = { x: number; y: number };
 
 export type Hand = "left" | "right";
 
+/// Where the arms are when no hand is on the ball (or there is no ball):
+/// low and wide in a defensive stance, one straight up (a shot's follow-
+/// through or a closeout's high hand), or both reaching forward.
+export type ArmPose = "out" | "up" | "forward";
+
+/// Which way the second drawing looks at the kid. "front" stands where the
+/// wall or the cone is and looks back at them, so the kid's right hand is on
+/// the viewer's left, as it would be in real life; "side" stands at the
+/// kid's right and looks across, so moving toward the wall reads as moving
+/// left.
+export type SkillProfile = "front" | "side";
+
 /// One moment of a skill. Frame 0 is the starting position; every later frame
 /// is the result of one movement, which its caption describes.
 export type SkillFrame = {
@@ -45,6 +57,16 @@ export type SkillFrame = {
   /// Which hands are on the ball at this frame. Empty while it is loose — on
   /// its way to the wall, bouncing, or in the air.
   hands: readonly Hand[];
+  /// How far the knees are bent: 0 standing tall, 1 the lowest defensive
+  /// stance. Only the front or side view shows it.
+  crouch: number;
+  /// How high the ball is off the floor, in feet. Required whenever `ball` is.
+  ballHeight?: number;
+  /// The ball is being dribbled while this frame holds: the front or side
+  /// view bounces it between `ballHeight` and the floor.
+  dribble?: true;
+  /// Where the arms are when no hand is on the ball. Defaults to "out".
+  arms?: ArmPose;
   /// What to do to get here, in a kid's words.
   caption: string;
 };
@@ -54,8 +76,9 @@ export type SkillScene = {
   /// close-up; footwork skills need room to move. The height follows from
   /// `SCENE_ASPECT`.
   width: number;
-  /// A wall along the top edge, with a tape mark at `spotX` to aim at.
-  wall?: { spotX: number };
+  /// A wall along the top edge, with a tape mark at `spotX` to aim at,
+  /// `spotHeight` feet up.
+  wall?: { spotX: number; spotHeight: number };
   /// Cones standing on the floor.
   cones?: readonly FloorPoint[];
 };
@@ -70,6 +93,9 @@ export type Skill = {
   /// What a family needs besides the kid.
   equipment: string;
   scene: SkillScene;
+  /// The second drawing: from the front for side-to-side skills, from the
+  /// side for skills that move toward a wall or a cone.
+  profile: SkillProfile;
   frames: readonly SkillFrame[];
 };
 
@@ -84,6 +110,11 @@ export function sceneHeight(scene: SkillScene): number {
 export const WALL_DEPTH = 0.5;
 export const BALL_RADIUS_FT = 0.4;
 const ON_WALL_Y = WALL_DEPTH + BALL_RADIUS_FT;
+/// The tape mark on the wall: about head height on a grown-up, so a kid
+/// shoots up at it.
+const SPOT_HEIGHT = 6.5;
+/// A passing target sits at a kid's chest height instead.
+const CHEST_SPOT_HEIGHT = 3.4;
 
 const BOTH: readonly Hand[] = ["left", "right"];
 const RIGHT: readonly Hand[] = ["right"];
@@ -109,26 +140,31 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Shuffle side to side in a low stance without crossing your feet — the footwork that keeps you in front of the player you're guarding.",
     equipment: "Two cones, shoes or water bottles about 10 feet apart.",
+    profile: "front",
     scene: { width: 16, cones: [{ x: 2.5, y: 6 }, { x: 13.5, y: 6 }] },
     frames: [
       {
         kid: { x: 3.5, y: 6.6 },
         hands: NONE,
+        crouch: 1,
         caption: "Get in your stance by the left cone: feet wide, knees bent, hands out.",
       },
       {
         kid: { x: 8, y: 6.6 },
         hands: NONE,
+        crouch: 1,
         caption: "Slide right. Push off your left foot and step with your right — never cross your feet.",
       },
       {
         kid: { x: 12.5, y: 6.6 },
         hands: NONE,
+        crouch: 1,
         caption: "Keep sliding, staying low, and touch the right cone.",
       },
       {
         kid: { x: 8, y: 6.6 },
         hands: NONE,
+        crouch: 1,
         caption: "Slide back the other way. Stay low — your head shouldn't bob up and down.",
       },
     ],
@@ -139,36 +175,47 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Move the ball into one hand and back again, so it feels at home on your fingertips on either side.",
     equipment: "A ball.",
+    profile: "front",
     scene: { width: 7 },
     frames: [
       {
         kid: CLOSE,
         ball: at(CLOSE, 0, -1),
         hands: BOTH,
+        crouch: 0.2,
+        ballHeight: 3,
         caption: "Hold the ball out in front of you with both hands.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 0.75, -1.05),
         hands: RIGHT,
+        crouch: 0.2,
+        ballHeight: 3.1,
         caption: "Let go with your left hand. Hold it on your right fingertips, not your palm.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 0.95, -2.1),
         hands: RIGHT,
+        crouch: 0.2,
+        ballHeight: 3.6,
         caption: "Reach it out as far as you can, still in one hand.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 0, -1),
         hands: BOTH,
+        crouch: 0.2,
+        ballHeight: 3,
         caption: "Bring it back in and catch it with both hands.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, -0.95, -2.1),
         hands: LEFT,
+        crouch: 0.2,
+        ballHeight: 3.6,
         caption: "Now your left hand: take it on your fingertips and reach it out.",
       },
     ],
@@ -179,30 +226,40 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Shoot at a spot on the wall and snap your wrist so the ball spins back to you — the follow-through of a real shot, no hoop needed.",
     equipment: "A ball, a wall, and a piece of tape for the spot.",
-    scene: { width: 10, wall: { spotX: 5 } },
+    profile: "side",
+    scene: { width: 10, wall: { spotX: 5, spotHeight: SPOT_HEIGHT } },
     frames: [
       {
         kid: { x: 5, y: 5.4 },
         ball: { x: 5.4, y: 4.6 },
         hands: BOTH,
+        crouch: 0.4,
+        ballHeight: 3.9,
         caption: "Stand a few big steps from the wall. Ball on your shooting hand, guide hand on the side.",
       },
       {
         kid: { x: 5, y: 5.4 },
         ball: { x: 5, y: ON_WALL_Y },
         hands: NONE,
+        crouch: 0,
+        ballHeight: SPOT_HEIGHT,
+        arms: "up",
         caption: "Shoot at the spot. Flick your wrist so the ball spins backward.",
       },
       {
         kid: { x: 5, y: 5.4 },
         ball: { x: 5.4, y: 4.6 },
         hands: BOTH,
+        crouch: 0.3,
+        ballHeight: 3.7,
         caption: "The backspin brings it back to you. Catch it in your shooting pocket.",
       },
       {
         kid: { x: 5, y: 6.6 },
         ball: { x: 5.4, y: 5.8 },
         hands: BOTH,
+        crouch: 0.3,
+        ballHeight: 3.7,
         caption: "Hit the spot five times in a row? Take one step back and keep going.",
       },
     ],
@@ -213,30 +270,39 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Wrap the ball around your body from hand to hand, so you can move it without looking at it.",
     equipment: "A ball.",
+    profile: "front",
     scene: { width: 7 },
     frames: [
       {
         kid: CLOSE,
         ball: at(CLOSE, 0, -1),
         hands: BOTH,
+        crouch: 0.2,
+        ballHeight: 2.6,
         caption: "Start with the ball in front of you in both hands. Eyes up.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 1.15, 0),
         hands: RIGHT,
+        crouch: 0.2,
+        ballHeight: 2.6,
         caption: "Swing it around to your right side with your right hand.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 0, 1),
         hands: BOTH,
+        crouch: 0.2,
+        ballHeight: 2.6,
         caption: "Hand it off behind your back, right hand to left.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, -1.15, 0),
         hands: LEFT,
+        crouch: 0.2,
+        ballHeight: 2.6,
         caption: "Bring it around your left side and back to the front. Ten times, then go the other way.",
       },
     ],
@@ -247,42 +313,55 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Weave the ball around and between your legs in a figure eight, keeping it moving hand to hand.",
     equipment: "A ball.",
+    profile: "front",
     scene: { width: 7 },
     frames: [
       {
         kid: CLOSE,
         ball: at(CLOSE, 0.45, -0.85),
         hands: RIGHT,
+        crouch: 0.6,
+        ballHeight: 1.5,
         caption: "Feet wide, knees bent. Ball in your right hand in front of you.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 0, 0.9),
         hands: LEFT,
+        crouch: 0.6,
+        ballHeight: 1.5,
         caption: "Pass it between your legs to your left hand behind you.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, -1.35, 0),
         hands: LEFT,
+        crouch: 0.6,
+        ballHeight: 1.5,
         caption: "Bring it around the outside of your left leg.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, -0.45, -0.85),
         hands: LEFT,
+        crouch: 0.6,
+        ballHeight: 1.5,
         caption: "Back to the front, still in your left hand.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 0, 0.9),
         hands: RIGHT,
+        crouch: 0.6,
+        ballHeight: 1.5,
         caption: "Between your legs again, this time to your right hand.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 1.35, 0),
         hands: RIGHT,
+        crouch: 0.6,
+        ballHeight: 1.5,
         caption: "Around the outside of your right leg and back to the front.",
       },
     ],
@@ -293,24 +372,32 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Step and pass hard at a spot on the wall, then catch it with two hands as it comes back.",
     equipment: "A ball, a wall, and a piece of tape for the spot.",
-    scene: { width: 10, wall: { spotX: 5 } },
+    profile: "side",
+    scene: { width: 10, wall: { spotX: 5, spotHeight: CHEST_SPOT_HEIGHT } },
     frames: [
       {
         kid: { x: 5, y: 6.2 },
         ball: { x: 5, y: 5.4 },
         hands: BOTH,
+        crouch: 0.3,
+        ballHeight: 3.2,
         caption: "Ball at your chest, thumbs behind it, elbows in.",
       },
       {
         kid: { x: 5, y: 5.2 },
         ball: { x: 5, y: ON_WALL_Y },
         hands: NONE,
+        crouch: 0.3,
+        ballHeight: CHEST_SPOT_HEIGHT,
+        arms: "forward",
         caption: "Step toward the wall and push the ball at the spot. Finish with your thumbs pointing down.",
       },
       {
         kid: { x: 5, y: 5.2 },
         ball: { x: 5, y: 4.4 },
         hands: BOTH,
+        crouch: 0.3,
+        ballHeight: 3.3,
         caption: "Hands up with your fingers spread, and catch it with two hands.",
       },
     ],
@@ -321,30 +408,41 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Bounce the ball low and quick from one hand to the other in front of you — the move that changes direction.",
     equipment: "A ball and a hard floor — a driveway or garage is perfect.",
+    profile: "front",
     scene: { width: 7 },
     frames: [
       {
         kid: CLOSE,
         ball: at(CLOSE, 1.05, -0.7),
         hands: RIGHT,
+        crouch: 0.5,
+        ballHeight: 2.3,
+        dribble: true,
         caption: "Dribble low and hard on your right side. Eyes up, not on the ball.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 0, -1.3),
         hands: NONE,
+        crouch: 0.5,
+        ballHeight: 0.4,
         caption: "Push it across your body. It bounces once in the middle, below your knees.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, -1.05, -0.7),
         hands: LEFT,
+        crouch: 0.5,
+        ballHeight: 2.3,
+        dribble: true,
         caption: "Catch it in your left hand and dribble on your left side.",
       },
       {
         kid: CLOSE,
         ball: at(CLOSE, 0, -1.3),
         hands: NONE,
+        crouch: 0.5,
+        ballHeight: 0.4,
         caption: "Cross it back the same way, low and quick, to your right hand.",
       },
     ],
@@ -355,6 +453,7 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Dribble in and out of a line of cones, switching hands at every one so the ball stays away from the cone.",
     equipment: "A ball and three cones, shoes or water bottles in a line.",
+    profile: "side",
     scene: {
       width: 12,
       cones: [{ x: 6, y: 6.6 }, { x: 6, y: 4.3 }, { x: 6, y: 2 }],
@@ -364,24 +463,36 @@ export const SKILL_LIBRARY: readonly Skill[] = [
         kid: { x: 6, y: 8.2 },
         ball: { x: 6.8, y: 7.9 },
         hands: RIGHT,
+        crouch: 0.4,
+        ballHeight: 2.3,
+        dribble: true,
         caption: "Start behind the first cone, dribbling with your right hand.",
       },
       {
         kid: { x: 7.7, y: 6.6 },
         ball: { x: 8.5, y: 6.3 },
         hands: RIGHT,
+        crouch: 0.4,
+        ballHeight: 2.3,
+        dribble: true,
         caption: "Go around the right side of the first cone, ball on the outside.",
       },
       {
         kid: { x: 4.3, y: 4.3 },
         ball: { x: 3.5, y: 4 },
         hands: LEFT,
+        crouch: 0.4,
+        ballHeight: 2.3,
+        dribble: true,
         caption: "Cross over to your left hand and go around the left side of the next one.",
       },
       {
         kid: { x: 7.7, y: 2 },
         ball: { x: 8.5, y: 1.7 },
         hands: RIGHT,
+        crouch: 0.4,
+        ballHeight: 2.3,
+        dribble: true,
         caption: "Cross back to your right around the last cone. Then dribble back and do it again.",
       },
     ],
@@ -392,26 +503,33 @@ export const SKILL_LIBRARY: readonly Skill[] = [
     summary:
       "Sprint at a shooter, chop your feet to stop under control with a hand up, then slide to cut off the drive.",
     equipment: "One cone, shoe or water bottle to stand in for the shooter.",
+    profile: "side",
     scene: { width: 12, cones: [{ x: 6, y: 1.8 }] },
     frames: [
       {
         kid: { x: 6, y: 8 },
         hands: NONE,
+        crouch: 0.3,
         caption: "Start a long way back from the cone — it's the player with the ball.",
       },
       {
         kid: { x: 6, y: 5.2 },
         hands: NONE,
+        crouch: 0.1,
+        arms: "forward",
         caption: "Sprint at the cone.",
       },
       {
         kid: { x: 6, y: 3.6 },
         hands: NONE,
+        crouch: 0.6,
+        arms: "up",
         caption: "Chop your feet — short, quick steps — and get a hand up high.",
       },
       {
         kid: { x: 8.6, y: 3.6 },
         hands: NONE,
+        crouch: 0.9,
         caption: "They drive! Slide over to stay in front, then jog back and do it again.",
       },
     ],
@@ -476,6 +594,12 @@ export function skillDurationSeconds(skill: Skill): number {
 export type SkillSnapshot = {
   kid: FloorPoint;
   ball: FloorPoint | null;
+  /// The ball's height off the floor, for the front or side view. Null with
+  /// no ball.
+  ballHeight: number | null;
+  crouch: number;
+  /// Where free arms are (those with no hand on the ball).
+  arms: ArmPose;
   /// Hands on the ball right now. Mid-move that is only the hands holding it
   /// at both ends, so an arm never stretches out to a ball in flight.
   hands: readonly Hand[];
@@ -485,6 +609,21 @@ export type SkillSnapshot = {
 
 function lerp(a: FloorPoint, b: FloorPoint, t: number): FloorPoint {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+}
+
+function mix(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/// Seconds for one dribble, hand to floor and back. The hold divides into a
+/// whole number of them, so a dribbled hold ends with the ball back in the
+/// hand, exactly where the next move starts it from.
+export const DRIBBLE_SECONDS = 0.7;
+
+/// How high a dribbled ball is, `held` seconds into a hold, as a share of the
+/// hand's height: 1 in the hand, 0 on the floor.
+export function dribbleShare(held: number): number {
+  return Math.abs(Math.cos((Math.PI * held) / DRIBBLE_SECONDS));
 }
 
 function ease(t: number): number {
@@ -501,6 +640,12 @@ function between(
   return {
     kid: lerp(from.kid, to.kid, t),
     ball: from.ball && to.ball ? lerp(from.ball, to.ball, t) : (to.ball ?? null),
+    ballHeight:
+      from.ballHeight !== undefined && to.ballHeight !== undefined
+        ? mix(from.ballHeight, to.ballHeight, t)
+        : (to.ballHeight ?? null),
+    crouch: mix(from.crouch, to.crouch, t),
+    arms: to.arms ?? "out",
     hands: from.hands.filter((hand) => to.hands.includes(hand)),
     frameIndex,
   };
@@ -513,18 +658,24 @@ export function skillSnapshot(skill: Skill, seconds: number): SkillSnapshot {
   const loop = skillDurationSeconds(skill);
   const t = ((seconds % loop) + loop) % loop;
 
-  const hold = (index: number): SkillSnapshot => {
+  /// `held` is how long the frame has been holding, for the dribble.
+  const hold = (index: number, held: number): SkillSnapshot => {
     const frame = frames[index];
+    const height = frame.ballHeight ?? null;
     return {
       kid: frame.kid,
       ball: frame.ball ?? null,
+      ballHeight:
+        height !== null && frame.dribble ? height * dribbleShare(held) : height,
+      crouch: frame.crouch,
+      arms: frame.arms ?? "out",
       hands: frame.hands,
       frameIndex: index,
     };
   };
 
   if (frames.length === 1 || t < SKILL_HOLD_SECONDS) {
-    return hold(0);
+    return hold(0, t);
   }
 
   const afterStart = t - SKILL_HOLD_SECONDS;
@@ -538,7 +689,7 @@ export function skillSnapshot(skill: Skill, seconds: number): SkillSnapshot {
   const step = Math.min(Math.floor(afterStart / STEP_SECONDS), frames.length - 2);
   const within = afterStart - step * STEP_SECONDS;
   if (within >= SKILL_MOVE_SECONDS) {
-    return hold(step + 1);
+    return hold(step + 1, within - SKILL_MOVE_SECONDS);
   }
   return between(frames[step], frames[step + 1], within / SKILL_MOVE_SECONDS, step + 1);
 }
