@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DRIBBLE_SECONDS,
   MAX_TEAM_SKILLS,
   SKILL_HOLD_SECONDS,
   SKILL_LIBRARY,
@@ -63,6 +64,17 @@ describe("SKILL_LIBRARY", () => {
           inside(frame.ball);
         } else {
           expect(frame.hands).toEqual([]);
+        }
+      }
+      expect(["front", "side"]).toContain(skill.profile);
+      for (const frame of skill.frames) {
+        expect(frame.crouch).toBeGreaterThanOrEqual(0);
+        expect(frame.crouch).toBeLessThanOrEqual(1);
+        // The front or side view needs a height for every ball it draws.
+        expect(frame.ballHeight !== undefined).toBe(frame.ball !== undefined);
+        if (frame.ballHeight !== undefined) {
+          expect(frame.ballHeight).toBeGreaterThanOrEqual(0);
+          expect(frame.ballHeight).toBeLessThanOrEqual(8);
         }
       }
       for (const cone of skill.scene.cones ?? []) {
@@ -154,11 +166,12 @@ const TOY: Skill = {
   name: "Toy",
   summary: "Test skill.",
   equipment: "Nothing.",
-  scene: { width: 10, wall: { spotX: 5 } },
+  scene: { width: 10, wall: { spotX: 5, spotHeight: 6 } },
+  profile: "side",
   frames: [
-    { kid: P(1, 5), ball: P(1, 4), hands: ["left", "right"], caption: "Start" },
-    { kid: P(5, 5), ball: P(5, 4), hands: ["left", "right"], caption: "Walk" },
-    { kid: P(5, 5), ball: P(5, 1), hands: [], caption: "Throw" },
+    { kid: P(1, 5), ball: P(1, 4), hands: ["left", "right"], crouch: 0, ballHeight: 3, caption: "Start" },
+    { kid: P(5, 5), ball: P(5, 4), hands: ["left", "right"], crouch: 1, ballHeight: 3, caption: "Walk" },
+    { kid: P(5, 5), ball: P(5, 1), hands: [], crouch: 1, ballHeight: 6, arms: "up", caption: "Throw" },
   ],
 };
 
@@ -167,7 +180,15 @@ describe("skillSnapshot", () => {
 
   it("holds the start at the top of the loop", () => {
     const snap = skillSnapshot(TOY, 0);
-    expect(snap).toEqual({ kid: P(1, 5), ball: P(1, 4), hands: ["left", "right"], frameIndex: 0 });
+    expect(snap).toEqual({
+      kid: P(1, 5),
+      ball: P(1, 4),
+      ballHeight: 3,
+      crouch: 0,
+      arms: "out",
+      hands: ["left", "right"],
+      frameIndex: 0,
+    });
   });
 
   it("moves the kid and the ball halfway at the middle of a move", () => {
@@ -176,6 +197,7 @@ describe("skillSnapshot", () => {
     expect(snap.kid.x).toBeCloseTo(3);
     expect(snap.ball?.x).toBeCloseTo(3);
     expect(snap.hands).toEqual(["left", "right"]);
+    expect(snap.crouch).toBeCloseTo(0.5);
   });
 
   it("lets go of the ball for the whole of a throw, so no arm reaches into the air", () => {
@@ -183,6 +205,8 @@ describe("skillSnapshot", () => {
     const mid = skillSnapshot(TOY, throwStart + SKILL_MOVE_SECONDS / 2);
     expect(mid.hands).toEqual([]);
     expect(mid.ball?.y).toBeCloseTo(2.5);
+    expect(mid.ballHeight).toBeCloseTo(4.5);
+    expect(mid.arms).toBe("up");
   });
 
   it("walks back to the start under the start's caption, then loops", () => {
@@ -197,6 +221,26 @@ describe("skillSnapshot", () => {
   it("has no ball at all for a skill without one", () => {
     const slides = getSkill("defensive-slides")!;
     expect(skillSnapshot(slides, 2).ball).toBeNull();
+  });
+
+  it("bounces a dribbled ball to the floor and back into the hand within each hold", () => {
+    const crossovers = getSkill("crossovers")!;
+    const hand = crossovers.frames[0].ballHeight!;
+    expect(skillSnapshot(crossovers, 0).ballHeight).toBeCloseTo(hand);
+    expect(skillSnapshot(crossovers, DRIBBLE_SECONDS / 2).ballHeight).toBeCloseTo(0);
+    // The hold ends with the ball back in the hand, where the move picks it up.
+    expect(skillSnapshot(crossovers, SKILL_HOLD_SECONDS - 0.0001).ballHeight).toBeCloseTo(
+      hand,
+      2,
+    );
+    expect((SKILL_HOLD_SECONDS / DRIBBLE_SECONDS) % 1).toBeCloseTo(0);
+  });
+
+  it("never bounces a ball that isn't being dribbled", () => {
+    const wraps = getSkill("around-the-waist")!;
+    expect(skillSnapshot(wraps, DRIBBLE_SECONDS / 2).ballHeight).toBe(
+      wraps.frames[0].ballHeight,
+    );
   });
 
   it("jumps the step buttons to each frame's hold", () => {

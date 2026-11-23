@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 
+import { SkillProfileView } from "@/components/SkillProfileView";
 import {
   StepCaptionAndControls,
   useLoopClock,
@@ -74,9 +75,7 @@ export function SkillAnimation({ skill }: { skill: Skill }) {
   const to = skill.frames[frameIndex];
   const kidMoved = from && (from.kid.x !== to.kid.x || from.kid.y !== to.kid.y);
   const ballFlew =
-    from?.ball &&
-    to.ball &&
-    (from.hands.length === 0 || to.hands.length === 0);
+    from?.ball && to.ball && (from.hands.length === 0 || to.hands.length === 0);
 
   const kid = px(snapshot.kid);
   const ball = snapshot.ball ? px(snapshot.ball) : null;
@@ -108,147 +107,175 @@ export function SkillAnimation({ skill }: { skill: Skill }) {
 
   return (
     <div ref={containerRef} className="space-y-3">
-      <div
-        className="relative mx-auto w-full max-w-sm"
-        style={{ aspectRatio: `${VIEW_WIDTH} / ${viewHeight}` }}
-        aria-hidden="true"
-      >
-        <svg
-          viewBox={`0 0 ${VIEW_WIDTH} ${viewHeight}`}
-          focusable="false"
-          className="absolute inset-0 h-full w-full"
-          data-skill-floor={skill.id}
-        >
-          <defs>
-            <clipPath id={clipId}>
-              <rect x={0} y={0} width={VIEW_WIDTH} height={viewHeight} rx={6} />
-            </clipPath>
-          </defs>
+      {/* Two views of the same moment, under one caption: from above, which
+          shows where the kid and the ball go on the floor, and from the front
+          or side (SkillProfileView), which shows how high. */}
+      <div className="grid grid-cols-2 gap-2" aria-hidden="true">
+        <figure className="space-y-1">
+          <div
+            className="relative w-full"
+            style={{ aspectRatio: `${VIEW_WIDTH} / ${viewHeight}` }}
+          >
+            <svg
+              viewBox={`0 0 ${VIEW_WIDTH} ${viewHeight}`}
+              focusable="false"
+              className="absolute inset-0 h-full w-full"
+              data-skill-floor={skill.id}
+            >
+              <defs>
+                <clipPath id={clipId}>
+                  <rect
+                    x={0}
+                    y={0}
+                    width={VIEW_WIDTH}
+                    height={viewHeight}
+                    rx={6}
+                  />
+                </clipPath>
+              </defs>
 
-          <g clipPath={`url(#${clipId})`}>
-            <rect
-              x={0}
-              y={0}
-              width={VIEW_WIDTH}
-              height={viewHeight}
-              className="fill-hardwood"
-            />
-            {planks.map((x) => (
-              <rect
-                key={x}
-                x={x}
-                y={0}
-                width={PLANK}
-                height={viewHeight}
-                className="fill-hardwood-grain"
-              />
-            ))}
-
-            {scene.wall ? (
-              <g data-wall="">
+              <g clipPath={`url(#${clipId})`}>
                 <rect
                   x={0}
                   y={0}
                   width={VIEW_WIDTH}
-                  height={WALL_DEPTH * ft}
-                  className="fill-court-paint"
+                  height={viewHeight}
+                  className="fill-hardwood"
                 />
-                {/* The tape mark to aim at, on the face of the wall. */}
-                <rect
-                  x={(scene.wall.spotX - 0.45) * ft}
-                  y={WALL_DEPTH * ft - 5}
-                  width={0.9 * ft}
-                  height={5}
-                  className="fill-court-line"
-                  data-spot=""
+                {planks.map((x) => (
+                  <rect
+                    key={x}
+                    x={x}
+                    y={0}
+                    width={PLANK}
+                    height={viewHeight}
+                    className="fill-hardwood-grain"
+                  />
+                ))}
+
+                {scene.wall ? (
+                  <g data-wall="">
+                    <rect
+                      x={0}
+                      y={0}
+                      width={VIEW_WIDTH}
+                      height={WALL_DEPTH * ft}
+                      className="fill-court-paint"
+                    />
+                    {/* The tape mark to aim at, on the face of the wall. */}
+                    <rect
+                      x={(scene.wall.spotX - 0.45) * ft}
+                      y={WALL_DEPTH * ft - 5}
+                      width={0.9 * ft}
+                      height={5}
+                      className="fill-court-line"
+                      data-spot=""
+                    />
+                  </g>
+                ) : null}
+
+                {(scene.cones ?? []).map((cone, index) => {
+                  const point = px(cone);
+                  return (
+                    <g
+                      key={index}
+                      transform={`translate(${point.x} ${point.y})`}
+                      data-cone=""
+                    >
+                      <circle
+                        r={0.38 * figure}
+                        className="fill-court-paint stroke-court-line"
+                        strokeWidth={2}
+                      />
+                      <circle r={0.12 * figure} className="fill-court-line" />
+                    </g>
+                  );
+                })}
+              </g>
+
+              {from && kidMoved ? (
+                <line
+                  x1={from.kid.x * ft}
+                  y1={from.kid.y * ft}
+                  x2={to.kid.x * ft}
+                  y2={to.kid.y * ft}
+                  className="stroke-foreground/60"
+                  strokeWidth={3}
+                  strokeDasharray="10 8"
+                  strokeLinecap="round"
+                />
+              ) : null}
+              {from?.ball && to.ball && ballFlew ? (
+                <line
+                  x1={from.ball.x * ft}
+                  y1={from.ball.y * ft}
+                  x2={to.ball.x * ft}
+                  y2={to.ball.y * ft}
+                  className="stroke-primary"
+                  strokeWidth={3}
+                  strokeDasharray="4 6"
+                  strokeLinecap="round"
+                  data-ball-path=""
+                />
+              ) : null}
+
+              <g data-kid="">
+                {[-1, 1].map((side) => (
+                  <ellipse
+                    key={side}
+                    cx={kid.x + side * FOOT_X * figure}
+                    cy={kid.y - 0.12 * figure}
+                    rx={0.16 * figure}
+                    ry={0.3 * figure}
+                    className="fill-foreground/70"
+                  />
+                ))}
+                {snapshot.hands.map(arm)}
+                <ellipse
+                  cx={kid.x}
+                  cy={kid.y}
+                  rx={SHOULDER_RX * figure}
+                  ry={SHOULDER_RY * figure}
+                  className="fill-foreground"
+                />
+                <circle
+                  cx={kid.x}
+                  cy={kid.y}
+                  r={HEAD_R * figure}
+                  className="fill-card stroke-foreground"
+                  strokeWidth={0.08 * figure}
                 />
               </g>
-            ) : null}
 
-            {(scene.cones ?? []).map((cone, index) => {
-              const point = px(cone);
-              return (
-                <g
-                  key={index}
-                  transform={`translate(${point.x} ${point.y})`}
-                  data-cone=""
-                >
-                  <circle
-                    r={0.38 * figure}
-                    className="fill-court-paint stroke-court-line"
-                    strokeWidth={2}
-                  />
-                  <circle r={0.12 * figure} className="fill-court-line" />
-                </g>
-              );
-            })}
-          </g>
-
-          {from && kidMoved ? (
-            <line
-              x1={from.kid.x * ft}
-              y1={from.kid.y * ft}
-              x2={to.kid.x * ft}
-              y2={to.kid.y * ft}
-              className="stroke-foreground/60"
-              strokeWidth={3}
-              strokeDasharray="10 8"
-              strokeLinecap="round"
-            />
-          ) : null}
-          {from?.ball && to.ball && ballFlew ? (
-            <line
-              x1={from.ball.x * ft}
-              y1={from.ball.y * ft}
-              x2={to.ball.x * ft}
-              y2={to.ball.y * ft}
-              className="stroke-primary"
-              strokeWidth={3}
-              strokeDasharray="4 6"
-              strokeLinecap="round"
-              data-ball-path=""
-            />
-          ) : null}
-
-          <g data-kid="">
-            {[-1, 1].map((side) => (
-              <ellipse
-                key={side}
-                cx={kid.x + side * FOOT_X * figure}
-                cy={kid.y - 0.12 * figure}
-                rx={0.16 * figure}
-                ry={0.3 * figure}
-                className="fill-foreground/70"
-              />
-            ))}
-            {snapshot.hands.map(arm)}
-            <ellipse
-              cx={kid.x}
-              cy={kid.y}
-              rx={SHOULDER_RX * figure}
-              ry={SHOULDER_RY * figure}
-              className="fill-foreground"
-            />
-            <circle
-              cx={kid.x}
-              cy={kid.y}
-              r={HEAD_R * figure}
-              className="fill-card stroke-foreground"
-              strokeWidth={0.08 * figure}
-            />
-          </g>
-
-          {ball ? (
-            <circle
-              cx={ball.x}
-              cy={ball.y}
-              r={BALL_RADIUS_FT * figure}
-              className="fill-primary stroke-background"
-              strokeWidth={2.5}
-              data-ball=""
-            />
-          ) : null}
-        </svg>
+              {ball ? (
+                <circle
+                  cx={ball.x}
+                  cy={ball.y}
+                  r={BALL_RADIUS_FT * figure}
+                  className="fill-primary stroke-background"
+                  strokeWidth={2.5}
+                  data-ball=""
+                />
+              ) : null}
+            </svg>
+          </div>
+          <figcaption className="text-center text-xs font-semibold text-muted-foreground">
+            From above
+          </figcaption>
+        </figure>
+        <figure className="space-y-1">
+          <div
+            className="relative w-full"
+            style={{ aspectRatio: `${VIEW_WIDTH} / ${viewHeight}` }}
+          >
+            <div className="absolute inset-0">
+              <SkillProfileView skill={skill} snapshot={snapshot} />
+            </div>
+          </div>
+          <figcaption className="text-center text-xs font-semibold text-muted-foreground">
+            {skill.profile === "front" ? "From the front" : "From the side"}
+          </figcaption>
+        </figure>
       </div>
 
       <StepCaptionAndControls
